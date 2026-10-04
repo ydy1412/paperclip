@@ -22,6 +22,7 @@ import {
   GanttChartSquare,
   LayoutGrid,
   Users,
+  BookOpen,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -249,6 +250,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               aria-hidden="true"
             />
           ) : null}
+          <SidebarNavItem to="/knowledge" label="Knowledge" icon={BookOpen} />
           {showWorkspacesLink ? (
             <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
           ) : null}
