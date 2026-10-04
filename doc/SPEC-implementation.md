@@ -126,6 +126,11 @@ preserving the new Work section, existing plugin entries and route tests.
 On this base the routing suite passes all 19 tests, and UI typecheck and build
 pass. Full workspace build is blocked by the missing Rust `cargo` executable;
 the newer base has not been verified in the live installed service.
+The current-base UI suite initially passed 7,307 tests and failed only the
+Sidebar navigation expectation, which needed the new Knowledge entry. After
+updating `ui/src/components/Sidebar.test.tsx`, the Sidebar and company routing
+suites pass all 54 tests. The full UI suite was not rerun after that test-only
+expectation change.
 
 ## 6. Architecture
 
