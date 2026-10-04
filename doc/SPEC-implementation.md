@@ -93,6 +93,40 @@ Role-based human permission granularity is V1 — see the `humans-and-permission
 plan, the `principal_permission_grants` table, and the `PERMISSION_KEYS` set
 in `packages/shared/src/constants.ts`.
 
+### Local board navigation customization (2026-10-04)
+
+The operator's local UI includes a `Knowledge` link after `Goals` in the `Work`
+sidebar section. It opens an empty company-scoped `/:companyPrefix/knowledge`
+page with a `Knowledge` breadcrumb. The unprefixed `/knowledge` route uses the
+existing company redirect behavior. This is a navigation placeholder only;
+knowledge storage, editing, search, and API endpoints remain out of scope.
+Repository documents are the source of truth for this customization; Space
+registration is not required. Publish only the navigation files and this
+specification to the operator's fork, preserving unrelated local changes.
+
+Acceptance checks: the Work section links to Knowledge, company-prefixed and
+unprefixed routes resolve correctly, and the page has no knowledge content.
+Validate company routing with `ui/src/lib/company-routes.test.ts`, run the UI
+tests, workspace typecheck and build, and preserve the real browser preview
+evidence. Updating the separately installed local service is a separate step.
+
+Validation on the original local checkout on 2026-10-04:
+- `pnpm exec vitest run ui/src`: 21 files, 84 tests passed, including four
+  Knowledge routing regression tests.
+- `pnpm -r typecheck` and `pnpm build`: passed.
+- `pnpm test:run`: 137 files passed; two existing unrelated failures remain:
+  Vitest discovery of the untracked `local-workspace-root.test.mjs` node:test
+  suite, and environment quoting in `workspace-runtime.test.ts`.
+- The authenticated source preview showed the Work link, Knowledge breadcrumb
+  and empty page with real company data. The existing installed service was
+  not replaced.
+
+Fork publication was adapted to master `1c07b5903` in an isolated worktree,
+preserving the new Work section, existing plugin entries and route tests.
+On this base the routing suite passes all 19 tests, and UI typecheck and build
+pass. Full workspace build is blocked by the missing Rust `cargo` executable;
+the newer base has not been verified in the live installed service.
+
 ## 6. Architecture
 
 ## 6.1 Runtime Components
