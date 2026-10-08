@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import request from "supertest";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
@@ -107,7 +110,7 @@ describe("continuity real PostgreSQL/API", () => {
     const load = createNativeSessionHandoffLoader({ db, companyId: f.companyId, agentId: f.team[0].id, issueId: f.issue.id, before: new Date(), structuredHandoff: packet });
     const handoff = await load(); expect(await load()).toBe(handoff);
     for (const field of ["Task X", "server/task.ts", "pnpm test", "passed", "Run integration tests", f.issue.id, "old-provider"]) expect(handoff).toContain(field);
-    expect(handoff).toContain(renderStructuredHandoff(packet!));
+    expect(handoff).toContain(renderStructuredHandoff(packet!, "context"));
     expect((await db.select().from(issues).where(eq(issues.id, f.issue.id)))[0].status).toBe("in_progress");
   });
   it("rejects stale/incomplete handoffs and active rotation without clearing the session", async () => {
@@ -141,6 +144,40 @@ describe("continuity real PostgreSQL/API", () => {
     const [session] = await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.id, f.session.id));
     await expect(pendingSessionHandoff(db, session, f.issue.id)).rejects.toMatchObject({ status: 409 });
     expect((await f.svc.assess(f.companyId, f.team[0].id))[0].status).toBe("attention_required");
+  });
+  it("detects changed branches and malformed workspace metadata before a provider starts", async () => {
+    const f = await fixture(); const gitCwd = await mkdtemp(path.join(cwd, "branch-check-"));
+    const git = promisify(execFile);
+    await git("git", ["-C", gitCwd, "init", "--initial-branch", "continuity-test"]);
+    await git("git", ["-C", gitCwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "fixture"]);
+    await db.update(agentTaskSessions).set({ sessionParamsJson: { sessionId: "old-provider", cwd: gitCwd } }).where(eq(agentTaskSessions.id, f.session.id));
+    const saved = await f.svc.saveHandoff(f.companyId, f.team[0].id, requestCheckpoint(f), operator);
+    expect(saved.packet.workspace.branch).toBe("continuity-test");
+    await git("git", ["-C", gitCwd, "checkout", "-b", "other-branch"]);
+    expect((await f.svc.assess(f.companyId, f.team[0].id))[0].status).toBe("attention_required");
+    const [pending] = await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.id, f.session.id));
+    await expect(pendingSessionHandoff(db, pending, f.issue.id)).rejects.toMatchObject({ status: 409 });
+    expect(pending.sessionDisplayId).toBe("old-provider");
+    await db.update(agentHandoffs).set({ packet: { ...saved.packet, workspace: {} as typeof saved.packet.workspace } }).where(eq(agentHandoffs.id, saved.id));
+    const [session] = await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.id, f.session.id));
+    await expect(pendingSessionHandoff(db, session, f.issue.id)).rejects.toMatchObject({ status: 409 });
+  });
+  it("recognizes legacy task identifiers and canonicalizes only an explicit idle policy change", async () => {
+    const f = await fixture();
+    await db.update(issues).set({ identifier: "CONT-91" }).where(eq(issues.id, f.issue.id));
+    await db.update(agentTaskSessions).set({ taskKey: "CONT-91" }).where(eq(agentTaskSessions.id, f.session.id));
+    expect((await f.svc.assess(f.companyId, f.team[0].id))[0]).toMatchObject({ issueId: f.issue.id, status: "awaiting_decision" });
+    await f.svc.saveHandoff(f.companyId, f.team[0].id, requestCheckpoint(f), operator);
+    expect((await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.id, f.session.id)))[0]).toMatchObject({ taskKey: f.issue.id, sessionDisplayId: "old-provider" });
+  });
+  it("keeps quarantined agent checkpoints inspectable but never promotes them into fresh provider context", async () => {
+    const f = await fixture();
+    const saved = await f.svc.saveHandoff(f.companyId, f.team[0].id, requestCheckpoint(f, "checkpoint_only"), { type: "agent", id: f.team[0].id, runId: randomUUID() });
+    expect(saved.packet.sourceTrust?.disposition).toBe("quarantined");
+    await db.update(agentTaskSessions).set({ sessionDisplayId: null, sessionParamsJson: null }).where(eq(agentTaskSessions.id, f.session.id));
+    const [session] = await db.select().from(agentTaskSessions).where(eq(agentTaskSessions.id, f.session.id));
+    await expect(pendingSessionHandoff(db, session, f.issue.id)).rejects.toMatchObject({ status: 409 });
+    expect((await f.svc.handoffs(f.companyId, f.team[0].id))[0].markdown).toContain("### 목표");
   });
   it("retains the old session and pending handoff when fresh adapter execution fails", async () => {
     const f = await fixture();
@@ -178,4 +215,22 @@ describe("continuity real PostgreSQL/API", () => {
     await db.update(agentTaskSessions).set({ lastError: "Provider failed" }).where(eq(agentTaskSessions.id, f.session.id));
     expect((await restarted.assess(f.companyId, f.team[0].id))[0].status).toBe("failed");
   });
+  it("preserves restore truth across two distinct Node process boots using the same durable database", async () => {
+    const a = await fixture(), b = await fixture(), c = await fixture();
+    await b.svc.saveHandoff(b.companyId, b.team[0].id, requestCheckpoint(b), operator);
+    await db.update(agentTaskSessions).set({ sessionDisplayId: null, sessionParamsJson: null }).where(eq(agentTaskSessions.id, b.session.id));
+    await db.update(agentTaskSessions).set({ sessionParamsJson: { cwd: path.join(cwd, "missing") } }).where(eq(agentTaskSessions.id, c.session.id));
+    const targets = [a, b, c].map(f => ({ companyId: f.companyId, agentId: f.team[0].id }));
+    const probe = async () => {
+      const result = await promisify(execFile)(process.execPath, [
+        fileURLToPath(new URL("../../../cli/node_modules/tsx/dist/cli.mjs", import.meta.url)),
+        fileURLToPath(new URL("./fixtures/continuity-restart-probe.ts", import.meta.url)),
+      ], { timeout: 30_000, maxBuffer: 100_000, env: { ...process.env, PAPERCLIP_CONTINUITY_TEST_DATABASE_URL: database.connectionString, PAPERCLIP_CONTINUITY_TEST_TARGETS: JSON.stringify(targets) } });
+      return JSON.parse(result.stdout) as { bootId: string; statuses: string[] };
+    };
+    const before = await probe(), after = await probe();
+    expect(before.bootId).not.toBe(after.bootId);
+    expect(before.statuses).toEqual(["awaiting_decision", "fresh_with_handoff", "attention_required"]);
+    expect(after.statuses).toEqual(before.statuses);
+  }, 90_000);
 });

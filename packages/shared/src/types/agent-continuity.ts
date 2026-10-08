@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { SourceTrustMetadata } from "../trust-policy.js";
 import type { handoffContentSchema, saveHandoffSchema, sendAgentMessageSchema } from "../validators/agent-continuity.js";
 
 export type HandoffContent = z.infer<typeof handoffContentSchema>;
@@ -13,6 +14,7 @@ export interface StructuredHandoff {
   adapterType: string;
   previousSessionId: string | null;
   createdAt: string;
+  sourceTrust?: SourceTrustMetadata | null;
   workspace: { id: string | null; cwd: string | null; branch: string | null; providerType: string; worktree: string | null };
   content: HandoffContent;
 }
@@ -27,6 +29,8 @@ export interface AgentHandoff {
 }
 export interface ContinuityAssessment {
   issueId: string; taskSessionId: string; status: ContinuityStatus;
+  taskTitle?: string;
+  taskIdentifier?: string | null;
   reasons: string[]; sessionId: string | null; handoffId: string | null;
   checkedAt: string;
 }

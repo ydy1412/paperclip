@@ -17,7 +17,7 @@ export function createNativeSessionHandoffLoader(input: Parameters<typeof buildN
   return () => packet ??= (async () => {
     const history = await buildNativeSessionHandoff(input);
     if (!input.structuredHandoff) return history;
-    return [renderStructuredHandoff(input.structuredHandoff), history].filter(Boolean).join("\n\n");
+    return [renderStructuredHandoff(input.structuredHandoff, "context"), history].filter(Boolean).join("\n\n");
   })();
 }
 

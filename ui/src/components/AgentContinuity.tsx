@@ -49,12 +49,12 @@ export function AgentContinuity({ agent }: { agent: Agent }) {
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">세션 복구 상태</h2>
       {state.error && <p role="alert">{state.error.message}</p>}{state.isLoading && <p>확인 중…</p>}{state.data?.length === 0 && <p>저장된 작업 세션이 없습니다.</p>}
-      {state.data?.map(row => <div key={row.taskSessionId} className="flex flex-col gap-1"><p>{statusLabels[row.status]} · <span className="font-mono text-sm">{row.issueId}</span></p>{row.reasons.map(reason => <p key={reason} className="text-sm text-muted-foreground">{reason}</p>)}</div>)}
-      <Button variant="outline" disabled={busy} onClick={() => void act(() => state.refetch(), "복구 상태를 갱신했습니다.")}>상태 갱신</Button>
+      {state.data?.map(row => <div key={row.taskSessionId} className="flex flex-col gap-1"><p>{statusLabels[row.status]} · {row.taskTitle ?? row.issueId}</p>{row.reasons.map(reason => <p key={reason} className="text-sm text-muted-foreground">{reason}</p>)}</div>)}
+      <Button variant="outline" disabled={busy} onClick={() => void act(() => state.refetch({ throwOnError: true }), "복구 상태를 갱신했습니다.")}>상태 갱신</Button>
     </section>
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">인수인계와 세션 교체</h2>
-      <label className="flex flex-col gap-2">작업<select value={issueId} onChange={event => setIssueId(event.target.value)} className="border-input rounded-md border bg-background p-2"><option value="">저장된 세션의 작업 선택</option>{state.data?.map(row => <option key={row.taskSessionId} value={row.issueId}>{row.issueId}</option>)}</select></label>
+      <label className="flex flex-col gap-2">작업<select value={issueId} onChange={event => setIssueId(event.target.value)} className="border-input rounded-md border bg-background p-2"><option value="">저장된 세션의 작업 선택</option>{state.data?.map(row => <option key={row.taskSessionId} value={row.issueId}>{row.taskIdentifier ? `${row.taskIdentifier} · ` : ""}{row.taskTitle ?? row.issueId}</option>)}</select></label>
       <label className="flex flex-col gap-2">현재 목표<Textarea value={goal} onChange={event => setGoal(event.target.value)} maxLength={1500} /></label>
       {fields.map(([key, label]) => <label key={key} className="flex flex-col gap-2">{label} (한 줄에 한 항목)<Textarea value={notes[key] ?? ""} onChange={event => setNotes(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}
       <label className="flex flex-col gap-2">실행한 테스트<Input value={testCommand} onChange={event => setTestCommand(event.target.value)} /></label>

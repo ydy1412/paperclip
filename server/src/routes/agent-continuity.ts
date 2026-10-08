@@ -27,7 +27,7 @@ export function agentContinuityRoutes(db: Db) {
         if (!decision.allowed) throw forbidden(decision.explanation);
       }
     }
-    return { agent, actor: req.actor.type === "agent" ? { type: "agent" as const, id } : { type: "user" as const, id: req.actor.userId ?? "local-board" } };
+    return { agent, actor: req.actor.type === "agent" ? { type: "agent" as const, id, runId: req.actor.runId } : { type: "user" as const, id: req.actor.userId ?? "local-board" } };
   }
   router.get("/agents/:id/continuity", async (req, res) => {
     const { agent } = await scope(req);
