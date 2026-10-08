@@ -12,6 +12,7 @@ import {
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { agentHandoffs } from "./agent_continuity.js";
 
 export const agentTaskSessions = pgTable(
   "agent_task_sessions",
@@ -25,6 +26,8 @@ export const agentTaskSessions = pgTable(
     sessionDisplayId: text("session_display_id"),
     lastRunId: uuid("last_run_id").references(() => heartbeatRuns.id),
     lastError: text("last_error"),
+    handoffId: uuid("handoff_id").references(() => agentHandoffs.id, { onDelete: "set null" }),
+    continuityPolicy: text("continuity_policy").notNull().default("resume"),
     goalCapabilityJson: jsonb("goal_capability_json").$type<Record<string, unknown>>(),
     goalJson: jsonb("goal_json").$type<Record<string, unknown>>(),
     goalStatus: text("goal_status"),

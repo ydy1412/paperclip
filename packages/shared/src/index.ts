@@ -2816,3 +2816,6 @@ export * from "./browser-use.js";
 export * from "./types/skill-source.js";
 export * from "./validators/skill-source.js";
 export * from "./github-skill-repository.js";
+
+export * from "./types/agent-continuity.js";
+export * from "./validators/agent-continuity.js";

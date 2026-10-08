@@ -86,6 +86,7 @@ export const agentRuntimeConfigSchema = z.object({
 
 export const createAgentSchema = z.object({
   name: z.string().min(1),
+  seatAlias: seatAliasSchema.nullable().optional(),
   role: z.enum(AGENT_ROLES).optional().default("general"),
   title: z.string().optional().nullable(),
   icon: z.enum(AGENT_ICON_NAMES).optional().nullable(),
@@ -303,3 +304,4 @@ export const resolveAgentInstructionCandidateSchema = z.object({
   content: z.string().max(1024 * 1024),
 }).strict();
 export type ResolveAgentInstructionCandidate = z.infer<typeof resolveAgentInstructionCandidateSchema>;
+import { seatAliasSchema } from "./agent-continuity.js";

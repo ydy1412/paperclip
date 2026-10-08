@@ -218,3 +218,5 @@ export { browserUseSettings, browserUseSessions, browserUseRuns, browserUseBrows
 
 
 export * from "./company_skill_sources.js";
+
+export { agentMailboxMessages, agentHandoffs } from "./agent_continuity.js";
