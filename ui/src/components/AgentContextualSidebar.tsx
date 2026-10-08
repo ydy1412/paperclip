@@ -32,6 +32,7 @@ const localIcons = {
   instructions: BookOpenText,
   skills: Library,
   runtime: Settings2,
+  continuity: MessageSquare,
   secrets: ShieldCheck,
   tools: Wrench,
   channels: MessageSquare,

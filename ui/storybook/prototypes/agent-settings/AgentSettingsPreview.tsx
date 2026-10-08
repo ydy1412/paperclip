@@ -44,6 +44,7 @@ import { storybookIssues } from "../../fixtures/paperclipData";
 import "./settings.css";
 
 const descriptions: Record<AgentLocalDetailView, string> = {
+  continuity: "Review saved context, session readiness, and team messages.",
   overview: "A snapshot of Nova’s work, capabilities, and current setup.",
   instructions: "The files that guide how your agent thinks and works.",
   skills: "Choose the skills your agent brings to each task.",
