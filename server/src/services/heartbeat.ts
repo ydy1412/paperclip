@@ -1,3 +1,4 @@
+import { pendingSessionHandoff } from "./agent-continuity.js";
 import { externalObjectService } from "./external-objects.js";
 import { isAiAuthenticationBlocked } from "./ai-auth-failure.js";
 import { CHAT_COMPLETION_WAKE_REASON, prepareChatCompletionTurn, chatCompletionInstruction, isCompletedOnboardingHandoffWake } from "./chat-completion-delivery.js";
@@ -12757,6 +12758,7 @@ export function heartbeatService(
     sessionDisplayId: string | null;
     lastRunId: string | null;
     lastError: string | null;
+    continuityCompleted?: boolean;
   }) {
     return db.transaction(async (tx) => {
       const [issue] = await tx.select().from(issues).where(and(sql`${issues.id}::text = ${input.taskKey}`, eq(issues.companyId, input.companyId))).for("update");
@@ -12773,6 +12775,7 @@ export function heartbeatService(
           sessionDisplayId: input.sessionDisplayId,
           lastRunId: input.lastRunId,
           lastError: input.lastError,
+          ...(input.continuityCompleted ? { continuityPolicy: "resume" } : {}),
           updatedAt: new Date(),
         })
         .where(eq(agentTaskSessions.id, existing.id))
@@ -20952,6 +20955,12 @@ export function heartbeatService(
             taskKey,
           )
         : null;
+      const continuityHandoff = await pendingSessionHandoff(db, taskSession, issueContext?.id ?? null);
+      if (continuityHandoff) {
+        context.forceFreshSession = true;
+        delete context.resumeSessionParams;
+        delete context.resumeSessionDisplayId;
+      }
       if (isConversation(issueContext)) {
         delete context.resumeSessionParams;
         delete context.resumeSessionDisplayId;
@@ -20959,7 +20968,7 @@ export function heartbeatService(
         delete context.paperclipContinuationSummary;
       }
       const taskSessionDecodedParams = normalizeSessionParams(
-        sessionCodec.deserialize(taskSession?.sessionParamsJson ?? null),
+        sessionCodec.deserialize(continuityHandoff ? null : taskSession?.sessionParamsJson ?? null),
       );
       const explicitResumeSessionParams = normalizeResumeParamsForAdapter(
         agent.adapterType,
@@ -21866,6 +21875,7 @@ export function heartbeatService(
       const taskSessionForRun = resetTaskSession ? null : taskSession;
       const getFreshSessionHandoff = issueRef ? createNativeSessionHandoffLoader({
         db, companyId: agent.companyId, issueId: issueRef.id, agentId: agent.id, before: run.createdAt,
+        structuredHandoff: continuityHandoff,
         throughCommentId: readNonEmptyString(context.conversationReplayThroughCommentId) ?? (context.interactionKind ? null : wakeCommentId),
       }) : undefined;
       const previousSessionParams =
@@ -25941,7 +25951,14 @@ export function heartbeatService(
             normalizedUsage,
           );
           if (taskKey) {
-            if (
+            if (continuityHandoff && (outcome !== "succeeded" || (!nextSessionState.params && !nextSessionState.displayId))) {
+              await upsertTaskSession({
+                companyId: agent.companyId, agentId: agent.id, adapterType: agent.adapterType, taskKey,
+                sessionParamsJson: taskSession?.sessionParamsJson ?? null,
+                sessionDisplayId: taskSession?.sessionDisplayId ?? null,
+                lastRunId: finalizedRun.id, lastError: runErrorMessage ?? "Fresh provider session was not confirmed",
+              });
+            } else if (
               adapterResult.clearSession ||
               (!nextSessionState.params && !nextSessionState.displayId)
             ) {
@@ -25965,6 +25982,7 @@ export function heartbeatService(
                 sessionDisplayId: nextSessionState.displayId,
                 lastRunId: finalizedRun.id,
                 lastError: runErrorMessage,
+                continuityCompleted: Boolean(continuityHandoff && outcome === "succeeded"),
               });
             }
           }
@@ -26296,14 +26314,14 @@ export function heartbeatService(
               adapterType: agent.adapterType,
               taskKey,
               sessionParamsJson:
-                goalCheckpointSession.current?.params ??
+                (continuityHandoff ? taskSession?.sessionParamsJson : goalCheckpointSession.current?.params) ??
                 attachPaperclipSessionMetadataToSessionParams(
                   previousSessionParams,
                   configuredModel,
                   sessionConfigMetadata,
                 ),
               sessionDisplayId:
-                goalCheckpointSession.current?.displayId ??
+                (continuityHandoff ? taskSession?.sessionDisplayId : goalCheckpointSession.current?.displayId) ??
                 previousSessionDisplayId,
               lastRunId: failedRun.id,
               lastError: message,
