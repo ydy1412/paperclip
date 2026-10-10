@@ -140,6 +140,8 @@ export const builtInAgentResetSchema = z.object({
 export type BuiltInAgentReset = z.infer<typeof builtInAgentResetSchema>;
 
 export const createAgentHireSchema = createAgentSchema.extend({
+  profileId: z.string().uuid().optional(),
+  profileVersion: z.number().int().positive().optional(),
   sourceIssueId: z.string().guid().optional().nullable(),
   sourceIssueIds: z.array(z.string().guid()).optional(),
   // Agent-authored hires may explicitly request the caller's native runner

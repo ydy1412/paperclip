@@ -565,6 +565,7 @@ import {
 import { resolveRequiredSuccessfulRunHandoffOnValidPath } from "./successful-run-handoff-state.js";
 import { taskWatchdogService } from "./task-watchdogs.js";
 import { withAgentStartLock } from "./agent-start-lock.js";
+import { agentProfileService } from "./agent-profiles.js";
 import {
   evaluateAgentInvokability,
   evaluateAgentInvokabilityFromDb,
@@ -20067,6 +20068,7 @@ export function heartbeatService(
     const rejectedClaims: Array<{ run: typeof heartbeatRuns.$inferSelect; err: HttpError }> = [];
 
     return withAgentStartLock(agentId, async () => {
+      if (!(await agentProfileService(db).applyPending(agentId))) return [];
       const agent = await getAgent(agentId);
       if (!agent) return [];
       const invokability = await getAgentInvokability(agent);

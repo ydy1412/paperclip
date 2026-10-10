@@ -1,3 +1,4 @@
+import { agentProfilesApi } from "../../api/agentProfiles";
 import { AgentCharacter } from "../AgentCharacter";
 import { useAgentAppearanceDraft } from "../../hooks/useAgentAppearanceDraft";
 import { AiConnectionField, aiProviderForAdapter } from "../ai-connections/AiConnectionField";
@@ -75,6 +76,9 @@ const blocking = (result: AdapterEnvironmentTestResult) =>
 export function NewAgentSetup() {
   const { selectedCompanyId } = useCompany();
   const [params] = useSearchParams();
+  const profileId = params.get("profileId");
+  const profile = useQuery({ queryKey: ["agent-profiles", selectedCompanyId, profileId], queryFn: () => agentProfilesApi.get(selectedCompanyId!, profileId!), enabled: !!selectedCompanyId && !!profileId, retry: false });
+  if (profileId && !params.get("createdAgentId") && !profile.data) return <p role={profile.error ? "alert" : "status"} className="text-sm text-muted-foreground">{profile.error?.message ?? "프로필을 불러오는 중입니다."}</p>;
   if (!selectedCompanyId)
     return (
       <p className="text-sm text-muted-foreground">
@@ -89,6 +93,10 @@ export function NewAgentSetup() {
       adapterType={params.get("adapterType") ?? ""}
       runnerProvider={params.get("runnerProvider") ?? "codex"}
       createdAgentId={params.get("createdAgentId")}
+      profileId={profileId}
+      profileVersion={Number(params.get("profileVersion")) || profile.data?.version}
+      profileModel={profile.data?.config.model}
+      reportsTo={params.has("reportsTo") ? params.get("reportsTo") : undefined}
     />
   );
 }
@@ -99,12 +107,14 @@ function Setup({
   adapterType,
   runnerProvider,
   createdAgentId,
+  profileId, profileVersion, profileModel, reportsTo,
 }: {
   companyId: string;
   name: string;
   adapterType: string;
   runnerProvider: string;
   createdAgentId: string | null;
+  profileId?: string | null; profileVersion?: number; profileModel?: string; reportsTo?: string | null;
 }) {
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -138,7 +148,7 @@ function Setup({
   const [screen, setScreen] = useState<"connect" | "runtime" | "saved">(
     createdAgentId ? "saved" : connectionAdapter ? "connect" : "runtime",
   );
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(profileModel ?? "");
   const efforts = isRunner ? [] : setupEfforts(adapterType, model);
   const [effort, setEffort] = useState("");
   const [modelOpen, setModelOpen] = useState(false);
@@ -504,7 +514,8 @@ function Setup({
         name: name.trim(),
         appearance: appearanceDraft.appearance,
         role: existing.length ? "general" : "ceo",
-        ...(leader ? { reportsTo: leader.id } : {}),
+        ...(reportsTo !== undefined ? { reportsTo: reportsTo || null } : leader ? { reportsTo: leader.id } : {}),
+        ...(profileId ? { profileId, profileVersion } : {}),
         adapterType,
         adapterConfig: config,
         defaultEnvironmentId:
