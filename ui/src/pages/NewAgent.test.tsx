@@ -38,6 +38,7 @@ const state = vi.hoisted(() => ({
   adapters: [] as object[],
   navigate: vi.fn(),
   openNewIssue: vi.fn(),
+  profileOptions: {} as { dangerouslyBypassApprovalsAndSandbox?: boolean; search?: boolean },
 }));
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", connections: [] })),
@@ -46,7 +47,7 @@ const managedApi = vi.hoisted(() => ({
 }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: managedApi }));
 vi.mock("@/api/agents", () => ({ agentsApi: api }));
-vi.mock("@/api/agentProfiles", () => ({ agentProfilesApi: { get: async () => ({ id: "effort-profile", version: 1, config: { model: "gpt-6.1-sol", thinkingEffort: "ultra" } }) } }));
+vi.mock("@/api/agentProfiles", () => ({ agentProfilesApi: { get: async () => ({ id: "effort-profile", version: 1, config: { model: "gpt-6.1-sol", thinkingEffort: "ultra", ...state.profileOptions } }) } }));
 vi.mock("@/api/environments", () => ({ environmentsApi: envApi }));
 vi.mock("@/api/instanceSettings", () => ({ instanceSettingsApi: settings }));
 vi.mock("@/api/secrets", () => ({ secretsApi: secrets }));
@@ -159,6 +160,7 @@ const pass = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  state.profileOptions = {};
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -595,6 +597,14 @@ describe("New agent setup", () => {
     await click("Retry test");
     await click("Finish setup");
     expect(api.hire).toHaveBeenCalledTimes(1);
+  });
+  it.each([false, true])("uses explicit profile execution options for Codex connection testing and hiring (bypass=%s)", async (bypass) => {
+    state.profileOptions = { dangerouslyBypassApprovalsAndSandbox: bypass, search: !bypass };
+    await render("codex_local", "codex", true); await settle(); await connect("OpenAI");
+    const config = { engine: "cli", dangerouslyBypassApprovalsAndSandbox: bypass, search: !bypass };
+    expect(api.testEnvironment).toHaveBeenCalledWith("company-1", "codex_local", expect.objectContaining({ adapterConfig: expect.objectContaining(config) }));
+    await click("Finish setup");
+    expect(api.hire.mock.calls[0][1]).toMatchObject({ profileId: "effort-profile", adapterConfig: config });
   });
   it.each(["codex_local", "paperclip_runner"])("uses the profile effort for %s connection testing and agent creation", async (adapter) => {
     api.adapterModels.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol", reasoningEfforts: ["low", "ultra"] }]);

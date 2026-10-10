@@ -5,6 +5,8 @@ export const agentProfileConfigSchema = z.object({
   capabilities: z.string().max(4000).default(""), instructions: z.string().max(200000).default(""),
   adapterType: z.string().trim().min(1).max(100), runnerProvider: z.enum(["codex", "claude", "grok", "opencode"]).default("codex"), model: z.string().trim().max(200).default(""),
   thinkingEffort: z.string().trim().max(100).regex(/^[a-zA-Z0-9_-]*$/).default(""),
+  // Omitted in older snapshots: keep existing agent execution settings.
+  dangerouslyBypassApprovalsAndSandbox: z.boolean().optional(), search: z.boolean().optional(),
   skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
 }).strict().transform(({ role: _role, title: _title, ...config }) => config);
 export const createAgentProfileSchema = z.object({ name: z.string().trim().min(1).max(100), description: z.string().trim().max(300).default(""), config: agentProfileConfigSchema }).strict();
@@ -14,6 +16,10 @@ export const deleteAgentProfileSchema = z.object({ expectedVersion: z.number().i
 export type AgentProfileConfig = z.infer<typeof agentProfileConfigSchema>;
 export type CreateAgentProfile = z.infer<typeof createAgentProfileSchema>;
 export type UpdateAgentProfile = z.infer<typeof updateAgentProfileSchema>;
+
+export function agentProfileSupportsCodexOptions(config: { adapterType: string }): boolean {
+  return config.adapterType === "codex_local";
+}
 
 /** Config keys consumed by the existing adapter runtimes. */
 export function agentProfileEffortKey(config: { adapterType: string; runnerProvider: string }): string | null {

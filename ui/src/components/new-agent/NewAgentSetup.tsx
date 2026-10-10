@@ -97,6 +97,8 @@ export function NewAgentSetup() {
       profileVersion={Number(params.get("profileVersion")) || profile.data?.version}
       profileModel={profile.data?.config.model}
       profileEffort={profile.data?.config.thinkingEffort}
+      profileBypassSandbox={profile.data?.config.dangerouslyBypassApprovalsAndSandbox}
+      profileSearch={profile.data?.config.search}
       reportsTo={params.has("reportsTo") ? params.get("reportsTo") : undefined}
     />
   );
@@ -108,7 +110,7 @@ function Setup({
   adapterType,
   runnerProvider,
   createdAgentId,
-  profileId, profileVersion, profileModel, profileEffort, reportsTo,
+  profileId, profileVersion, profileModel, profileEffort, profileBypassSandbox, profileSearch, reportsTo,
 }: {
   companyId: string;
   name: string;
@@ -116,6 +118,7 @@ function Setup({
   runnerProvider: string;
   createdAgentId: string | null;
   profileId?: string | null; profileVersion?: number; profileModel?: string; profileEffort?: string; reportsTo?: string | null;
+  profileBypassSandbox?: boolean; profileSearch?: boolean;
 }) {
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -364,6 +367,11 @@ function Setup({
         : {}),
     };
     const config = getUIAdapter(adapterType).buildAdapterConfig(values);
+    if (adapterType === "codex_local" && profileId) {
+      if (profileBypassSandbox !== undefined || profileSearch !== undefined) config.engine = "cli";
+      if (profileBypassSandbox !== undefined) config.dangerouslyBypassApprovalsAndSandbox = profileBypassSandbox;
+      if (profileSearch !== undefined) config.search = profileSearch;
+    }
     const effortKey = agentProfileEffortKey({ adapterType, runnerProvider });
     if (effortKey && (effort || (profileId && profileEffort))) config[effortKey] = effort;
     if (isRunner)

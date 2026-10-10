@@ -60,6 +60,30 @@ No extra product repair is needed for those reproduced environment/version
 issues. Proceed with the feature PR and the authorized dev rollout; keep the
 initial full-run limitations visible in the PR. Master remains unchanged.
 
+## Profile Codex execution options — 2026-10-11
+
+- The profile editor and detail show `Bypass sandbox` and `Enable search` for
+  `codex_local`, matching the existing adapter's
+  `dangerouslyBypassApprovalsAndSandbox` and `search` keys. The editor explains
+  that bypass disables both execution approval and sandbox restrictions.
+- New editor drafts start with both options off. Older snapshots and API clients
+  may omit either option; omission leaves the agent's existing setting in place.
+  Other adapters do not expose or accept these Codex-specific profile options.
+- Profile setup must use the saved options in both the connection test and hire
+  payload, rather than the setup screen's independent Codex defaults. Explicit
+  per-agent hire settings retain precedence over profile defaults.
+- Profiles with explicit CLI options create new Codex agents with `engine=cli`;
+  conflicting explicit engines are rejected before hiring. Existing ACP agents
+  keep their execution contract and report these fields as individual overrides.
+  Imports capture CLI options only from CLI agents.
+- Importing an agent captures its explicit options, including the legacy bypass
+  alias. Opt-in linked changes use the existing idle/start lock and versioned
+  three-way comparison; they preserve individual overrides and other settings.
+  Restoring a version with explicit options applies them through the same path.
+- Verify draft restoration, saved detail, setup test/hire values, real-DB
+  round-trip, linked deferral, overrides, import/restore and legacy omission.
+  No existing profile or agent option is enabled by this feature deployment.
+
 ## Technical plan
 
 - Extend the established DB/shared/server/UI layers with company-scoped `agent_profiles`, immutable `agent_profile_versions`, `agent_profile_bindings`, typed strict schemas, a focused service/router and one page.

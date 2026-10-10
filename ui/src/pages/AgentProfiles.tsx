@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, UserRound, Copy, Pencil, Trash2, RotateCcw } from "lucide-react";
-import { agentProfileEffortKey, type AgentProfileDetail, type CreateAgentProfile } from "@paperclipai/shared";
+import { agentProfileEffortKey, agentProfileSupportsCodexOptions, type AgentProfileDetail, type CreateAgentProfile } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useNavigate } from "@/lib/router";
@@ -11,12 +11,13 @@ import { agentsApi } from "../api/agents";
 import { companySkillsApi } from "../api/companySkills";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { ToggleSwitch } from "../components/ui/toggle-switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { clearAgentProfileDraft, readAgentProfileDraft, writeAgentProfileDraft } from "../lib/agent-profile-draft";
 import { setupEfforts } from "../lib/agent-setup-fields";
 
 const control = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
-const empty = (adapterType: string): CreateAgentProfile => ({ name: "", description: "", config: { capabilities: "", instructions: "", adapterType, runnerProvider: "codex", model: "", thinkingEffort: "", skills: [] } });
+const empty = (adapterType: string): CreateAgentProfile => ({ name: "", description: "", config: { capabilities: "", instructions: "", adapterType, runnerProvider: "codex", model: "", thinkingEffort: "", skills: [], ...(agentProfileSupportsCodexOptions({ adapterType }) ? { dangerouslyBypassApprovalsAndSandbox: false, search: false } : {}) } });
 
 export function AgentProfiles() {
   const { selectedCompanyId } = useCompany();
@@ -103,7 +104,7 @@ function Profiles({ companyId }: { companyId: string }) {
           <label className="block space-y-1 text-sm">핵심 역할 설명<Input maxLength={300} value={draft.description} disabled={pending} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
           <label className="block space-y-1 text-sm">담당 업무<textarea className={control} rows={3} maxLength={4000} value={draft.config.capabilities} disabled={pending} onChange={e => setConfig("capabilities", e.target.value)} /></label>
           <label className="block space-y-1 text-sm">작업 지침<textarea className={`${control} font-mono`} rows={10} maxLength={200000} value={draft.config.instructions} disabled={pending} onChange={e => setConfig("instructions", e.target.value)} /></label>
-          <label className="block space-y-1 text-sm">실행 방식<select className={control} required value={draft.config.adapterType} disabled={pending || !creating} onChange={e => { setConfig("adapterType", e.target.value); setConfig("model", ""); setConfig("thinkingEffort", ""); setManualModel(false); }}>
+          <label className="block space-y-1 text-sm">실행 방식<select className={control} required value={draft.config.adapterType} disabled={pending || !creating} onChange={e => { setConfig("adapterType", e.target.value); setConfig("model", ""); setConfig("thinkingEffort", ""); setConfig("dangerouslyBypassApprovalsAndSandbox", agentProfileSupportsCodexOptions({ adapterType: e.target.value }) ? false : undefined); setConfig("search", agentProfileSupportsCodexOptions({ adapterType: e.target.value }) ? false : undefined); setManualModel(false); }}>
             {!supported?.some(a => a.type === draft.config.adapterType) && <option value={draft.config.adapterType}>{draft.config.adapterType}</option>}{supported?.map(a => <option key={a.type} value={a.type}>{a.label}</option>)}
           </select></label>
           {draft.config.adapterType === "paperclip_runner" && <label className="block space-y-1 text-sm">실행 제공자<select className={control} value={draft.config.runnerProvider} disabled={pending || !creating} onChange={e => { setConfig("runnerProvider", e.target.value as typeof draft.config.runnerProvider); setConfig("model", ""); setConfig("thinkingEffort", ""); setManualModel(false); }}>{["codex", "claude", "grok", "opencode"].map(provider => <option key={provider} value={provider}>{provider}</option>)}</select></label>}
@@ -128,6 +129,13 @@ function Profiles({ companyId }: { companyId: string }) {
             {efforts.length === 0 && <p className="text-xs text-muted-foreground">지원 값은 모델 선택 후 표시됩니다. 목록에 없는 모델은 에포트를 직접 입력할 수 있습니다.</p>}
             {usingManualModel && <label className="block space-y-1 text-sm">에포트 직접 입력<Input maxLength={100} pattern="[a-zA-Z0-9_-]*" value={draft.config.thinkingEffort} disabled={pending} onChange={e => setConfig("thinkingEffort", e.target.value)} /></label>}
           </fieldset>}
+          {agentProfileSupportsCodexOptions(draft.config) && <fieldset className="space-y-3" disabled={pending}>
+            <legend className="text-sm font-medium">Codex CLI 실행 옵션</legend>
+            <p className="text-xs text-muted-foreground">옵션을 지정한 프로필로 새 에이전트를 만들면 Codex CLI로 실행합니다. 기존 에이전트의 실행 방식은 유지합니다.</p>
+            <div className="space-y-1"><label htmlFor="profile-bypass-sandbox" className="flex items-center justify-between gap-3 text-sm"><span>Bypass sandbox</span><ToggleSwitch id="profile-bypass-sandbox" aria-label="Bypass sandbox" disabled={pending} checked={draft.config.dangerouslyBypassApprovalsAndSandbox ?? false} onCheckedChange={value => setConfig("dangerouslyBypassApprovalsAndSandbox", value)} /></label><p className="text-xs text-muted-foreground">실행 승인과 샌드박스 제한을 해제합니다.</p></div>
+            <div className="space-y-1"><label htmlFor="profile-enable-search" className="flex items-center justify-between gap-3 text-sm"><span>Enable search</span><ToggleSwitch id="profile-enable-search" aria-label="Enable search" disabled={pending} checked={draft.config.search ?? false} onCheckedChange={value => setConfig("search", value)} /></label><p className="text-xs text-muted-foreground">에이전트가 웹 검색을 사용할 수 있게 합니다.</p></div>
+            {(draft.config.dangerouslyBypassApprovalsAndSandbox === undefined || draft.config.search === undefined) && <p className="text-xs text-muted-foreground">이전 프로필에서 지정하지 않은 옵션은 기존 에이전트 설정을 유지합니다. 스위치를 변경하면 프로필에 저장됩니다.</p>}
+          </fieldset>}
           <fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">사용할 스킬</legend>{skills.error && <p role="alert" className="text-sm text-destructive">스킬을 불러오지 못했습니다.</p>}{skills.data?.map(skill => <label key={skill.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.config.skills.includes(skill.key)} disabled={pending} onChange={e => setConfig("skills", e.target.checked ? [...draft.config.skills, skill.key] : draft.config.skills.filter(k => k !== skill.key))} />{skill.name}</label>)}{skills.data?.length === 0 && <p className="text-sm text-muted-foreground">등록된 스킬이 없습니다.</p>}</fieldset>
           {!creating && linked > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={apply} disabled={pending} onChange={e => setApply(e.target.checked)} />연결된 에이전트 {linked}개에도 반영</label>}
           {!creating && <p className="text-xs text-muted-foreground">작업 중인 에이전트는 작업이 끝난 뒤 반영됩니다. 에이전트별로 따로 바꾼 설정은 유지합니다.</p>}
@@ -138,6 +146,7 @@ function Profiles({ companyId }: { companyId: string }) {
           <div className="space-y-2"><h3 className="text-sm font-semibold">담당 업무</h3><p className="whitespace-pre-wrap text-sm">{profile.config.capabilities || "등록된 업무 설명이 없습니다."}</p></div>
           <div className="space-y-2"><h3 className="text-sm font-semibold">작업 지침</h3><pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{profile.config.instructions || "등록된 지침이 없습니다."}</pre></div>
           <p className="text-sm">모델: {profile.config.model || "기본 모델"}</p><p className="text-sm">추론 강도: {profile.config.thinkingEffort || "기본값"}</p><p className="text-sm">스킬: {profile.config.skills.map(k => skills.data?.find(s => s.key === k)?.name ?? k).join(", ") || "선택 없음"}</p>
+          {agentProfileSupportsCodexOptions(profile.config) && <div className="space-y-1 text-sm"><p>Bypass sandbox: {profile.config.dangerouslyBypassApprovalsAndSandbox === undefined ? "개별 설정 유지" : profile.config.dangerouslyBypassApprovalsAndSandbox ? "켜짐" : "꺼짐"}</p><p>Enable search: {profile.config.search === undefined ? "개별 설정 유지" : profile.config.search ? "켜짐" : "꺼짐"}</p></div>}
           <section className="space-y-2"><h3 className="text-sm font-semibold">연결된 에이전트</h3>{profile.bindings.length === 0 && <p className="text-sm text-muted-foreground">이 프로필로 생성한 에이전트가 없습니다.</p>}{profile.bindings.map(b => <div key={b.agentId} className="rounded-md border border-border p-3 text-sm"><p>{b.name} · 적용 버전 {b.appliedVersion}{b.pendingVersion ? ` · 버전 ${b.pendingVersion} 반영 대기` : ""}</p>{b.overrides.length > 0 && <p className="mt-1 text-xs text-muted-foreground">개별 설정 유지: {b.overrides.join(", ")}</p>}{b.error && <p role="alert" className="mt-1 text-destructive">{b.error}</p>}</div>)}</section>
           <section className="space-y-2"><h3 className="text-sm font-semibold">버전 기록</h3>{linked > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={apply} onChange={e => setApply(e.target.checked)} />복원할 때 연결된 에이전트에도 반영</label>}{profile.versions.map(v => <div key={v.version} className="flex items-center justify-between gap-2 text-sm"><span>버전 {v.version} · {v.name}</span>{v.version !== profile.version && <Button variant="ghost" size="sm" disabled={pending} onClick={() => restore.mutate(v.version)}><RotateCcw className="size-4" />복원</Button>}</div>)}</section>
         </> : <p role={detail.error ? "alert" : "status"} className="text-sm text-muted-foreground">{detail.error ? detail.error.message : selected ? "프로필을 불러오는 중입니다." : "프로필 카드를 선택하면 상세 내용을 볼 수 있습니다."}</p>}

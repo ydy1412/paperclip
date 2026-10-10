@@ -16,6 +16,7 @@ import { agentRoutes } from "../routes/agents.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { boardMutationGuard } from "../middleware/board-mutation-guard.js";
 import type { CreateAgentProfile } from "@paperclipai/shared";
+import { buildCodexExecArgs } from "../../../packages/adapters/codex-local/src/server/codex-args.js";
 
 let db: ReturnType<typeof createDb>, database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, home: string;
 const companyId = randomUUID(), otherCompanyId = randomUUID(), userId = randomUUID();
@@ -27,10 +28,11 @@ function app() {
   server.use((req, _res, next) => { req.actor = req.header("x-agent") ? { type: "agent", companyId, agentId: randomUUID(), source: "agent_jwt" } : { ...actor, companyIds: [companyId] }; next(); });
   server.use("/api", boardMutationGuard()); server.use("/api", agentProfileRoutes(db)); server.use("/api", agentRoutes(db)); server.use(errorHandler); return server;
 }
-async function linked() {
-  const service = agentProfileService(db), profile = await service.create(companyId, input, userId);
+async function linked(config = input.config) {
+  const service = agentProfileService(db), profile = await service.create(companyId, { ...input, config }, userId);
   const [agent] = await db.insert(agents).values({ companyId, name: `Profile fixture ${randomUUID()}`, adapterType: input.config.adapterType, role: "engineer", title: "Original title", capabilities: input.config.capabilities,
-    adapterConfig: { model: input.config.model, env: { FIXTURE_SETTING: { type: "plain", value: "preserve" } }, cwd: home }, runtimeConfig: { heartbeat: { enabled: false } } }).returning();
+    adapterConfig: { engine: "cli", model: input.config.model, env: { FIXTURE_SETTING: { type: "plain", value: "preserve" } }, cwd: home,
+      ...(config.dangerouslyBypassApprovalsAndSandbox !== undefined ? { dangerouslyBypassApprovalsAndSandbox: config.dangerouslyBypassApprovalsAndSandbox } : {}), ...(config.search !== undefined ? { search: config.search } : {}) }, runtimeConfig: { heartbeat: { enabled: false } } }).returning();
   const bundle = await agentInstructionsService(db).materializeManagedBundle(agent, { "AGENTS.md": input.config.instructions });
   await db.update(agents).set({ adapterConfig: bundle.adapterConfig }).where(eq(agents.id, agent.id));
   await service.bind(companyId, profile.id, 1, agent.id, userId);
@@ -49,6 +51,100 @@ beforeAll(async () => {
 }, 90000);
 afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 describe("versioned agent profiles", () => {
+  it("uses profile execution options for hires and lets explicit false settings override them", async () => {
+    const service = agentProfileService(db);
+    const profile = await service.create(companyId, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: true, search: true } }, userId);
+    const payload = { name: `Options fixture ${randomUUID()}`, adapterType: "codex_local", adapterConfig: { model: input.config.model, cwd: home, engine: "cli" }, runtimeConfig: { heartbeat: { enabled: false } }, profileId: profile.id, profileVersion: 1 };
+    const result = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send(payload);
+    expect(result.status, JSON.stringify(result.body)).toBe(201);
+    expect(result.body.agent.adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: true, search: true });
+    const args = buildCodexExecArgs(result.body.agent.adapterConfig).args;
+    expect(args).toContain("--search"); expect(args).toContain("--dangerously-bypass-approvals-and-sandbox");
+    const override = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ ...payload, name: `Options override ${randomUUID()}`, adapterConfig: { ...payload.adapterConfig, dangerouslyBypassApprovalsAndSandbox: false, search: false } });
+    expect(override.status).toBe(201);
+    expect(override.body.agent.adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    expect(buildCodexExecArgs(override.body.agent.adapterConfig).args).not.toContain("--search");
+    expect(buildCodexExecArgs(override.body.agent.adapterConfig).args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+    const legacyOverride = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ ...payload, name: `Legacy options override ${randomUUID()}`, adapterConfig: { ...payload.adapterConfig, dangerouslyBypassSandbox: false } });
+    expect(legacyOverride.status).toBe(201);
+    expect(legacyOverride.body.agent.adapterConfig.dangerouslyBypassApprovalsAndSandbox).toBe(false);
+    const disabled = await service.create(companyId, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: false } }, userId);
+    const defaults = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ ...payload, name: `Disabled options ${randomUUID()}`, profileId: disabled.id });
+    expect(defaults.status).toBe(201);
+    expect(defaults.body.agent.adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    const inferredCli = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ ...payload, name: `CLI selection ${randomUUID()}`, adapterConfig: { cwd: home } });
+    expect(inferredCli.status).toBe(201); expect(inferredCli.body.agent.adapterConfig.engine).toBe("cli");
+    const incompatible = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ ...payload, adapterConfig: { cwd: home, engine: "acp" } });
+    expect(incompatible.status).toBe(400);
+  });
+  it("preserves an existing ACP engine and excludes inactive CLI options from imports", async () => {
+    const { service, profile, agent } = await linked({ ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    const [original] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    await db.update(agents).set({ adapterConfig: { ...original.adapterConfig, engine: "acp" } }).where(eq(agents.id, agent.id));
+    await service.update(companyId, profile.id, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: true, search: true }, expectedVersion: 1, applyToLinked: true }, userId);
+    const [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig).toMatchObject({ engine: "acp", dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    expect((await service.get(companyId, profile.id)).bindings[0].overrides).toEqual(["dangerouslyBypassApprovalsAndSandbox", "search"]);
+    await service.remove(companyId, profile.id, 2, userId);
+    const imported = await service.fromAgent(companyId, agent.id, actor);
+    expect(imported.config.dangerouslyBypassApprovalsAndSandbox).toBeUndefined();
+    expect(imported.config.search).toBeUndefined();
+  });
+  it("defers opt-in execution changes until the active run ends and restores explicit options", async () => {
+    const config = { ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: false };
+    const { service, profile, agent } = await linked(config);
+    const next = { ...input, config: { ...config, dangerouslyBypassApprovalsAndSandbox: true, search: true }, expectedVersion: 1, applyToLinked: false };
+    await service.update(companyId, profile.id, next, userId);
+    const current = async () => (await db.select().from(agents).where(eq(agents.id, agent.id)))[0];
+    expect((await current()).adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent.id, status: "running", invocationSource: "on_demand", responsibleUserId: userId }).returning();
+    const pending = await service.update(companyId, profile.id, { ...next, expectedVersion: 2, applyToLinked: true }, userId);
+    expect(pending.bindings[0]).toMatchObject({ appliedVersion: 1, pendingVersion: 3 });
+    expect((await current()).adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
+    expect(await service.applyPending(agent.id)).toBe(true);
+    expect((await current()).adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: true, search: true, cwd: home, env: { FIXTURE_SETTING: { type: "plain", value: "preserve" } } });
+    await service.restore(companyId, profile.id, { expectedVersion: 3, version: 1, applyToLinked: true }, userId);
+    expect((await current()).adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+  });
+  it("preserves individual option overrides and imports and normalizes the legacy bypass alias", async () => {
+    const { service, profile, agent } = await linked({ ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    const [original] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    const config: Record<string, unknown> = { ...original.adapterConfig, search: false, dangerouslyBypassSandbox: true };
+    delete config.dangerouslyBypassApprovalsAndSandbox;
+    await db.update(agents).set({ adapterConfig: config }).where(eq(agents.id, agent.id));
+    const applied = await service.update(companyId, profile.id, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: true }, expectedVersion: 1, applyToLinked: true }, userId);
+    expect(applied.bindings[0].overrides).toContain("dangerouslyBypassApprovalsAndSandbox");
+    const [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig).toMatchObject({ dangerouslyBypassSandbox: true, search: true });
+    await service.remove(companyId, profile.id, 2, userId);
+    const imported = await service.fromAgent(companyId, agent.id, actor);
+    expect(imported.config).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: true, search: true });
+    await service.update(companyId, imported.id, { ...input, config: { ...imported.config, dangerouslyBypassApprovalsAndSandbox: false, search: false }, expectedVersion: 1, applyToLinked: true }, userId);
+    const [normalized] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(normalized.adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: false, search: false });
+    expect(normalized.adapterConfig).not.toHaveProperty("dangerouslyBypassSandbox");
+  });
+  it("leaves omitted legacy execution options unchanged and rejects invalid or unsupported options", async () => {
+    const { service, profile, agent } = await linked();
+    const [original] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    await db.update(agents).set({ adapterConfig: { ...original.adapterConfig, dangerouslyBypassApprovalsAndSandbox: true, search: true } }).where(eq(agents.id, agent.id));
+    const applied = await service.update(companyId, profile.id, { ...input, config: { ...input.config, capabilities: "New work" }, expectedVersion: 1, applyToLinked: true }, userId);
+    expect(applied.config.search).toBeUndefined();
+    const [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig).toMatchObject({ dangerouslyBypassApprovalsAndSandbox: true, search: true });
+    expect((await request(app()).post(base).send({ ...input, config: { ...input.config, search: "true" } })).status).toBe(400);
+    expect((await request(app()).post(base).send({ ...input, config: { ...input.config, adapterType: "claude_local", search: true } })).status).toBe(400);
+  });
+  it("compares an omitted agent bypass setting with the actual CLI default", async () => {
+    const { service, profile, agent } = await linked({ ...input.config, dangerouslyBypassApprovalsAndSandbox: true, search: false });
+    const [original] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    const config = { ...original.adapterConfig }; delete config.dangerouslyBypassApprovalsAndSandbox;
+    await db.update(agents).set({ adapterConfig: config }).where(eq(agents.id, agent.id));
+    const applied = await service.update(companyId, profile.id, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: false, search: false }, expectedVersion: 1, applyToLinked: true }, userId);
+    expect(applied.bindings[0].overrides).not.toContain("dangerouslyBypassApprovalsAndSandbox");
+    expect((await db.select().from(agents).where(eq(agents.id, agent.id)))[0].adapterConfig.dangerouslyBypassApprovalsAndSandbox).toBe(false);
+  });
   it("uses the existing hire endpoint and links the pinned profile without copying authentication into it", async () => {
     const service = agentProfileService(db), profile = await service.create(companyId, { ...input, config: { ...input.config, thinkingEffort: "high" } }, userId);
     const hireBase = `/api/companies/${companyId}/agent-hires`;
@@ -78,7 +174,7 @@ describe("versioned agent profiles", () => {
     expect((await request(server).post(base).send({ ...input, config: { ...input.config, apiKey: "synthetic-secret" } })).status).toBe(400);
     expect((await request(server).post(base).send({ ...input, config: { ...input.config, skills: ["missing-skill"] } })).status).toBe(400);
     expect(await db.select().from(agentProfileVersions).where(eq(agentProfileVersions.profileId, id))).toHaveLength(2);
-    expect((await db.select().from(activityLog).where(eq(activityLog.entityId, id))).map(x => x.action)).toEqual(["agent.profile_created", "agent.profile_updated"]);
+    expect((await db.select().from(activityLog).where(eq(activityLog.entityId, id))).map(x => x.action).sort()).toEqual(["agent.profile_created", "agent.profile_updated"]);
   });
   it("keeps changes opt-in, applies instructions/model after active work and preserves identity/auth/workspace", async () => {
     const { service, profile, agent } = await linked();
