@@ -24,6 +24,7 @@ import {
   getInboxWorkItemKey,
   getApprovalsForTab,
   getInboxWorkItems,
+  getLatestFailedIssueIds,
   getInboxKeyboardSelectionIndex,
   getInboxSearchSupplementIssues,
   getRecentTouchedIssues,
@@ -312,6 +313,29 @@ const dashboard: DashboardSummary = {
 };
 
 describe("inbox helpers", () => {
+  it("tracks the latest failure per task, including failures from an agent now doing another task", () => {
+    const run = (id: string, status: HeartbeatRun["status"], time: string, issueId: string) => ({
+      ...makeRun(id, status, time), contextSnapshot: { issueId },
+    });
+    const ids = getLatestFailedIssueIds([
+      run("old-failure", "failed", "2026-03-11T00:00:00Z", "retried"),
+      run("success", "succeeded", "2026-03-11T01:00:00Z", "retried"),
+      run("unresolved", "timed_out", "2026-03-11T00:30:00Z", "failed-task"),
+      run("other-task", "succeeded", "2026-03-11T02:00:00Z", "different-task"),
+    ]);
+    expect([...ids]).toEqual(["failed-task"]);
+  });
+
+  it("filters failed runs by Status and removes approvals and join requests from status results", () => {
+    const options = {
+      issues: [], approvals: [makeApproval("pending")], joinRequests: [makeJoinRequest("join")],
+      failedRuns: [makeRun("failure", "failed", "2026-03-11T00:00:00Z")],
+    };
+    expect(getInboxWorkItems({ ...options, statuses: ["failed"] }).map(item => item.kind)).toEqual(["failed_run"]);
+    expect(getInboxWorkItems({ ...options, statuses: ["done"] })).toEqual([]);
+    expect(getInboxWorkItems(options)).toHaveLength(3);
+  });
+
   beforeEach(() => {
     storage.clear();
   });
@@ -1164,10 +1188,10 @@ describe("inbox helpers", () => {
       },
     });
     expect(loadInboxFilterPreferences("company-2")).toEqual({
-      allCategoryFilter: "failed_runs",
+      allCategoryFilter: "everything",
       allApprovalFilter: "actionable",
       issueFilters: {
-        statuses: ["done"],
+        statuses: ["failed"],
         priorities: [],
         assignees: [],
         creators: [],

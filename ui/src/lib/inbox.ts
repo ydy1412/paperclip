@@ -215,9 +215,12 @@ export function loadInboxFilterPreferences(
     }
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
-      allCategoryFilter: normalizeInboxCategoryFilter(parsed.allCategoryFilter),
+      allCategoryFilter: parsed.allCategoryFilter === "failed_runs" ? "everything" : normalizeInboxCategoryFilter(parsed.allCategoryFilter),
       allApprovalFilter: normalizeInboxApprovalFilter(parsed.allApprovalFilter),
-      issueFilters: normalizeIssueFilterState(parsed.issueFilters),
+      issueFilters: {
+        ...normalizeIssueFilterState(parsed.issueFilters),
+        ...(parsed.allCategoryFilter === "failed_runs" ? { statuses: ["failed"] } : {}),
+      },
     };
   } catch {
     return {
@@ -750,6 +753,16 @@ export function normalizeTimestamp(value: string | Date | null | undefined): num
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+/** A failure belongs to a task even when its agent has since run a different task. */
+export function getLatestFailedIssueIds(runs: HeartbeatRun[]): Set<string> {
+  const latestByIssue = new Map<string, HeartbeatRun>();
+  for (const run of [...runs].sort((a, b) => normalizeTimestamp(b.createdAt) - normalizeTimestamp(a.createdAt))) {
+    const issueId = run.contextSnapshot?.issueId ?? run.contextSnapshot?.taskId;
+    if (typeof issueId === "string" && issueId && !latestByIssue.has(issueId)) latestByIssue.set(issueId, run);
+  }
+  return new Set([...latestByIssue].filter(([, run]) => FAILED_RUN_STATUSES.has(run.status)).map(([id]) => id));
+}
+
 export function issueLastActivityTimestamp(issue: Issue): number {
   const lastActivityAt = normalizeTimestamp(issue.lastActivityAt);
   if (lastActivityAt > 0) return lastActivityAt;
@@ -819,11 +832,13 @@ export function getInboxWorkItems({
   approvals,
   failedRuns = [],
   joinRequests = [],
+  statuses = [],
 }: {
   issues: Issue[];
   approvals: Approval[];
   failedRuns?: HeartbeatRun[];
   joinRequests?: JoinRequest[];
+  statuses?: string[];
 }): InboxWorkItem[] {
   return [
     ...issues.map((issue) => ({
@@ -831,17 +846,17 @@ export function getInboxWorkItems({
       timestamp: issueLastActivityTimestamp(issue),
       issue,
     })),
-    ...approvals.map((approval) => ({
+    ...(statuses.length === 0 ? approvals : []).map((approval) => ({
       kind: "approval" as const,
       timestamp: approvalActivityTimestamp(approval),
       approval,
     })),
-    ...failedRuns.map((run) => ({
+    ...(statuses.length === 0 || statuses.includes("failed") ? failedRuns : []).map((run) => ({
       kind: "failed_run" as const,
       timestamp: normalizeTimestamp(run.createdAt),
       run,
     })),
-    ...joinRequests.map((joinRequest) => ({
+    ...(statuses.length === 0 ? joinRequests : []).map((joinRequest) => ({
       kind: "join_request" as const,
       timestamp: normalizeTimestamp(joinRequest.createdAt),
       joinRequest,

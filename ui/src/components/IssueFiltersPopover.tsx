@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Bot, Check, Filter, HardDrive, Search, User, X } from "lucide-react";
+import { Bot, Check, CircleX, Filter, HardDrive, Search, User, X } from "lucide-react";
 import { PriorityIcon } from "./PriorityIcon";
 import { SHOW_TASK_PRIORITY_UI } from "../lib/ui-flags";
 import { StatusIcon } from "./StatusIcon";
@@ -69,7 +69,6 @@ const INBOX_CATEGORY_OPTIONS: ReadonlyArray<[InboxCategoryFilter, string]> = [
   ["issues_i_touched", "My recent tasks"],
   ["join_requests", "Join requests"],
   ["approvals", "Approvals"],
-  ["failed_runs", "Failed"],
   ["alerts", "Alerts"],
 ];
 
@@ -323,14 +322,15 @@ export function IssueFiltersPopover({
             <div className="min-w-0 space-y-3">
               <div className="space-y-1">
                 <span className="text-xs text-muted-foreground">Status</span>
-                <div className="space-y-0.5">
-                  {issueStatusOrder.map((status) => (
+                <div className="space-y-0.5" data-filter-options="issue-status">
+                  {(inboxScopeFilters ? [...issueStatusOrder, "failed"] : issueStatusOrder).map((status) => (
                     <label key={status} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent/50">
                       <Checkbox
+                        aria-label={issueFilterLabel(status)}
                         checked={state.statuses.includes(status)}
                         onCheckedChange={() => onChange({ statuses: toggleIssueFilterValue(state.statuses, status) })}
                       />
-                      <StatusIcon status={status} />
+                      {status === "failed" ? <CircleX className="h-4 w-4 text-destructive" aria-hidden="true" /> : <StatusIcon status={status} />}
                       <span className="text-sm">{issueFilterLabel(status)}</span>
                     </label>
                   ))}
