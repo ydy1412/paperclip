@@ -28,6 +28,12 @@ submission.
 
 ## 3. Repo Map
 
+Dovix development follows the repository-specific Git Flow in
+`doc/DEVELOPING.md` (Dovix Git and release workflow). `origin` is the Dovix
+repository; `upstream` is a read-only Paperclip source. Work on `feature/*`,
+integrate verified changes into `develop`, and promote a tested release to
+`master`. Unvalidated recovery checkpoints must remain on their working branch.
+
 - `server/`: Express REST API and orchestration services
 - `ui/`: React + Vite board UI
 - `packages/db/`: Drizzle schema, migrations, DB clients
