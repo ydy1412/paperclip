@@ -18,7 +18,7 @@
 
 - AutoSourcing 전체: 177 통과 / 12 live 제외 / 0 실패. 실제 SQLite 후보·범위·검색·전환, 가격 확인·부분 실패·응답 유실·재시작·재조회, 기존 IMAGE 상세/가격 JSON 호환성을 검증했다.
 - Dovix 공유 UI·HTML 검사 13개 통과. native worker/host/HTTP/SQLite 3파일 12개 검사 통과 후, 가격 확인값의 실제 HTTP 회귀를 추가한 catalog integration 4개도 통과했다.
-- 전체 typecheck/build와 토큰 검사 통과. Dovix 전체 test:run은 실행 중이며 결과를 별도로 기록한다. 미완료 검사를 통과로 간주하지 않는다.
+- 전체 typecheck/build와 토큰 검사 통과. Dovix 전체 test:run을 실행했으나 기본 sibling checkout의 예전 AutoSourcing 테스트 바이너리로 연동 검사 3개가 실패해 중단했다. 병합된 백엔드를 AUTO_SOURCING_PROJECT_ROOT로 지정한 재검증은 4개 모두 통과했다. 보조 병렬 실행에서 시간 초과가 난 기존 권한/인증 20개와 DB 마이그레이션 3개는 단독 재실행으로 모두 통과했다. shared project 841개도 통과했다. 나머지 전체 검사 그룹과 CI는 완료/성공으로 기록하지 않는다.
 - 운영 SQLite 복사본에 새 마이그레이션을 적용하고 기존 48개 테이블의 모든 기존 열/행 digest를 비교해 보존을 확인했다. 신규 옵션 작업의 기본값은 []다.
 - 현재 운영 UI의 프로필/Inbox 개선을 보존한 호환 빌드가 통과했다. 실제 운영 반영은 dev 머지 SHA와 연결해 tmp/workspace-catalog-operating의 deployment.json/backend-deployment.json 및 후속 검증 기록으로 확인한다.
 
@@ -27,3 +27,16 @@
 실제 판매 계정의 상품/가격 쓰기와 새 Aside 유료 수집은 이 검증에서 실행하지 않았다. 구현 완료와 이 두 외부 실행 성공을 구분한다.
 
 Aside 실제 브라우저 검증: HTML 표시/sandbox/script 비실행, 10,000→12,000원 비교·취소 draft 보존·저장, 쇼핑몰 기존 가격 비교와 큐 등록, 후보 1개 불러오기, 가공 전 1→0·가공 중 0→1 전환, 최종 alert 0. 실제 fixture 작업은 별도 HTTP 조회에서 succeeded/반영 버전 2를 확인했다. 증거: tmp/workspace-catalog-operating/browser-full.log 및 browser-backend-proof.json. 새 Aside 수집/실제 판매 계정 쓰기는 수행하지 않았다.
+
+
+## dev 반영·인계 (2026-10-11 07:03 KST)
+
+- 기능 PR: [Dovix #11](https://github.com/ydy1412/paperclip/pull/11), [AutoSourcing #8](https://github.com/ydy1412/auto-sourcing/pull/8)를 검토 후 dev에 병합했다. 두 PR에 등록된 CI check는 없었으며 CI 통과를 주장하지 않는다.
+- 실행 버전: Dovix 선택 모듈/호환 UI는 dev `197c2b5b5c9d635f8c6ee52d9098803aacab0a97`, AutoSourcing release는 dev `f1e6b1f8d9426ac3b4911accb136f047dbc3c5bd`에 연결된다. 후속 문서/테스트 전용 커밋은 배포된 앱 변경으로 간주하지 않는다.
+- Dovix는 실행 중 heartbeat/plugin/marketing 작업이 모두 0일 때 세 JS 모듈과 UI만 반영했다. 재시작 후 health, 익명 접근 거부, 프로필 4개, Codex 모델 목록, UI assets 48개 hash를 확인했다. 기존 프로필 옵션·Inbox를 포함한 호환 UI entry는 `/assets/index-CwvJfHrP.js`다.
+- AutoSourcing 운영 DB 마이그레이션 및 무결성/FK 확인, 기존 48개 테이블의 기존 열/행 digest 보존을 확인했다. 첫 시도는 Homebrew Python의 plist XML 모듈 오류로 앱/DB를 복구했고, 시스템 Python으로 재시도해 성공했다. 백업의 앱/DB/plist를 함께 복구하며 재시작 후 새 쓰기가 있으면 DB 자동 복원을 중단한다.
+- 기록된 후보 3,879개를 범위가 지정된 후보 테이블에 가져왔다. 두 번째 가져오기는 0건이며 기존 다른 48개 테이블은 그대로다. 화면은 소싱 후보 3,877개, 가공 전 2개를 표시한다. 기존 등록 상품 244개/옵션 468개에서 판매가가 보이고 IMAGE 상세 243개는 HTML 미리보기로 읽힌다.
+- Aside u1 실제 운영 UI에서 대표 이미지 로드, 기존 가격 입력값, HTML 편집/미리보기와 sandbox, 새 단계/count, alert 0을 확인했다. 개발 fixture에서는 가격 확인/취소/저장/큐/GET 완료와 가공 시작까지 검증했다. 운영 상품 가격 변경과 새 유료 수집은 실행하지 않았다.
+- Todoist 세 항목은 07:03 KST에 완료했다. 완료 조회의 checked=true 3개, completed activity 3개, 해당 프로젝트의 열린 항목 0개를 확인했다.
+
+로컬 증거: `tmp/workspace-catalog-operating/{deployment,backend-deployment,operating-catalog-proof,todoist-completion-proof}.json`, `artifacts/operating-browser-proof.json`, `pr11-review.json`. 복구 경로는 배포 receipt의 backup을 따른다. paired 연동 실행 시 `AUTO_SOURCING_PROJECT_ROOT`에 새 백엔드를 빌드한 checkout을 지정한다. master 반영, 실제 판매 계정 쓰기, 새 Aside 수집, 나머지 전체 검사 그룹은 이 인계의 성공 범위에 포함하지 않는다.
