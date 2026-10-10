@@ -1,9 +1,9 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type Db, agents, heartbeatRuns, issues, projects, pluginConfig } from "@paperclipai/db";
-import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema } from "@paperclipai/shared";
+import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema, workspaceItemSchema, candidateSchema, catalogPricePreviewSchema } from "@paperclipai/shared";
 import type { HostServices, WorkerHostCallContext } from "@paperclipai/plugin-sdk";
-import { forbidden } from "../errors.js";
+import { forbidden, HttpError } from "../errors.js";
 import { pluginRegistryService } from "./plugin-registry.js";
 import { createPluginSecretsHandler } from "./plugin-secrets-handler.js";
 import { processingReadSchema, processingWriteSchema, processingSourceSchema, processingListSchema, processingViewSchema } from "./auto-sourcing-processing-contract.js";
@@ -95,21 +95,26 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
       redirect: "error", signal: AbortSignal.timeout(120000) });
     if (!response.ok) {
       const error = await response.json().catch(() => null) as { code?: unknown } | null;
-      throw new Error(typeof error?.code === "string" && /^[a-z_]{1,80}$/.test(error.code) ? error.code : "catalog_request_failed");
+      const code = typeof error?.code === "string" && /^[a-z_]{1,80}$/.test(error.code) ? error.code : "catalog_request_failed";
+      if ([400, 403, 404, 409, 422].includes(response.status)) throw new HttpError(response.status, code);
+      throw new Error(code);
     }
     const text = await response.text(); if (text.length > 8 * 1024 * 1024) throw new Error("catalog_response_too_large");
     return JSON.parse(text) as unknown;
   }
   async function catalog(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = catalogRequestSchema.parse(value);
-    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status"];
+    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview"];
     if (reads.includes(input.operation) === write) throw forbidden("허용되지 않은 상품 작업입니다.");
     if (context?.invocationScope?.agentRun && write && !["save", "source"].includes(input.operation)) throw forbidden("상품 가져오기와 실제 업로드는 운영 화면에서 실행해 주세요.");
     const { config, accounts } = await authorize(input, context, true);
-    if (input.operation === "source" && !(config.sourceProducts?.[input.projectId] ?? []).includes(`${input.sourceProvider}:${input.sourceProductId}`)) throw forbidden("프로젝트에 허용된 원본 상품이 아닙니다.");
+    if (input.operation === "source" && !(config.sourceProducts?.[input.projectId] ?? []).includes(`${input.sourceProvider}:${input.sourceProductId}`)) {
+      const access = z.object({ allowed: z.boolean() }).parse(await catalogCall(input.companyId, config.serviceToken, "source-access", input));
+      if (!access.allowed) throw forbidden("프로젝트에 허용된 원본 상품이 아닙니다.");
+    }
     const { operation, ...body } = input;
     const raw = await catalogCall(input.companyId, config.serviceToken, operation, operation === "settings" ? { ...body, legacyAccountIds: context?.invocationScope?.agentRun ? [] : accounts } :
-      operation === "sources" ? { ...body, allowedSources: config.sourceProducts?.[input.projectId] ?? [] } : body);
+      ["sources", "workspace", "stages"].includes(operation) ? { ...body, allowedSources: config.sourceProducts?.[input.projectId] ?? [] } : body);
     let result: unknown = raw;
     if (operation === "settings") {
       const settings = storeSettingsSchema.parse(raw);
@@ -117,6 +122,10 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
       if (context?.invocationScope?.agentRun) settings.businesses = settings.businesses.map(b => ({ ...b, registrationNumber: "" }));
       result = settings;
     } else if (operation === "list") result = z.array(managedProductSchema).parse(raw);
+    else if (operation === "workspace") result = z.array(workspaceItemSchema).parse(raw);
+    else if (operation === "candidate-import") result = z.object({ imported: z.number().int().nonnegative() }).parse(raw);
+    else if (operation === "candidate-collect") result = candidateSchema.parse(raw);
+    else if (operation === "price-preview") result = catalogPricePreviewSchema.parse(raw);
     else if (operation === "stages") result = catalogStageCountsSchema.parse(raw);
     else if (operation === "sources") result = z.array(z.object({ sourceProvider: z.string(), sourceProductId: z.string(), title: z.string(), mainImage: z.string() })).parse(raw);
     else if (["get", "save", "source"].includes(operation)) result = managedProductSchema.parse(raw);
@@ -163,7 +172,9 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   async function processing(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = (write ? processingWriteSchema : processingReadSchema).parse(value);
     const { config } = await authorize(input, context);
-    const allowed = config.sourceProducts?.[input.projectId] ?? [];
+    const bound = z.array(z.object({ sourceProvider: z.string(), sourceProductId: z.string(), title: z.string(), mainImage: z.string() })).parse(
+      await catalogCall(input.companyId, config.serviceToken, "sources", { companyId: input.companyId, projectId: input.projectId, allowedSources: config.sourceProducts?.[input.projectId] ?? [] }));
+    const allowed = [...(config.sourceProducts?.[input.projectId] ?? []), ...bound.map(s => `${s.sourceProvider}:${s.sourceProductId}`)];
     const permitted = (provider: string, productId: string) => allowed.includes(`${provider}:${productId}`);
     if ("productId" in input && !permitted(input.sourceProvider, input.productId)) throw forbidden("프로젝트에 허용된 원본 상품이 아닙니다.");
     const token = await secrets.resolve({ companyId: input.companyId, secretRef: config.serviceToken, configPath: "serviceToken" });
