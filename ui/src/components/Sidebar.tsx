@@ -23,6 +23,8 @@ import {
   LayoutGrid,
   Users,
   BookOpen,
+  Megaphone,
+  ShoppingBag,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -251,6 +253,8 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             />
           ) : null}
           <SidebarNavItem to="/knowledge" label="Knowledge" icon={BookOpen} />
+          <SidebarNavItem to="/marketing" label="마케팅" icon={Megaphone} />
+          <SidebarNavItem to="/sourcing" label="쇼핑몰 관리" icon={ShoppingBag} />
           {showWorkspacesLink ? (
             <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
           ) : null}
@@ -275,7 +279,8 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             collapsible={{ open: organizationOpen, onOpenChange: setOrganizationOpen }}
           >
             <SidebarNavItem to="/agents" label="Agents" icon={Users} />
-            <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
+            <SidebarNavItem to="/agent-profiles" label="에이전트 프로필" icon={Boxes} />
+          <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
             <SidebarNavItem to="/apps" label="Connectors" icon={Unplug} />
             <SidebarNavItem to="/activity" label="Audit" icon={History} />
           </SidebarSection>

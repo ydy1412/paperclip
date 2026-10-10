@@ -20,6 +20,9 @@ import {
   MessagesSquare,
   GanttChartSquare,
   LayoutGrid,
+  BookOpen,
+  Megaphone,
+  ShoppingBag,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -198,6 +201,10 @@ export function Sidebar() {
             />
           ) : null}
           <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
+          <SidebarNavItem to="/knowledge" label="Knowledge" icon={BookOpen} />
+          <SidebarNavItem to="/marketing" label="마케팅" icon={Megaphone} />
+          <SidebarNavItem to="/sourcing" label="쇼핑몰 관리" icon={ShoppingBag} />
+          <SidebarNavItem to="/agent-profiles" label="에이전트 프로필" icon={Boxes} />
           <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
           {showWorkspacesLink ? (
             <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />

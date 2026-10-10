@@ -2032,6 +2032,7 @@ export {
   issueWorkProductStatusSchema,
   issueWorkProductReviewStateSchema,
   COMPANY_ARTIFACTS_DEFAULT_LIMIT,
+  moveArtifactFolderEntrySchema,
   COMPANY_ARTIFACTS_MAX_LIMIT,
   COMPANY_ARTIFACTS_MAX_QUERY_LENGTH,
   companyArtifactGroupBySchema,
@@ -2816,6 +2817,13 @@ export * from "./browser-use.js";
 export * from "./types/skill-source.js";
 export * from "./validators/skill-source.js";
 export * from "./github-skill-repository.js";
-
+export * from "./validators/marketing.js";
+export * from "./types/marketing.js";
 export * from "./types/agent-continuity.js";
 export * from "./validators/agent-continuity.js";
+
+export * from "./types/sourcing-forwarders.js";
+export * from "./validators/sourcing-forwarders.js";
+export * from "./validators/sourcing-catalog.js";
+export * from "./validators/agent-profiles.js";
+export * from "./types/agent-profiles.js";
