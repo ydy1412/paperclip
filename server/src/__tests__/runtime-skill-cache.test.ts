@@ -45,6 +45,7 @@ describe("runtime skill revision cache", () => {
     expect(new Set(sources).size).toBe(1);
     expect(read).toHaveBeenCalledTimes(2);
     expect((await fs.stat(sources[0]!)).mode & 0o222).toBe(0);
+    expect((await fs.stat(path.dirname(sources[0]!))).mode & 0o222).toBe(0);
     expect((await fs.stat(path.join(sources[0]!, "SKILL.md"))).mode & 0o222).toBe(0);
     const before = await fs.stat(path.join(sources[0]!, "SKILL.md"));
     read.mockRejectedValue(new Error("Upstream offline"));
@@ -90,6 +91,16 @@ describe("runtime skill revision cache", () => {
       expect(runtimeSkillCacheSpec(root, { ...skill, ...update })!.fingerprint).not.toBe(spec.fingerprint);
     }
     expect(runtimeSkillCacheSpec(root, { ...skill, sourceRef: "main" })).toBeNull();
+  });
+
+  it("does not reuse a writable revision root even when its descendants are readonly", async () => {
+    const spec = runtimeSkillCacheSpec(root, skill)!;
+    await resolveRuntimeSkillCache(spec, reader());
+    await fs.chmod(spec.entry, 0o700);
+    expect(await resolveRuntimeSkillCache(spec, reader(), false)).toBeNull();
+    const source = await resolveRuntimeSkillCache(spec, reader());
+    expect((await fs.stat(path.dirname(source!))).mode & 0o222).toBe(0);
+    expect(await resolveRuntimeSkillCache(spec, reader(), false)).toBe(source);
   });
 
   it("retains the old revision when publishing an explicit update", async () => {

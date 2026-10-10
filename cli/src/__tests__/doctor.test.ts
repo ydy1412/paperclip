@@ -2,7 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { doctor } from "../commands/doctor.js";
 import { writeConfig } from "../config/store.js";
 import type { PaperclipConfig } from "../config/schema.js";
@@ -20,8 +20,8 @@ async function availablePort(): Promise<number> {
   return address.port;
 }
 
-function createTempConfig(serverPort: number): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-doctor-"));
+function createTempConfig(serverPort: number, home: string): string {
+  const root = fs.mkdtempSync(path.join(home, "paperclip-doctor-"));
   const configPath = path.join(root, ".paperclip", "config.json");
   const runtimeRoot = path.join(root, "runtime");
 
@@ -87,19 +87,25 @@ function createTempConfig(serverPort: number): string {
 }
 
 describe("doctor", () => {
+  let home: string;
+
   beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV };
+    home = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-doctor-home-"));
+    process.env = { ...ORIGINAL_ENV, HOME: home, PAPERCLIP_HOME: path.join(home, ".paperclip") };
+    vi.spyOn(os, "homedir").mockReturnValue(home);
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env = { ...ORIGINAL_ENV };
+    fs.rmSync(home, { recursive: true, force: true });
   });
 
   it("re-runs repairable checks so repaired failures do not remain blocking", async () => {
-    const configPath = createTempConfig(await availablePort());
+    const configPath = createTempConfig(await availablePort(), home);
 
     const summary = await doctor({
       config: configPath,

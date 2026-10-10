@@ -4,7 +4,8 @@ import { issueRecoveryActionService } from "../services/issue-recovery-actions.j
 import * as localCredentials from "../services/local-ai-credentials.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, access, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, access, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -24,6 +25,7 @@ import { validateAiApiKey } from "../routes/ai-connections.js";
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
 let home: string;
+let restoreCwd: (() => void) | undefined;
 const companyId = randomUUID();
 const otherCompanyId = randomUUID();
 const agentId = randomUUID();
@@ -34,6 +36,9 @@ const create = (userId: string, name: string, ownership: "personal" | "shared" =
 
 beforeAll(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "paperclip-ai-tests-"));
+  // Keep default project-auth checks independent of developer checkout settings.
+  const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(home);
+  restoreCwd = () => cwdSpy.mockRestore();
   vi.stubEnv("PAPERCLIP_HOME", home);
   vi.stubEnv("PAPERCLIP_INSTANCE_ID", "ai-connection-fixture");
   database = await startEmbeddedPostgresTestDatabase("paperclip-ai-db-");
@@ -43,7 +48,7 @@ beforeAll(async () => {
   await db.insert(agents).values({ id: agentId, companyId, name: "Nova", adapterType: "claude_local" });
   await db.insert(companyMemberships).values(["alice", "bob"].map(principalId => ({ companyId, principalId, principalType: "user", status: "active", membershipRole: "member" })));
 }, 90000);
-afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
+afterAll(async () => { await database?.cleanup(); restoreCwd?.(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 
 describe("managed AI connections", () => {
   it.each([false, true])("reports the authoritative connection-manager capability for custom grants (manager: %s)", async (manager) => {
@@ -277,6 +282,41 @@ describe("managed AI connections", () => {
       .where(and(eq(aiConnectionDefaults.userId, userId), eq(aiConnectionDefaults.method, "api_key")));
     expect((await service.select({ ...input, userId })).grant.id).toBe(api.grantId);
   });
+  it("separates managed Codex Git-project settings from outer user defaults while rejecting project overrides", async () => {
+    const outer = await mkdtemp(path.join(os.tmpdir(), "managed-codex-project-scope-"));
+    const repository = path.join(outer, "repository");
+    const nested = path.join(repository, "src", "nested");
+    try {
+      await mkdir(path.join(outer, ".codex"), { recursive: true });
+      await writeFile(path.join(outer, ".codex", "config.toml"), 'model_provider = "fixture-outer"\n');
+      await mkdir(nested, { recursive: true });
+      execFileSync("git", ["init", "--quiet", repository]);
+      await expect(assertManagedAiProjectAuth({ cwd: nested }, "openai")).resolves.toBeUndefined();
+      await mkdir(path.join(repository, ".codex"));
+      const projectConfig = path.join(repository, ".codex", "config.toml");
+      await writeFile(projectConfig, 'model_provider = "fixture-project"\n');
+      await expect(assertManagedAiProjectAuth({ cwd: nested }, "openai")).rejects.toThrow("Project authentication");
+      await rm(projectConfig);
+      await mkdir(path.join(nested, ".codex"));
+      await writeFile(path.join(nested, ".codex", "config.toml"), 'env_key = "FIXTURE_KEY_NAME"\n');
+      await expect(assertManagedAiProjectAuth({ cwd: nested }, "openai")).rejects.toThrow("Project authentication");
+      await rm(path.join(nested, ".codex"), { recursive: true });
+      const nonGit = path.join(outer, "not-a-repository");
+      await mkdir(nonGit);
+      await expect(assertManagedAiProjectAuth({ cwd: nonGit }, "openai")).rejects.toThrow("Project authentication");
+      await expect(assertManagedAiProjectAuth({ cwd: nested, args: ["--config=model_provider=fixture"] }, "openai")).rejects.toThrow("overrides");
+      execFileSync("git", ["-C", repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "--quiet", "-m", "fixture"]);
+      const worktree = path.join(outer, "worktree");
+      execFileSync("git", ["-C", repository, "worktree", "add", "--quiet", "--detach", worktree]);
+      await expect(assertManagedAiProjectAuth({ cwd: worktree }, "openai")).resolves.toBeUndefined();
+      await mkdir(path.join(worktree, ".codex"));
+      await writeFile(path.join(worktree, ".codex", "config.toml"), 'experimental_bearer_token = "synthetic-fixture"\n');
+      await expect(assertManagedAiProjectAuth({ cwd: worktree }, "openai")).rejects.toThrow("Project authentication");
+    } finally {
+      await rm(outer, { recursive: true, force: true });
+    }
+  });
+
   it("checks the selected environment for project auth overrides without exposing their contents", async () => {
     const execute = vi.spyOn(executionTarget, "runAdapterExecutionTargetProcess");
     const target = { kind: "remote", transport: "sandbox", remoteCwd: "/workspace/project" } as Parameters<typeof assertManagedAiProjectAuth>[2];

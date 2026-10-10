@@ -74,3 +74,270 @@ The final safety review added complete packet/workspace validation, dispatch-tim
 - An abandoned empty Git index lock had no active Git process or open-file owner; it was moved to task diagnostics before task-only commits. No user source/history was deleted.
 - No operating service restart, production DB migration, merge, push, second orchestration store or OpenRig source copy was performed.
 - Isolated browser preview and identified orphan test-runner processes were stopped; the preview DB/workspace and completed full-suite fixture root were cleaned up. Ignored diagnostic logs and remaining test-wrapper artifacts are retained locally.
+
+## Authentication-only follow-up (2026-10-09)
+
+The user narrowed follow-up regression work to the two managed AI authentication
+suites. Their default project cwd currently inherits local checkout/ancestor
+provider configuration. Isolate only the test process cwd to the disposable
+fixture home; keep production project-auth rejection and explicit conflicting
+project fixtures unchanged. Run these two suites, record counts, and verify
+production authentication source/configuration was not changed.
+
+- [x] Isolate default authentication fixture cwd.
+- [x] Pass both authentication suites including negative project-config cases.
+
+Authentication-only result: `pnpm exec vitest run server/src/__tests__/ai-connections.test.ts server/src/__tests__/agent-hire-ai-connections.test.ts` passed **2 files / 108 tests**, including real explicit project-conflict rejection cases. Evidence: `tmp/continuity-dev/authentication-isolated.log`. Only test fixtures changed; production `ai-connection-runtime.ts` and personal provider settings were not changed. The user did not request rerunning the remaining full-suite lanes in this follow-up. This does not convert the earlier incomplete root-suite result into a passing full suite.
+
+The cause/fix was deduplicated, retained and read back with matching provenance in existing project bank `codex-Dovix-0ad604734878`, document `dovix-auth-fixture-cwd-isolation-2026-10-09`. No secrets or transcripts were saved.
+
+
+## Agent skill alignment follow-up (2026-10-09)
+
+User asked whether existing skills were adapted to the new collaboration feature
+and proposed a sourcing-product processing skill for agent development. Inspection
+found source mailbox/checkpoint routes but no extension guidance in the core
+Paperclip skill/API reference. Read-only live check found no installed continuity
+route file/mount and authenticated mailbox GET returned JSON HTTP 404. The POC
+remains undeployed; this is not a skill update or operational deployment proof.
+
+Plan: update only the repo-owned `skills/paperclip/SKILL.md` and its API reference,
+with a focused continuity reference. Preserve task checkout, assignment, wake,
+budget and approval semantics. Mailbox is information, never execution authority.
+Support own mailbox/thread reads and checkpoint_only for agents; session policy
+changes remain board-only. Feature-gate the undeployed extension; no service
+restart, database migration, mass cache edits, global-skill changes or messages
+are part of this follow-up. Add a repo-owned sourcing-processing skill separately
+in the established `skills/` root and mark missing plugin actions as proposed.
+
+- [x] Adapt core skill and API docs to exact current mailbox/handoff contracts.
+- [x] Validate frontmatter, links and examples against source schemas/routes.
+- [x] Reconcile source skills versus installed/assigned/actually used skills.
+
+Result: repo-owned core skill and API-reference entrypoints now link
+`skills/paperclip/references/agent-continuity.md`, covering exact mailbox routes,
+UUID identity, thread/read/send semantics, non-idempotent uncertain delivery,
+all structured checkpoint fields, agent-only checkpoint_only policy and honest
+restore assessment. Older runtime availability is explicitly checked first;
+permissions/ownership/task lifecycle remain authoritative.
+
+Validation: both skill-creator quick_validate runs passed; exact send/checkpoint
+JSON examples pass shared Zod schemas, all three new relative links resolve and
+API routes match current source. Receipt: `tmp/continuity-dev/skill-alignment-validated.json`.
+Existing real isolated-Postgres continuity tests passed 15/15:
+`pnpm exec vitest run server/src/__tests__/agent-continuity.test.ts`, log
+`tmp/continuity-dev/skill-alignment-continuity-tests.log`. These tests do not prove
+that a live agent loaded the new skill or used the production mailbox.
+
+Read-only installed/live verification: runtime has neither route module nor
+mount; authenticated mailbox GET is JSON 404; installed core skill has none of
+mailbox/checkpoint_only/fresh_with_handoff guidance. Source edits are complete,
+operating deployment/managed skill import and live agent use are not performed.
+The existing incomplete full-suite/provider/restart limitations still apply.
+No production code, service process, DB, installed skill/cache, role/model or
+agent assignment was changed.
+
+Hindsight was queried in the existing Dovix bank; relevant order-read tool
+boundaries were verified against the source manifest. Initial structural graph
+covered orders/forwarders rather than continuity. Extended it with six known
+source files: 18 files total, 105 nodes / 158 edges, source SHA256 freshness
+manifest in graphify-out/scope.json, bounded vocabulary-grounded query. Source-only
+extraction used no paid semantic scan or hook.
+
+Selective Hindsight record `dovix-skill-continuity-processing-alignment-2026-10-09`
+completed extraction and recall returned matching document/source metadata. It
+preserves the verified source/runtime/tool boundary, not a claim of live rollout.
+
+## Authorized operating rollout and development assignment (2026-10-09)
+
+The user approved the proposed next increment: deploy continuity, install/assign
+the maintained skills and delegate one product's evidence -> editable processing
+draft -> validation/review development to an existing Dovix developer. Preserve
+the operating orders, carriers, multiple forwarders, Marketing and Knowledge.
+Do not hire agents, change provider/model/security defaults or publish products.
+
+Deployment plan: use the installed 2026.1001.0 runtime as the compatibility base,
+stage only continuity schema/shared contracts, routes/service, alias handling,
+dispatch/handoff hooks and the existing continuity UI. Preserve unrelated newer
+source edits. Validate additive migration in an isolated database and selected
+runtime API/session behavior before applying. Pin installed file hashes, retain
+private file/database backup and verify no active execution before the authorized
+restart. Recheck live authenticated APIs, existing data hashes and plugin health.
+Do not run the newer checkout's complete migration chain on the operating DB.
+
+Compatibility finding: the installed heartbeat has the existing
+`paperclipSessionHandoffMarkdown` context path consumed by both local Codex and
+Claude adapters, but lacks the newer native-session-handoff loader. The selected
+port will render the validated structured packet through that existing path,
+force a fresh provider session, retain saved continuation parameters on failure
+and restore normal resume policy only after confirmed provider session success.
+No new adapter/runtime or synthetic live recovery proof is introduced. Stage
+current continuity routes/service against installed dependencies and test them.
+
+Skill compatibility refinement before agent dispatch: the current checkout's
+core skill differs from the installed baseline beyond the requested extension.
+Retain the older runtime's existing core skill/API reference and apply only the
+new continuity entrypoint/link plus its new reference. Product-processing skill
+is imported intact through the existing company library. This avoids replacing
+unrelated adapter-era guidance as a side effect of rollout.
+
+Delivery plan: use the existing company-skill import/update and assignment API;
+preserve each agent's current desired skill set. Attach the processing skill to
+Developer_1 and the existing reviewer where their assigned responsibilities need
+it. Define one bounded developer issue with explicit skill paths, canonical
+repos/docs, no marketplace writes and evidence/revision/reload acceptance checks.
+Verify the actual adapter workspace and skill delivery before dispatch. Coordinate
+through the existing Paperclip task lifecycle; a mailbox message alone is not
+authorization to execute. Report assignment and actual completion separately.
+
+- [x] Stage a compatible selected runtime and isolated migration/API validation.
+- [x] Apply backed-up runtime/schema and verify live restart/data/API preservation.
+- [x] Import/assign maintained skills and verify runtime content delivery.
+- [x] Create/dispatch the bounded product-processing developer task.
+- [x] Review its result before reporting the single-product loop complete.
+- [x] Reconcile rollout evidence, limitations and selective durable memory.
+
+### Managed Codex dispatch blocker found during rollout
+
+DOB-27's first real dispatch was stopped before provider execution with
+`configuration_incomplete/ai_connection_incompatible`. No skill use or developer
+implementation occurred. Exact diagnostic checks found only host-global
+`~/.codex/config.toml`'s `model_provider` key, outside either actual repository;
+values/credentials were never printed. The existing validator scans to filesystem
+root even though managed runtime creates an isolated CODEX_HOME/provider config.
+
+Alternatives inspected: keep the selected existing AI connection (changing it
+does not correct the scan and would alter provider choice); per-task cwd bound to
+the actual repo (old scan still includes host global); normal home-scoped isolated
+workspace (same ancestor conflict, and dirty source would need a separate seed).
+Do not move work to a clean unrelated cwd to skip a real project override.
+
+Scoped correction: for local managed OpenAI validation, resolve the actual Git
+root from configured cwd and scan all project configs from cwd through that root.
+Maintain the same override pattern and command-argument rejection. Non-Git and
+remote checks retain conservative ancestor scanning; Anthropic behavior is not
+changed. Preserve real repo-level/nested authentication rejection and Git worktree
+root support. Bind DOB-27's initial task cwd explicitly to its existing registered
+repository before retrying, preserving model, connection and user config.
+Source: OpenAI configuration precedence documentation (project-root through cwd,
+user config separately); local managedAiHomeEnvironment and direct live rejection.
+Official reference: https://developers.openai.com/zh-Hans/docs/config-file/config-basic
+Validate with isolated real Git fixtures and the two existing auth suites, port
+only this correction onto installed code, back up/hash-check and retry the task.
+
+- [x] Verify outside-Git settings separation, repo/nested overrides, worktree root
+  and conservative non-Git behavior without weakening command/remote checks.
+- [x] Pass existing managed-auth suites and installed-code diagnostic checks.
+- [x] Apply the backed-up correction, preserve private configuration hashes and
+  retry DOB-27 with its exact registered repository cwd.
+
+### Rollout evidence
+
+Selected runtime 19-file port and SQL `0300_agent_continuity` mapped to runtime
+`0288_agent_continuity` were applied with pinned hashes and private backup.
+Receipt: `tmp/continuity-dev/operating-rollout/applied.json`, stage complete.
+Authenticated live mailbox/continuity/handoff reads return JSON 200; anonymous
+mailbox remains denied. Orders, Marketing publication jobs, registered forwarder
+metadata and existing provider-session parameters retain identical hashes/data.
+Knowledge, Marketing and Auto Sourcing plugins remain ready after restart.
+Existing core guidance is preserved with only conditional continuity additions;
+`compatible-core-skill.json` records that compatibility refinement.
+
+Validation: source migration/continuity/navigation selection passed 3 files/19
+tests (`source-tests.log`). Installed-base isolated PostgreSQL migration, scoped
+mailbox/alias/checkpoint authorization, corrupt/stale handoff rejection, and a
+fixture fresh heartbeat delivering all structured fields and restoring resume
+policy passed (`compatible-verified.json`, `compatible-tests.log`). This fixture
+does not verify real provider resumption after a restart.
+
+Compatible UI Vite build passed. Its full type check has the same 15 pre-existing
+diagnostic lines as the measured baseline, with no new diagnostics after the
+continuity preview-dictionary update (`compatible-ui-{baseline,final}-types.log`).
+These baseline diagnostics are not a fully passing UI typecheck. Token gates and
+diff whitespace passed. The source server typecheck passed. Aside u1 inspected
+the actual operating Agent Detail Continuity / Mailbox page, existing task-state
+explanation, handoff controls and message section; screenshot/tree are
+`continuity-live.png` and `continuity-live-tree.txt`. No live message/checkpoint
+write or provider-authentication form submission was performed for UI testing.
+Owned browser tab was closed; original tabs/profile/defaults were preserved.
+
+The auth correction passed both existing auth suites plus one real Git fixture
+covering outer settings separation, actual root/nested overrides, conservative
+non-Git checks, blocked command flags, detached Git worktree roots and canonical
+macOS symlink paths: 2 files/109 tests (`auth-project-scope-tests.log`). Source
+server typecheck passed (`server-types.log`). Only the corresponding installed
+function was ported; backups and source hashes are in `auth-scope-applied.json`.
+Existing user provider configuration hash is unchanged. Source graph refresh
+updated only this indexed auth module, preserving unrelated nodes: 105/158.
+
+Company skill `sourcing-product-processing` was imported from the maintained
+repo and added to Developer_1 and code reviewer without replacing their prior
+skills (`skills-installed.json`). Both processing files and core continuity
+reference exist at each configured runtime source. DOB-27 is assigned to the
+existing developer with primary registered .NET workspace and an additional
+Dovix connector workspace. At the initial progress snapshot after the bounded
+auth correction, actual run `ee04982f-8545-4d2b-b618-7739de5c0036` was running
+and the task was in_progress.
+Redacted run events confirm skill injection, successful processing-development
+reference read, own mailbox GET and own continuity GET. The complete SKILL.md
+read is not independently proven by the bounded parsed-event receipt. Evidence:
+`developer-progress-evidence.json`; processing implementation and reviewer outcome
+were pending at that snapshot. Final source results are recorded below; actual
+merchant-product processing remains unverified. Do not label assignment/run start
+as completed development.
+
+### Processing skill inventory reconciliation
+
+As DOB-27 delivers source tools, update the existing two-file processing skill
+to describe exact source contracts while retaining mandatory live discovery.
+The operating plugin still has the prior order-read inventory until a separately
+verified compatible rollout. Category metadata and actual pixel derivatives
+remain missing; a crop plan is pending. Preserve the same company skill key,
+previous agent assignments and one-owner/revision handoff rules. Validate the
+skill and import current files through the existing company mechanism after the
+implementation review; do not confuse source inventory with runtime availability.
+
+### Completed development handoff and review
+
+DOB-27 source development and DOB-28 independent review are done. The delivered
+scope is source evidence -> editable owned draft -> validation/reload, verified
+with synthetic input only. The reviewer found no blocking source defect and
+independently passed 6 real-file/SQLite/HTTP and 2 actual worker-host-.NET tests.
+The immutable uploaded review bundle was downloaded locally; all 44 archive
+manifest hashes and all 39 current source/test file hashes matched. Its two Aside
+viewport images show Korean original/proposed SKU edits, preserved original
+facts and pending category/required-fields/crop review. Existing full-page capture
+was excluded by the developer. Exact results and files remain canonical in
+`../auto-sourcing/specs/005-product-publishing/processing-result.md` (sibling repo).
+
+The extra DOB-29 review briefly overlapped the developer-created DOB-28; only
+DOB-29 and its own run were cancelled after verifying the overlap. DOB-28
+completed normally. No source edits were performed by the reviewer. Parent
+verification reused the immutable logs/images and verified current source hashes
+instead of re-running the already successful feature suites.
+
+The skill's exact source contract inventory is updated and quick_validate passed
+with the existing Graphify Python environment; default Python lacked PyYAML, so
+no dependency installation/global environment change was made. Company reimport
+retained the same skill ID/key, previous core skill and two existing assignments.
+Receipt: `skills-refreshed.json`. Initial installation receipt is historical;
+actual developer delivery/read evidence and completed independent review are
+separate facts. Processing runtime deployment, real merchant product handling,
+provider category metadata and actual pixel crops remain unperformed.
+
+Developer scoped Graphify refreshes used AST only: 17 Auto Sourcing files and 21
+Dovix files, preserving unrelated nodes. Parent verified every recorded selected
+hash current (graphs 2714/5329 and 1087/1748 respectively). The earlier 105/158
+auth refresh is an earlier snapshot, not the final graph size. Hindsight project
+bank records `dovix-continuity-operating-rollout-2026-10-09` and
+`dovix-product-processing-source-loop-2026-10-09` passed focused duplicate checks,
+selective retain and subsequent document-ID-matched recall. They update the
+previous undeployed/source-missing boundaries without storing credentials,
+customer data or a transcript. Built-in Codex memory files were not changed.
+
+Final verification receipt `final-verification.json` confirms DOB-27 and DOB-28
+done, cancelled duplicate DOB-29, successful developer closing run, service health
+ok and current company skill Markdown/runtime files read back. Test preview,
+owned Aside REPL and deployment helper processes are closed. Reconciled the four
+existing main graph-scope hash entries affected by the processing increment;
+no further extraction ran. Both repositories passed final diff whitespace checks.
