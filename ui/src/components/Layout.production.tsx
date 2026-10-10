@@ -19,6 +19,7 @@ import {
 } from "@/lib/router";
 import { Sidebar } from "./Sidebar.production";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar.production";
+import { SourcingSidebar } from "./SourcingSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar.production";
 import { AppDetailSidebar } from "./AppConnectionSidebar.production";
@@ -155,6 +156,7 @@ export function Layout() {
     companyPrefix,
   );
   const isToolsRoute = companyPathSegments[0]?.toLowerCase() === "tools";
+  const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
   const isAppsRoute = companyPathSegments[0]?.toLowerCase() === "apps";
   const appDetailConnectionId =
     isAppsRoute &&
@@ -223,6 +225,8 @@ export function Layout() {
   // both desktop (SecondarySidebar) and mobile (off-canvas drawer).
   const secondarySidebar = isCompanySettingsRoute ? (
     <CompanySettingsSidebar />
+  ) : isSourcingRoute ? (
+    <SourcingSidebar />
   ) : appDetailConnectionId ? (
     <AppDetailSidebar kind="connection" connectionId={appDetailConnectionId} />
   ) : appDetailApplicationId ? (
