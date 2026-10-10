@@ -563,7 +563,7 @@ describe("Sidebar", () => {
       .map((anchor) => anchor.textContent?.trim());
 
     expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "Knowledge", "마케팅", "쇼핑몰 관리"]);
-    expect(labels(orgSection)).toEqual(["Agents", "Skills", "Connectors", "Audit"]);
+    expect(labels(orgSection)).toEqual(["Agents", "에이전트 프로필", "Skills", "Connectors", "Audit"]);
     expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
     expect(
       workSection?.querySelector('a[href="/issues"] svg')?.classList.contains("lucide-circle-check"),

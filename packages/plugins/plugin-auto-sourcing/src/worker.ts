@@ -8,7 +8,8 @@ const plugin = definePlugin({
   async setup(ctx) {
     for (const [name, operation] of catalogTools)
       ctx.tools.register(name, manifest.tools!.find(tool => tool.name === name)!, async (params, run) => {
-        const input = { ...params as Record<string, unknown>, companyId: run.companyId, projectId: String(params.projectId ?? ""), operation };
+        const fields = params as Record<string, unknown>;
+        const input = { ...fields, companyId: run.companyId, projectId: String(fields.projectId ?? ""), operation };
         const data = operation === "save" ? await ctx.autoSourcing.catalogWrite(input) : await ctx.autoSourcing.catalogRead(input);
         return { content: JSON.stringify(data), data: data as Record<string, unknown> };
       });

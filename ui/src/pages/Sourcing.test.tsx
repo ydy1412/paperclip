@@ -76,7 +76,7 @@ describe("Shopping mall Settings-style workspace", () => {
     expect(container.querySelector("[data-location]")?.textContent).toContain("project=project");
     expect(container.querySelector("[data-location]")?.textContent).toContain("view=uploads");
     expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "쇼핑몰 관리", href: "/sourcing" }, { label: "상품 업로드" }]);
-    expect(container.textContent).toContain("상품 가공 서비스 미연결");
+    expect(container.textContent).toContain("등록 상품을 공통 상품별로 관리합니다.");
   });
 
   it("restores the orders view from its URL and shows no fabricated totals or registration controls", async () => {

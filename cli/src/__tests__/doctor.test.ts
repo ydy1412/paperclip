@@ -91,7 +91,7 @@ describe("doctor", () => {
 
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-doctor-home-"));
-    process.env = { ...ORIGINAL_ENV, HOME: home, PAPERCLIP_HOME: path.join(home, ".paperclip") };
+    process.env = { ...ORIGINAL_ENV, HOME: home, PAPERCLIP_HOME: path.join(home, ".paperclip"), PAPERCLIP_INSTANCE_ID: `doctor-test-${path.basename(home).toLowerCase()}` };
     vi.spyOn(os, "homedir").mockReturnValue(home);
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
