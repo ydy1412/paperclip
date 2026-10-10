@@ -19,6 +19,8 @@ const apiPrefixes: Record<string, string> = {
   "activity.ts": "/api",
   "adapters.ts": "/api",
   "agents.ts": "/api",
+  "agent-continuity.ts": "/api",
+  "agent-profiles.ts": "/api",
   "agent-avatars.ts": "/api",
   "announcements.ts": "/api",
   "ai-connections.ts": "/api",
@@ -55,6 +57,7 @@ const apiPrefixes: Record<string, string> = {
   "issues.ts": "/api",
   "issue-tree-control.ts": "/api",
   "llms.ts": "/api",
+  "marketing.ts": "/api",
   "managed-agent-profiles.ts": "/api",
   "onboarding-seed.ts": "/api",
   "openapi.ts": "/api",
@@ -69,6 +72,8 @@ const apiPrefixes: Record<string, string> = {
   "sidebar-badges.ts": "/api",
   "sidebar-preferences.ts": "/api",
   "summary-slots.ts": "/api",
+  "sourcing-catalog.ts": "/api",
+  "sourcing-forwarders.ts": "/api",
   "status-cards.ts": "/api",
   "teams-catalog.ts": "/api",
   "tool-access.ts": "/api",
@@ -177,14 +182,21 @@ function loadActualRoutes() {
       continue;
     }
 
+    const localBase = source.match(/\bbase\s*=\s*["']([^"']+)["']/)?.[1];
     for (const match of source.matchAll(ROUTE_LITERAL_PATTERN)) {
       const method = match[1].toUpperCase();
-      const routePath = match[2];
+      const routePath = localBase ? match[2].replace("${base}", localBase) : match[2];
       const operation = `${method} ${normalizeExpressPath(resolveMountedPath(file, prefix, routePath))}`;
       if (explicitOpenApiOperationCoverageExclusions.has(operation)) {
         excludedRoutes.add(operation);
       } else {
         routes.add(operation);
+      }
+    }
+
+    if (localBase) {
+      for (const match of source.matchAll(/router\.(get|post|put|patch|delete)\(\s*base\s*[,)]/g)) {
+        routes.add(`${match[1].toUpperCase()} ${normalizeExpressPath(resolveMountedPath(file, prefix, localBase))}`);
       }
     }
 

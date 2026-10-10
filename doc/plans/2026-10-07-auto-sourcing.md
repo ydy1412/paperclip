@@ -1345,7 +1345,8 @@ Verification: focused UI, server boundary, actual SQLite/provider protocol,
 source type/build and baseline blockers; live import and browser list/filter/
 statistics/editor checks; actual PR/merge/deployed commit receipts. Only verified
 requirements are checked in Todoist. Keep secret values, order names and raw
-provider responses out of logs and public PR text. Implementation is pending.
+provider responses out of logs and public PR text. Implementation details and
+verified evidence follow.
 
 Shopping ideas evidence and handoff:
 - Order list/detail now display persisted buyer/recipient/product names. The
@@ -1363,8 +1364,9 @@ Shopping ideas evidence and handoff:
   stale menu assertions, and skill inventory source anchors were reconciled.
   Existing evaluation records were preserved; the inventory completeness check
   passed without installing or accessing a separate evaluation corpus.
-- Auto Sourcing PR #6 merged into dev; actual DB-copy import verified 244 named,
-  imaged products with store mappings. Read-only order sync verified 49 stored
+- Auto Sourcing PR #6 merged into dev; DB-copy and operating imports verified
+  244 named products with store mappings. The operating provider has images
+  for 243 of them. Read-only order sync verified 49 stored
   orders, 48 with names and one retained record without provider fields.
   Full-scope summaries match across states/pages. Current scoped source count
   is zero; no fabricated sourcing rows were inserted.
@@ -1373,3 +1375,7 @@ Shopping ideas evidence and handoff:
   claimed as analyzed code. No semantic extraction or watcher was installed.
 - The final regression result, dev merge and operating deployment/readback
   receipt are recorded in this task's PR, with backups and source commit hashes.
+- The broad regression caught a continuity company-scope existence leak and
+  missing source OpenAPI entries for preserved routes. The continuity gate,
+  route coverage collector, and typed API request documentation were fixed;
+  affected HTTP authorization and source API contract tests passed.
