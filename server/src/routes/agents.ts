@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { agentProfileService } from "../services/agent-profiles.js";
+import { agentProfileEffortKey } from "@paperclipai/shared";
 import { connectionIntentService } from "../services/connection-intents.js";
 import { completeConnectionIntentSchema } from "@paperclipai/shared";
 import { agentFileStore, agentFileTokenFromHash } from "../services/agent-file-store.js";
@@ -4489,7 +4490,7 @@ export function agentRoutes(
       (profile.config.runnerProvider === "claude" || profile.config.runnerProvider === "grok" ? { provider: "acpx", acpxAgent: profile.config.runnerProvider } : { provider: profile.config.runnerProvider }) : {};
     req.body = { ...input, role: "general", title: null, capabilities: profile.config.capabilities,
       desiredSkills: profile.config.skills, instructionsBundle: { files: { "AGENTS.md": profile.config.instructions } },
-      adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...input.adapterConfig, ...runnerConfig } };
+      adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...(profile.config.thinkingEffort && agentProfileEffortKey(profile.config) ? { [agentProfileEffortKey(profile.config)!]: profile.config.thinkingEffort } : {}), ...input.adapterConfig, ...runnerConfig } };
     res.locals.agentProfileSelection = selection;
     next();
   }, validate(createAgentHireSchema), async (req, res) => {

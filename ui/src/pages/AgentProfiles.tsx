@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, UserRound, Copy, Pencil, Trash2, RotateCcw } from "lucide-react";
-import { type AgentProfileDetail, type CreateAgentProfile } from "@paperclipai/shared";
+import { agentProfileEffortKey, type AgentProfileDetail, type CreateAgentProfile } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useNavigate } from "@/lib/router";
@@ -13,9 +13,10 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { clearAgentProfileDraft, readAgentProfileDraft, writeAgentProfileDraft } from "../lib/agent-profile-draft";
+import { setupEfforts } from "../lib/agent-setup-fields";
 
 const control = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
-const empty = (adapterType: string): CreateAgentProfile => ({ name: "", description: "", config: { capabilities: "", instructions: "", adapterType, runnerProvider: "codex", model: "", skills: [] } });
+const empty = (adapterType: string): CreateAgentProfile => ({ name: "", description: "", config: { capabilities: "", instructions: "", adapterType, runnerProvider: "codex", model: "", thinkingEffort: "", skills: [] } });
 
 export function AgentProfiles() {
   const { selectedCompanyId } = useCompany();
@@ -45,6 +46,11 @@ function Profiles({ companyId }: { companyId: string }) {
   const agents = useQuery({ queryKey: ["profile-agents", companyId], queryFn: () => agentsApi.list(companyId) });
   const models = useQuery({ queryKey: ["profile-models", companyId, draft.config.adapterType, draft.config.runnerProvider], queryFn: () => agentsApi.adapterModels(companyId, draft.config.adapterType, { provider: draft.config.runnerProvider }), enabled: editing && !!draft.config.adapterType });
   const profile = detail.data;
+  const effortKey = agentProfileEffortKey(draft.config);
+  const effortChoices = (model: string) => effortKey === "modelReasoningEffort"
+    ? models.data?.find(m => m.id === model)?.reasoningEfforts ?? []
+    : setupEfforts(draft.config.adapterType, model);
+  const efforts = effortChoices(draft.config.model);
   const usingManualModel = manualModel || (!!draft.config.model && !models.data?.some(model => model.id === draft.config.model));
   const supported = adapters.data?.filter(a => a.loaded && !a.disabled && a.capabilities?.supportsInstructionsBundle);
   function persistDraft() {
@@ -72,6 +78,9 @@ function Profiles({ companyId }: { companyId: string }) {
   const error = save.error ?? remove.error ?? restore.error ?? importAgent.error;
   const linked = profile?.linkedCount ?? 0;
   function setConfig<K extends keyof CreateAgentProfile["config"]>(field: K, value: CreateAgentProfile["config"][K]) { setDraft(d => ({ ...d, config: { ...d.config, [field]: value } })); }
+  function selectModel(model: string) {
+    setDraft(d => ({ ...d, config: { ...d.config, model, thinkingEffort: effortChoices(model).includes(d.config.thinkingEffort) ? d.config.thinkingEffort : "" } }));
+  }
   return <div className="space-y-4">
     <header className="flex items-start justify-between gap-4"><div><h1 className="text-xl font-semibold">에이전트 프로필</h1><p className="mt-1 text-sm text-muted-foreground">역할과 작업 방식을 저장하고 여러 에이전트에 함께 반영합니다.</p></div><Button disabled={pending || editing} onClick={() => begin()}><Plus className="size-4" />프로필 추가</Button></header>
     {message && <p role="status" className="text-sm">{message}</p>}
@@ -94,22 +103,31 @@ function Profiles({ companyId }: { companyId: string }) {
           <label className="block space-y-1 text-sm">핵심 역할 설명<Input maxLength={300} value={draft.description} disabled={pending} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
           <label className="block space-y-1 text-sm">담당 업무<textarea className={control} rows={3} maxLength={4000} value={draft.config.capabilities} disabled={pending} onChange={e => setConfig("capabilities", e.target.value)} /></label>
           <label className="block space-y-1 text-sm">작업 지침<textarea className={`${control} font-mono`} rows={10} maxLength={200000} value={draft.config.instructions} disabled={pending} onChange={e => setConfig("instructions", e.target.value)} /></label>
-          <label className="block space-y-1 text-sm">실행 방식<select className={control} required value={draft.config.adapterType} disabled={pending || !creating} onChange={e => { setConfig("adapterType", e.target.value); setConfig("model", ""); setManualModel(false); }}>
+          <label className="block space-y-1 text-sm">실행 방식<select className={control} required value={draft.config.adapterType} disabled={pending || !creating} onChange={e => { setConfig("adapterType", e.target.value); setConfig("model", ""); setConfig("thinkingEffort", ""); setManualModel(false); }}>
             {!supported?.some(a => a.type === draft.config.adapterType) && <option value={draft.config.adapterType}>{draft.config.adapterType}</option>}{supported?.map(a => <option key={a.type} value={a.type}>{a.label}</option>)}
           </select></label>
-          {draft.config.adapterType === "paperclip_runner" && <label className="block space-y-1 text-sm">실행 제공자<select className={control} value={draft.config.runnerProvider} disabled={pending || !creating} onChange={e => { setConfig("runnerProvider", e.target.value as typeof draft.config.runnerProvider); setConfig("model", ""); setManualModel(false); }}>{["codex", "claude", "grok", "opencode"].map(provider => <option key={provider} value={provider}>{provider}</option>)}</select></label>}
+          {draft.config.adapterType === "paperclip_runner" && <label className="block space-y-1 text-sm">실행 제공자<select className={control} value={draft.config.runnerProvider} disabled={pending || !creating} onChange={e => { setConfig("runnerProvider", e.target.value as typeof draft.config.runnerProvider); setConfig("model", ""); setConfig("thinkingEffort", ""); setManualModel(false); }}>{["codex", "claude", "grok", "opencode"].map(provider => <option key={provider} value={provider}>{provider}</option>)}</select></label>}
           <fieldset className="space-y-2" disabled={pending}>
             <legend className="mb-2 flex w-full items-center justify-between gap-2 text-sm font-medium"><span>모델</span><Button type="button" variant="ghost" size="sm" disabled={pending || models.isFetching} onClick={() => void models.refetch()}>모델 새로고침</Button></legend>
             {models.isFetching && <p role="status" className="text-xs text-muted-foreground">모델 목록을 불러오는 중입니다.</p>}
             {models.error && <p role="alert" className="text-sm text-destructive">모델 목록을 불러오지 못했습니다. 새로고침하거나 모델 ID를 직접 입력해 주세요.</p>}
             {models.isSuccess && models.data.length === 0 && <p className="text-xs text-muted-foreground">등록된 모델 목록이 없습니다. 기본 모델을 사용하거나 모델 ID를 직접 입력해 주세요.</p>}
             <div role="radiogroup" aria-label="모델 선택" className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><input type="radio" name="profile-model" checked={!manualModel && !draft.config.model} onChange={() => { setManualModel(false); setConfig("model", ""); }} />기본 모델 사용</label>
-              {models.data?.map(model => <label key={model.id} className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><input type="radio" name="profile-model" value={model.id} checked={!manualModel && draft.config.model === model.id} onChange={() => { setManualModel(false); setConfig("model", model.id); }} /><span className="min-w-0 break-words">{model.label}</span></label>)}
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><input type="radio" name="profile-model" checked={!manualModel && !draft.config.model} onChange={() => { setManualModel(false); selectModel(""); }} />기본 모델 사용</label>
+              {models.data?.map(model => <label key={model.id} className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><input type="radio" name="profile-model" value={model.id} checked={!manualModel && draft.config.model === model.id} onChange={() => { setManualModel(false); selectModel(model.id); }} /><span className="min-w-0 break-words">{model.label}</span></label>)}
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><input type="radio" name="profile-model" checked={usingManualModel} onChange={() => setManualModel(true)} />모델 ID 직접 입력</label>
             </div>
-            {usingManualModel && <label className="block space-y-1 text-sm">모델 ID<Input required maxLength={200} value={draft.config.model} onChange={e => setConfig("model", e.target.value)} /></label>}
+            {usingManualModel && <label className="block space-y-1 text-sm">모델 ID<Input required maxLength={200} value={draft.config.model} onChange={e => selectModel(e.target.value)} /></label>}
           </fieldset>
+          {effortKey && <fieldset className="space-y-2" disabled={pending}>
+            <legend className="text-sm font-medium">추론 강도 (Effort)</legend>
+            <p className="text-xs text-muted-foreground">모델이 문제를 검토하는 강도입니다. 기본값은 실행 도구의 설정을 따릅니다.</p>
+            <div role="radiogroup" aria-label="추론 강도 선택" className="flex flex-wrap gap-3">
+              {["", ...efforts, ...(draft.config.thinkingEffort && !efforts.includes(draft.config.thinkingEffort) ? [draft.config.thinkingEffort] : [])].map(effort => <label key={effort} className="flex items-center gap-2 text-sm"><input type="radio" name="profile-effort" value={effort} checked={draft.config.thinkingEffort === effort} onChange={() => setConfig("thinkingEffort", effort)} />{effort || "기본값"}</label>)}
+            </div>
+            {efforts.length === 0 && <p className="text-xs text-muted-foreground">지원 값은 모델 선택 후 표시됩니다. 목록에 없는 모델은 에포트를 직접 입력할 수 있습니다.</p>}
+            {usingManualModel && <label className="block space-y-1 text-sm">에포트 직접 입력<Input maxLength={100} pattern="[a-zA-Z0-9_-]*" value={draft.config.thinkingEffort} disabled={pending} onChange={e => setConfig("thinkingEffort", e.target.value)} /></label>}
+          </fieldset>}
           <fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">사용할 스킬</legend>{skills.error && <p role="alert" className="text-sm text-destructive">스킬을 불러오지 못했습니다.</p>}{skills.data?.map(skill => <label key={skill.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.config.skills.includes(skill.key)} disabled={pending} onChange={e => setConfig("skills", e.target.checked ? [...draft.config.skills, skill.key] : draft.config.skills.filter(k => k !== skill.key))} />{skill.name}</label>)}{skills.data?.length === 0 && <p className="text-sm text-muted-foreground">등록된 스킬이 없습니다.</p>}</fieldset>
           {!creating && linked > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={apply} disabled={pending} onChange={e => setApply(e.target.checked)} />연결된 에이전트 {linked}개에도 반영</label>}
           {!creating && <p className="text-xs text-muted-foreground">작업 중인 에이전트는 작업이 끝난 뒤 반영됩니다. 에이전트별로 따로 바꾼 설정은 유지합니다.</p>}
@@ -119,7 +137,7 @@ function Profiles({ companyId }: { companyId: string }) {
           <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => { setAgentName(""); setReportsTo(""); setHire(true); }}>이 프로필로 에이전트 만들기</Button><Button variant="outline" size="sm" disabled={pending} onClick={() => begin(profile)}><Pencil className="size-4" />수정</Button><Button variant="outline" size="sm" disabled={pending} onClick={() => begin(profile, true)}><Copy className="size-4" />복사</Button><Button variant="outline" size="sm" disabled={pending} onClick={() => setConfirmDelete(true)}><Trash2 className="size-4" />삭제</Button></div>
           <div className="space-y-2"><h3 className="text-sm font-semibold">담당 업무</h3><p className="whitespace-pre-wrap text-sm">{profile.config.capabilities || "등록된 업무 설명이 없습니다."}</p></div>
           <div className="space-y-2"><h3 className="text-sm font-semibold">작업 지침</h3><pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-sm">{profile.config.instructions || "등록된 지침이 없습니다."}</pre></div>
-          <p className="text-sm">모델: {profile.config.model || "기본 모델"}</p><p className="text-sm">스킬: {profile.config.skills.map(k => skills.data?.find(s => s.key === k)?.name ?? k).join(", ") || "선택 없음"}</p>
+          <p className="text-sm">모델: {profile.config.model || "기본 모델"}</p><p className="text-sm">추론 강도: {profile.config.thinkingEffort || "기본값"}</p><p className="text-sm">스킬: {profile.config.skills.map(k => skills.data?.find(s => s.key === k)?.name ?? k).join(", ") || "선택 없음"}</p>
           <section className="space-y-2"><h3 className="text-sm font-semibold">연결된 에이전트</h3>{profile.bindings.length === 0 && <p className="text-sm text-muted-foreground">이 프로필로 생성한 에이전트가 없습니다.</p>}{profile.bindings.map(b => <div key={b.agentId} className="rounded-md border border-border p-3 text-sm"><p>{b.name} · 적용 버전 {b.appliedVersion}{b.pendingVersion ? ` · 버전 ${b.pendingVersion} 반영 대기` : ""}</p>{b.overrides.length > 0 && <p className="mt-1 text-xs text-muted-foreground">개별 설정 유지: {b.overrides.join(", ")}</p>}{b.error && <p role="alert" className="mt-1 text-destructive">{b.error}</p>}</div>)}</section>
           <section className="space-y-2"><h3 className="text-sm font-semibold">버전 기록</h3>{linked > 0 && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={apply} onChange={e => setApply(e.target.checked)} />복원할 때 연결된 에이전트에도 반영</label>}{profile.versions.map(v => <div key={v.version} className="flex items-center justify-between gap-2 text-sm"><span>버전 {v.version} · {v.name}</span>{v.version !== profile.version && <Button variant="ghost" size="sm" disabled={pending} onClick={() => restore.mutate(v.version)}><RotateCcw className="size-4" />복원</Button>}</div>)}</section>
         </> : <p role={detail.error ? "alert" : "status"} className="text-sm text-muted-foreground">{detail.error ? detail.error.message : selected ? "프로필을 불러오는 중입니다." : "프로필 카드를 선택하면 상세 내용을 볼 수 있습니다."}</p>}

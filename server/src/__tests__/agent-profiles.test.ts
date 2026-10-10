@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
@@ -19,7 +19,7 @@ import type { CreateAgentProfile } from "@paperclipai/shared";
 
 let db: ReturnType<typeof createDb>, database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, home: string;
 const companyId = randomUUID(), otherCompanyId = randomUUID(), userId = randomUUID();
-const input: CreateAgentProfile = { name: "상품 가공", description: "옵션과 상품 정보를 검토합니다.", config: { capabilities: "검토", instructions: "# Original profile", adapterType: "codex_local", runnerProvider: "codex", model: "gpt-6.1-sol", skills: [] } };
+const input: CreateAgentProfile = { name: "상품 가공", description: "옵션과 상품 정보를 검토합니다.", config: { capabilities: "검토", instructions: "# Original profile", adapterType: "codex_local", runnerProvider: "codex", model: "gpt-6.1-sol", thinkingEffort: "", skills: [] } };
 const base = `/api/companies/${companyId}/agent-profiles`;
 const actor = { type: "board" as const, source: "board_key" as const, userId };
 function app() {
@@ -38,6 +38,8 @@ async function linked() {
 }
 beforeAll(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "dovix-profiles-")); vi.stubEnv("PAPERCLIP_HOME", home);
+  vi.stubEnv("CODEX_HOME", home);
+  await writeFile(path.join(home, "models_cache.json"), JSON.stringify({ models: [...["gpt-6.1-sol", "gpt-6-sol"].map(slug => ({ slug, supported_reasoning_levels: ["low", "high", "ultra"].map(effort => ({ effort })) })), { slug: "limited-effort-model", supported_reasoning_levels: [{ effort: "low" }] }] }));
   database = await startEmbeddedPostgresTestDatabase("dovix-profiles-db-"); db = createDb(database.connectionString);
   await db.insert(companies).values([{ id: companyId, name: "Profile fixtures", issuePrefix: "PF", defaultResponsibleUserId: userId }, { id: otherCompanyId, name: "Other", issuePrefix: "PO" }]);
   await db.insert(authUsers).values({ id: userId, name: "Synthetic owner", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
@@ -48,7 +50,7 @@ beforeAll(async () => {
 afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 describe("versioned agent profiles", () => {
   it("uses the existing hire endpoint and links the pinned profile without copying authentication into it", async () => {
-    const service = agentProfileService(db), profile = await service.create(companyId, input, userId);
+    const service = agentProfileService(db), profile = await service.create(companyId, { ...input, config: { ...input.config, thinkingEffort: "high" } }, userId);
     const hireBase = `/api/companies/${companyId}/agent-hires`;
     const payload = { name: `Hired fixture ${randomUUID()}`, adapterType: "codex_local", adapterConfig: { model: input.config.model, cwd: home }, runtimeConfig: { heartbeat: { enabled: false } }, profileId: profile.id, profileVersion: profile.version };
     expect((await request(app()).post(hireBase).send({ ...payload, profileVersion: 100 })).status).toBe(409);
@@ -56,8 +58,13 @@ describe("versioned agent profiles", () => {
     const result = await request(app()).post(hireBase).send(payload);
     expect(result.status, JSON.stringify(result.body)).toBe(201);
     expect(result.body.agent).toMatchObject({ name: payload.name, role: "general", title: null, capabilities: input.config.capabilities });
+    expect(result.body.agent.adapterConfig.modelReasoningEffort).toBe("high");
     const detail = await service.get(companyId, profile.id); expect(detail.bindings).toHaveLength(1); expect(detail.bindings[0].agentId).toBe(result.body.agent.id);
     expect((await agentInstructionRevisionService(db).readCurrent({ companyId, agentId: result.body.agent.id }, actor))?.content).toBe(input.config.instructions);
+    const overridden = await request(app()).post(hireBase).send({ ...payload, name: `Override fixture ${randomUUID()}`, adapterConfig: { ...payload.adapterConfig, modelReasoningEffort: "low" } });
+    expect(overridden.status).toBe(201); expect(overridden.body.agent.adapterConfig.modelReasoningEffort).toBe("low");
+    const automatic = await request(app()).post(hireBase).send({ ...payload, name: `Automatic fixture ${randomUUID()}`, adapterConfig: { ...payload.adapterConfig, modelReasoningEffort: "" } });
+    expect(automatic.status).toBe(201); expect(automatic.body.agent.adapterConfig.modelReasoningEffort).toBe("");
   });
   it("persists versions/audit atomically and rejects stale, secret-shaped and cross-company writes", async () => {
     const server = app(); const created = await request(server).post(base).send(input); expect(created.status).toBe(201);
@@ -75,17 +82,19 @@ describe("versioned agent profiles", () => {
   });
   it("keeps changes opt-in, applies instructions/model after active work and preserves identity/auth/workspace", async () => {
     const { service, profile, agent } = await linked();
-    const next = { ...input, config: { ...input.config, instructions: "# Updated", model: "gpt-6-sol", capabilities: "새 담당 업무" }, expectedVersion: 1, applyToLinked: false };
+    const next = { ...input, config: { ...input.config, instructions: "# Updated", model: "gpt-6-sol", thinkingEffort: "ultra", capabilities: "새 담당 업무" }, expectedVersion: 1, applyToLinked: false };
     await service.update(companyId, profile.id, next, userId);
     expect((await service.get(companyId, profile.id)).bindings[0].appliedVersion).toBe(1);
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent.id, status: "running", invocationSource: "on_demand", responsibleUserId: userId }).returning();
     await service.update(companyId, profile.id, { ...next, expectedVersion: 2, applyToLinked: true }, userId);
     expect((await service.get(companyId, profile.id)).bindings[0]).toMatchObject({ appliedVersion: 1, pendingVersion: 3 });
     expect((await agentInstructionRevisionService(db).readCurrent({ companyId, agentId: agent.id }, actor))?.content).toBe(input.config.instructions);
+    expect((await db.select().from(agents).where(eq(agents.id, agent.id)))[0].adapterConfig.modelReasoningEffort).toBeUndefined();
     await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
     expect(await service.applyPending(agent.id)).toBe(true);
     const [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
     expect(updated).toMatchObject({ name: agent.name, role: agent.role, title: agent.title, capabilities: "새 담당 업무", reportsTo: agent.reportsTo, runtimeConfig: agent.runtimeConfig, adapterConfig: { model: "gpt-6-sol", env: { FIXTURE_SETTING: { type: "plain", value: "preserve" } }, cwd: home } });
+    expect(updated.adapterConfig.modelReasoningEffort).toBe("ultra");
     expect((await agentInstructionRevisionService(db).readCurrent({ companyId, agentId: agent.id }, actor))?.content).toBe("# Updated");
     expect((await service.get(companyId, profile.id)).bindings[0]).toMatchObject({ appliedVersion: 3, pendingVersion: null, error: null });
   });
@@ -128,5 +137,37 @@ describe("versioned agent profiles", () => {
       expect((await service.get(companyId, profile.id)).bindings[0]).toMatchObject({ appliedVersion: 1, pendingVersion: 2, error: expect.any(String) });
       const [unchanged] = await db.select().from(agents).where(eq(agents.id, agent.id)); expect(unchanged.capabilities).toBe(input.config.capabilities);
     } finally { await db.update(companyMemberships).set({ status: "active" }).where(eq(companyMemberships.principalId, userId)); }
+  });
+  it("imports agent effort, preserves an individual override and clears a profile-owned effort on restore", async () => {
+    const { service, profile, agent } = await linked();
+    await service.update(companyId, profile.id, { ...input, config: { ...input.config, thinkingEffort: "high" }, expectedVersion: 1, applyToLinked: true }, userId);
+    let [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig.modelReasoningEffort).toBe("high");
+    await service.restore(companyId, profile.id, { expectedVersion: 2, version: 1, applyToLinked: true }, userId);
+    [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig).not.toHaveProperty("modelReasoningEffort");
+    await db.update(agents).set({ adapterConfig: { ...updated.adapterConfig, reasoningEffort: "low" } }).where(eq(agents.id, agent.id));
+    await service.update(companyId, profile.id, { ...input, config: { ...input.config, thinkingEffort: "ultra" }, expectedVersion: 3, applyToLinked: true }, userId);
+    [updated] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(updated.adapterConfig.reasoningEffort).toBe("low");
+    expect((await service.get(companyId, profile.id)).bindings[0].overrides).toContain("thinkingEffort");
+    await service.remove(companyId, profile.id, 4, userId);
+    expect((await service.fromAgent(companyId, agent.id, actor)).config.thinkingEffort).toBe("low");
+  });
+  it("rejects an effort the selected Codex model does not advertise and reads legacy defaults", async () => {
+    const result = await request(app()).post(base).send({ ...input, config: { ...input.config, thinkingEffort: "max" } });
+    expect(result.status).toBe(400);
+    const { thinkingEffort: _effort, ...legacy } = input.config;
+    const created = await request(app()).post(base).send({ ...input, config: legacy });
+    expect(created.status).toBe(201); expect(created.body.config.thinkingEffort).toBe("");
+  });
+  it("leaves a linked update pending when an individual model does not support the new effort", async () => {
+    const { service, profile, agent } = await linked();
+    const [current] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    await db.update(agents).set({ adapterConfig: { ...current.adapterConfig, model: "limited-effort-model" } }).where(eq(agents.id, agent.id));
+    const result = await service.update(companyId, profile.id, { ...input, config: { ...input.config, thinkingEffort: "ultra", capabilities: "New work" }, expectedVersion: 1, applyToLinked: true }, userId);
+    expect(result.bindings[0]).toMatchObject({ appliedVersion: 1, pendingVersion: 2, error: "선택한 모델이 지원하는 에포트를 선택해 주세요." });
+    const [unchanged] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(unchanged.capabilities).toBe(input.config.capabilities); expect(unchanged.adapterConfig.modelReasoningEffort).toBeUndefined();
   });
 });

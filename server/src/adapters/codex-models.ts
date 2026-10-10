@@ -25,7 +25,14 @@ export async function listCodexModels(): Promise<AdapterModel[]> {
     if (!id || id.length > 200 || seen.has(id)) continue;
     seen.add(id);
     const label = typeof entry.display_name === "string" ? entry.display_name.trim() : "";
-    models.push({ id, label: label || id });
+    const reasoningEfforts = Array.isArray(entry.supported_reasoning_levels)
+      ? [...new Set<string>(entry.supported_reasoning_levels.flatMap((level: unknown) => {
+          if (!level || typeof level !== "object" || !("effort" in level)) return [];
+          const effort = level.effort;
+          return typeof effort === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(effort) ? [effort] : [];
+        }))]
+      : undefined;
+    models.push({ id, label: label || id, ...(reasoningEfforts !== undefined ? { reasoningEfforts } : {}) });
   }
   return models;
 }

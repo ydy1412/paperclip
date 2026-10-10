@@ -10,6 +10,56 @@ The user requested a menu for creating and managing reusable personal agent temp
 - AT4: Enforce company scope, board/operator access, validation and mutation audit. Do not store provider credentials, runtime sessions, arbitrary commands or agent identity in template configuration. Stale edits produce a conflict.
 - AT5: Verify persistence and authorization with a disposable real PostgreSQL database, verify the UI workflow through Aside, and deploy only the selected compatible change after an idle check.
 
+## Profile reasoning effort — 2026-10-10
+
+- Profiles store `thinkingEffort` with an empty string meaning the runtime's
+  default. New-agent setup can explicitly override a profile effort with the
+  automatic value. Old profiles, immutable versions and browser drafts read with that
+  default; the existing JSON columns need no migration.
+- The editor shows effort radio choices beside the model. Codex choices come
+  from the installed CLI catalog's `supported_reasoning_levels`, returned by
+  the existing model API. Model changes clear an incompatible selection;
+  refresh errors retain drafts. Manual model IDs can use a manual effort.
+- Profile setup seeds the effort used for the connection test and hire. Server
+  hires use it as a default, while explicit setup choices retain precedence.
+  Adapter-specific keys follow the existing runtimes. Native Codex runner
+  profiles use `modelReasoningEffort`; other runner providers have no effort
+  control until their runtime contract supports it.
+- Linked updates compare effort against the last applied profile independently
+  of model. Individual effort overrides remain visible. Active runs defer the
+  update; restore/default clears owned effort and legacy Codex aliases.
+  Importing an existing agent retains its effort. Unsupported advertised Codex
+  choices are rejected; no provider execution is started by saving a profile.
+
+Validation for this change: 101 focused tests passed across the profile editor,
+new-agent setup, real PostgreSQL profile service/hire flow, model catalog and
+refresh route. Repository typecheck, build and token gates passed. The compatible
+installed-package candidate passed isolated real-DB save, hire, linked apply,
+invalid-effort rejection and default-clear checks; its UI build and focused
+UI cases passed. Graphify was queried and refreshed with local code extraction.
+Operating deployment and live Effort UI/API verification are still pending.
+
+The initial broader run is not green: 15,410 server tests passed and four
+failed. The catalog failure used the older adjacent Auto Sourcing checkout; all
+three catalog cases pass with the merged backend dev worktree selected. The
+Slack callback and explicit-feedback failures pass on isolated reruns. One
+new profile pending-update assertion failed in the bulk run. The run started at
+20:58:18 and the service source changed at 20:58:38. A controlled experiment
+confirms that this non-watch Vitest run can reuse the previously loaded module
+after its file changes. Restoring the previous error-message filter reproduces
+the exact generic-error mismatch; the current filter passes. A fresh frozen-
+source run passed all 101 focused cases and retained identical source hashes.
+The original inner exception was not logged, so cache reuse is the supported
+explanation rather than a captured exception trace.
+All 151 separately isolated server files passed. UI/shared, CLI and other
+workspace runs passed apart from host path and timeout exceptions; affected
+checks passed with canonical short temporary paths and the already installed
+compatible Claude SDK CLI. These results do not establish a clean full-suite
+invocation. No Auto Sourcing source or operating executable was changed.
+No extra product repair is needed for those reproduced environment/version
+issues. Proceed with the feature PR and the authorized dev rollout; keep the
+initial full-run limitations visible in the PR. Master remains unchanged.
+
 ## Technical plan
 
 - Extend the established DB/shared/server/UI layers with company-scoped `agent_profiles`, immutable `agent_profile_versions`, `agent_profile_bindings`, typed strict schemas, a focused service/router and one page.

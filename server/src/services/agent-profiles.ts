@@ -7,11 +7,15 @@ import { agentService } from "./agents.js";
 import { agentInstructionRevisionService } from "./agent-instruction-revisions.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { withAgentStartLock } from "./agent-start-lock.js";
-import { findActiveServerAdapter } from "../adapters/registry.js";
-import { agentProfileConfigSchema } from "@paperclipai/shared";
+import { findActiveServerAdapter, listAdapterModels } from "../adapters/registry.js";
+import { agentProfileConfigSchema, agentProfileEffortKey } from "@paperclipai/shared";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+function readEffort(config: Record<string, unknown>, key: string | null): string {
+  const value = key === "modelReasoningEffort" ? config.modelReasoningEffort ?? config.reasoningEffort ?? config.effort : key ? config[key] : undefined;
+  return typeof value === "string" ? value : "";
+}
 function audit(tx: Tx, companyId: string, userId: string, action: string, id: string, details: Record<string, unknown> = {}) {
   return tx.insert(activityLog).values({ companyId, actorType: "user", actorId: userId, responsibleUserId: userId, action, entityType: "agent_profile", entityId: id, details });
 }
@@ -26,6 +30,12 @@ export function agentProfileService(db: Db) {
   async function validateConfig(source: Db | Tx, companyId: string, config: AgentProfileConfig) {
     config = agentProfileConfigSchema.parse(config);
     if (!findActiveServerAdapter(config.adapterType)?.supportsInstructionsBundle) throw badRequest("작업 지침을 지원하는 실행 방식을 선택해 주세요.");
+    const effortKey = agentProfileEffortKey(config);
+    if (config.thinkingEffort && !effortKey) throw badRequest("이 실행 방식은 프로필 에포트 설정을 지원하지 않습니다.");
+    if (config.thinkingEffort && effortKey === "modelReasoningEffort") {
+      const model = (await listAdapterModels("codex_local")).find(m => m.id === config.model);
+      if (model?.reasoningEfforts && !model.reasoningEfforts.includes(config.thinkingEffort)) throw badRequest("선택한 모델이 지원하는 에포트를 선택해 주세요.");
+    }
     const keys = [...new Set(config.skills)];
     if (keys.length) {
       const rows = await source.select({ key: companySkills.key }).from(companySkills).where(and(eq(companySkills.companyId, companyId), inArray(companySkills.key, keys)));
@@ -114,6 +124,14 @@ export function agentProfileService(db: Db) {
         if (same(config.model ?? "", old.model)) {
           if (next.model) config.model = next.model; else delete config.model;
         } else overrides.push("model");
+        const effortKey = agentProfileEffortKey(next);
+        const applyEffort = effortKey && same(readEffort(config, effortKey), old.thinkingEffort);
+        if (applyEffort) {
+          if (next.thinkingEffort) config[effortKey] = next.thinkingEffort; else delete config[effortKey];
+          if (effortKey === "modelReasoningEffort") { delete config.reasoningEffort; delete config.effort; }
+        } else if (effortKey) overrides.push("thinkingEffort");
+        // An individual model override must also support the propagated effort.
+        await validateConfig(tx, binding.companyId, { ...next, model: typeof config.model === "string" ? config.model : "", thinkingEffort: readEffort(config, effortKey) });
         const selections = readPaperclipSkillSyncPreference(config).desiredSkills;
         if (same([...selections].sort(), [...old.skills].sort())) config = writePaperclipSkillSyncPreference(config, next.skills); else overrides.push("skills");
         const revisions = agentInstructionRevisionService(tx as unknown as Db);
@@ -125,6 +143,10 @@ export function agentProfileService(db: Db) {
         const [fresh] = await tx.select().from(agents).where(eq(agents.id, agentId));
         patch.adapterConfig = { ...fresh.adapterConfig, ...config };
         if (same(agent.adapterConfig.model ?? "", old.model) && !next.model) delete patch.adapterConfig.model;
+        if (applyEffort) {
+          if (!next.thinkingEffort) delete patch.adapterConfig[effortKey];
+          if (effortKey === "modelReasoningEffort") { delete patch.adapterConfig.reasoningEffort; delete patch.adapterConfig.effort; }
+        }
         await agentService(tx as unknown as Db).update(agentId, patch, { recordRevision: { createdByUserId: binding.requestedByUserId, source: "agent_profile" } });
         await tx.update(agentProfileBindings).set({ appliedVersion: version.version, pendingVersion: null, baseline: next, overrides, error: null, updatedAt: new Date() }).where(eq(agentProfileBindings.agentId, agentId));
         await audit(tx, binding.companyId, binding.requestedByUserId, "agent.profile_applied", binding.profileId, { agentId, version: version.version, overrides });
@@ -132,7 +154,7 @@ export function agentProfileService(db: Db) {
       });
     } catch (error) {
       // No source/credential/config content enters this public error field.
-      const message = error instanceof Error && /프로필|권한|스킬|실행 방식/.test(error.message) ? error.message : "프로필 반영에 실패했습니다. 에이전트 설정을 확인한 뒤 다시 반영해 주세요.";
+      const message = error instanceof Error && /프로필|권한|스킬|실행 방식|모델|에포트/.test(error.message) ? error.message : "프로필 반영에 실패했습니다. 에이전트 설정을 확인한 뒤 다시 반영해 주세요.";
       await db.update(agentProfileBindings).set({ error: message, updatedAt: new Date() }).where(eq(agentProfileBindings.agentId, agentId));
       return false;
     }
@@ -149,6 +171,7 @@ export function agentProfileService(db: Db) {
       const head = await agentInstructionRevisionService(db).readCurrent({ companyId, agentId }, actor);
       const config = agentProfileConfigSchema.parse({ capabilities: agent.capabilities ?? "", adapterType: agent.adapterType,
         runnerProvider: agent.adapterConfig.provider === "acpx" ? agent.adapterConfig.acpxAgent ?? "claude" : agent.adapterConfig.provider ?? "codex", model: typeof agent.adapterConfig.model === "string" ? agent.adapterConfig.model : "", skills: readPaperclipSkillSyncPreference(agent.adapterConfig).desiredSkills, instructions: head?.content ?? "" });
+      config.thinkingEffort = readEffort(agent.adapterConfig, agentProfileEffortKey(config));
       const profile = await create(companyId, { name: `${agent.name} 프로필`, description: agent.title ?? agent.capabilities?.slice(0, 300) ?? "", config }, actor.userId);
       await bind(companyId, profile.id, profile.version, agent.id, actor.userId);
       return get(companyId, profile.id);
