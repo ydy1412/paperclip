@@ -5,7 +5,7 @@
 The user requested a menu for creating and managing reusable personal agent templates in Dovix. Templates belong to the selected company. They are individual agent presets, complementing the existing read-only bundled team catalog.
 
 - AT1: An `에이전트 프로필` navigation item opens name/short-role cards and a selected profile's detail/editor on the right.
-- AT2: Create, edit, duplicate and delete templates. Store template name, description, agent role/title/capabilities, instructions, adapter type, model and selected company skills.
+- AT2: Create, edit, duplicate and delete templates. Store template name, description, capabilities, instructions, adapter type, model and selected company skills. Profiles do not configure a fixed agent role or job title.
 - AT3: Use a saved profile in the existing governed agent hire/setup flow. Keep agent identity, reporting, environment and authentication. Saving offers an explicit linked-agent propagation checkbox. Store immutable versions and durable pending bindings; apply after active work, before the next queued execution. Compare each field with its last profile value to preserve deliberate individual overrides. Deleting unlinks agents without deleting them; restoring a version creates a new revision.
 - AT4: Enforce company scope, board/operator access, validation and mutation audit. Do not store provider credentials, runtime sessions, arbitrary commands or agent identity in template configuration. Stale edits produce a conflict.
 - AT5: Verify persistence and authorization with a disposable real PostgreSQL database, verify the UI workflow through Aside, and deploy only the selected compatible change after an idle check.
@@ -18,6 +18,104 @@ The user requested a menu for creating and managing reusable personal agent temp
 - Use a revision number for conditional edits. Profile changes, pending bindings and audit entries commit together. Use existing agent start lock and canonical instruction commit/config revision services for propagation. Persist actor provenance for deferred writes, recheck authorization, and expose failures/overrides rather than silently losing changes. Do not introduce a timer, background watcher or parallel execution queue.
 - The bundled teams catalog's missing runtime manifest is an independently diagnosed deployment fault; personal templates do not depend on its file loader. No plugin is introduced.
 - Preserve dirty source files and the installed 2026.1001.0 compatibility baseline. Keep backups and pin deployment file hashes; avoid a full upstream replacement.
+
+## Profile editor correction — 2026-10-10
+
+The user rejected fixed role/category and title controls, reported losing an
+unsaved form when visiting Skills, and requested visible model radio choices.
+The existing form holds drafts only in component state. Its model input uses a
+native datalist; the Codex registry bypasses discovery and returns a static list.
+The installed CLI cache currently lists `gpt-6.1-sol` and `gpt-6-sol`.
+
+- Remove role/title from the profile contract, editor, detail and propagation.
+  Accept and discard these legacy JSON fields so existing profiles/versions
+  remain readable without a destructive migration. Existing agents keep their
+  own role/title. Profile hires use the ordinary general-agent defaults.
+- Automatically retain the full form per company in browser-local storage,
+  including profile identity, base version, skill choices and propagation
+  choice. Restore after navigation/reload; add an explicit temporary-save
+  action. Clear only after a successful permanent save or explicit cancellation.
+  Failed saves retain the draft. Surface unavailable storage.
+- Render default/model/manual choices as one accessible radio group. Fetch
+  models through the existing scoped adapter API and expose refresh/loading/
+  error/empty states. Read Codex's installed `models_cache.json` on each listing
+  using `CODEX_HOME` or the user's default Codex home, preserving order/labels
+  and excluding hidden entries. Do not substitute a fixed model list or use
+  the general OpenAI API catalog, which includes non-Codex models. Existing
+  explicit adapter-model configuration and other adapter discovery keep their
+  existing precedence. Manual model IDs remain available.
+- Work on `feature/agent-profile-drafts`, based on the preserved profile-bearing
+  baseline. `develop` still lacks this coupled baseline; this branch depends on
+  `feature/dovix-baseline` and does not bypass its recorded integration gates.
+- Verify draft navigation/reload/isolation, failed/successful-save behavior,
+  removed fields, radio selection, dynamic cache changes and legacy profile
+  reads/propagation with focused tests. Record actual UI/build/runtime evidence
+  separately from source checks.
+
+Source validation for this correction:
+
+- The navigation-loss regression failed before implementation, then passed
+  with restored name/description and no server-side profile creation.
+- Passed: four focused Vitest files / 48 tests (editor drafts/model selection,
+  real disposable-PostgreSQL profile CRUD/legacy snapshots/propagation, adapter
+  catalog discovery and model refresh routes).
+- Passed: shared build, source UI typecheck/build, direct server TypeScript
+  check/emission, token gates and `git diff --check`.
+- Passed: the actual compatibility editor's 11 tests, its scoped TypeScript
+  check and compatibility production build. The compatibility UI's complete
+  typecheck reports existing settings/fixture contract differences outside the
+  editor (including `keyboardShortcuts` and experimental-settings fixtures);
+  no unrelated UI code was altered to hide those differences. Missing copied
+  asset/package paths and dependency links were restored before building.
+- Passed: importing the staged runtime strips legacy fields and returns the
+  seven visible models in the installed CLI cache, including both requested
+  Sol models. A read-only preflight found zero active heartbeat/plugin/
+  publication/connection-check jobs.
+- Graphify's updated code graph has 78,248 nodes / 222,777 edges; 233 zero-node
+  files remain a coverage limitation. The draft helper's connection to the
+  profile page was queried and checked against source.
+- Whole-baseline release gates remain subject to the failures recorded in the
+  Git reorganization plan. This scoped fix does not certify or merge that
+  baseline. A selected compatibility rollout will record its source commit,
+  file hashes, fresh rollback snapshot and actual API/browser proof below.
+
+Operating rollout and browser validation completed for this correction:
+
+- Deployed the selected compatibility UI and five runtime JavaScript files
+  from source commit `eb6a0da4d64f12e8f708d34016aef9752640906e` to the managed
+  `2026.1001.0` install. No database migration was needed. The entry is
+  `index-Dqofugis.js`; the service worker uses the same build identity.
+- The rollback files and deployment receipt are saved under
+  `/Users/ydy1412/.paperclip/instances/default/data/backups/profile-editor-20261010T074655Z/`.
+  The receipt records every old/new package-file hash. After application, all
+  five installed hashes matched the candidate. The service restarted and
+  reported healthy; before/after active heartbeat, plugin, publication and
+  connection-check counts were zero.
+- Live authenticated profile/model APIs succeeded, unauthenticated profile
+  access was rejected, and all 48 referenced app-shell assets matched their
+  candidate hashes. The model API returned seven visible CLI models, including
+  `gpt-6.1-sol` and `gpt-6-sol`. This verifies catalog discovery, not execution
+  of an agent with those models.
+- Aside account `u1`, using an owned temporary tab, verified that role/title
+  controls are absent and both Sol model radios can be selected. A temporary
+  form retained its name, instructions and model after visiting Skills and
+  returning. An additional edit made without pressing temporary save survived
+  reload. Explicit temporary save worked and cancellation cleared the draft.
+  No existing draft was present before testing; the test draft was removed,
+  no production profile was permanently saved, and existing user tabs were
+  preserved. Drafts are local to the same browser/origin, not cross-device.
+- Browser evidence is in
+  `tmp/agent-profile-editor-operating/profile-editor-proof.json`,
+  `profile-editor-snapshots.json` and `profile-editor.png`. Initial tool probes
+  failed on a restored textarea's exact-label selector and an early startup
+  lookup; waiting for the rendered profile region and matching the observed
+  textbox role resolved those tool failures. The final browser flow passed.
+- To roll back, first confirm an idle operating instance, restore the five
+  `package/` files listed in the receipt and the saved `ui-dist/index.html` /
+  `sw.js` from that backup, then restart the managed service and verify health,
+  authenticated APIs and shell assets. Old hashed assets were retained for
+  already-open clients. The whole baseline remains unmerged and subject to
+  its separately recorded integration gates.
 
 ## Execution checklist
 
