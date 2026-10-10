@@ -1383,3 +1383,9 @@ Shopping ideas evidence and handoff:
   exposed option values. The read schema now preserves these original values,
   while the existing save schema still requires complete input. No source
   values were fabricated, removed, or resubmitted to Coupang for this fix.
+
+## Catalog keyword search (2026-10-10)
+
+Source and upload lists search titles and product identifiers across the full company/project scope before pagination. Whitespace-separated terms must all match as case-insensitive literal substrings. Search and clear reset pagination and preserve unsaved edits by disabling controls. Source stage counts use the same query. No migration or provider write is required. Verify SQLite scope/paging/stages, both UI views, and authenticated live reads.
+
+Keyword verification: 15 shared-contract, catalog UI and native HTTP/SQLite integration tests pass with the backend feature checkout selected. Recursive workspace typecheck and token gates pass. Both UI views cover page reset, no results, clear and unsaved-edit protection. Full source build and operating deployment evidence are recorded in the task PR. The earlier unchanged-area regression results remain applicable.

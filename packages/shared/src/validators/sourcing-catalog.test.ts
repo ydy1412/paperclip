@@ -27,3 +27,14 @@ describe("registered catalog product readback", () => {
     expect(catalogRequestSchema.safeParse({ ...input, skus: [{ ...product.skus[0], options: [{ name: "Color", value: "Blue" }] }] }).success).toBe(true);
   });
 });
+
+describe("catalog keyword request contract", () => {
+  it("trims bounded keywords for list and stage queries and retains empty-query compatibility", () => {
+    const scope = { companyId: "10000000-0000-4000-8000-000000000001", projectId: "10000000-0000-4000-8000-000000000002" };
+    for (const input of [{ ...scope, operation: "list", view: "uploads" }, { ...scope, operation: "list", view: "source", stage: "ready" }, { ...scope, operation: "stages" }]) {
+      expect(catalogRequestSchema.safeParse(input).success).toBe(true);
+      expect(catalogRequestSchema.parse({ ...input, query: "  책상 BLUE  " })).toHaveProperty("query", "책상 BLUE");
+      expect(catalogRequestSchema.safeParse({ ...input, query: "x".repeat(201) }).success).toBe(false);
+    }
+  });
+});

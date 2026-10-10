@@ -36,6 +36,28 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 describe("store settings and common product editor", () => {
+  it.each(["source", "uploads"] as const)("searches and clears %s across server pages without losing unsaved edits", async view => {
+    const original = mock.request.getMockImplementation();
+    mock.request.mockImplementation(async (...args) => {
+      const request = args[2];
+      if (request.operation === "list") return request.query === "없음" ? [] : Array.from({ length: 20 }, (_, i) => ({ ...structuredClone(product), id: `${i}` }));
+      return original?.(...args);
+    });
+    await render(<SourcingProducts companyId="company" projectId="project" view={view} />);
+    await click("다음");
+    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "list", page: 2 }));
+    await input("상품 검색 키워드", "  없음  "); await click("검색");
+    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "list", view, page: 1, query: "없음" }));
+    expect(document.body.textContent).toContain("검색 결과가 없습니다.");
+    if (view === "source") expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "stages", query: "없음" });
+    await click("검색 초기화");
+    expect(document.querySelector<HTMLInputElement>('[aria-label="상품 검색 키워드"]')?.value).toBe("");
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-pressed]')!.click()); await settle();
+    await input("상품명", "저장 전 이름");
+    expect(document.querySelector<HTMLInputElement>('[aria-label="상품 검색 키워드"]')?.disabled).toBe(true);
+    expect([...document.querySelectorAll("button")].find(b => b.textContent === "검색")?.disabled).toBe(true);
+    expect(document.querySelector<HTMLInputElement>('[aria-label="상품명"]')?.value).toBe("저장 전 이름");
+  });
   it("reads stage totals from the server and sends the selected filter before paging", async () => {
     await render(<SourcingProducts companyId="company" projectId="project" view="source" />);
     expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("업로드 준비 (1)");

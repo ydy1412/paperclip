@@ -46,6 +46,9 @@ describe("catalog real worker/host/HTTP/SQLite and credential vault", () => {
     expect(saved.revision).toBe(2); expect(saved.skus).toHaveLength(2);
     const read = managedProductSchema.parse((await f.tool("get-managed-product", { productId: created.id })).data); expect(read.title).toBe("책상 10cm");
     const list = (await f.tool("list-managed-products", { view: "source" })).data as unknown[]; expect(list).toHaveLength(1);
+    expect(await f.service.catalogRead({ ...scope, operation: "list", view: "source", query: " 책상 10CM " }, context)).toHaveLength(1);
+    expect(await f.service.catalogRead({ ...scope, operation: "list", view: "source", query: "없는 키워드" }, context)).toEqual([]);
+    expect(await f.service.catalogRead({ ...scope, operation: "stages", query: "없는 키워드" }, context)).toMatchObject({ all: 0, processing: 0 });
     const counts = await f.service.catalogRead({ ...scope, operation: "stages" }, context);
     expect(counts).toMatchObject({ all: 1, processing: 1, ready: 0, queued: 0, uploaded: 0, attention: 0 });
     expect(await f.service.catalogRead({ ...scope, operation: "list", view: "source", stage: "ready" }, context)).toEqual([]);
