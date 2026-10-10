@@ -9,6 +9,33 @@ import {
 import { PLUGIN_RPC_ERROR_CODES } from "../src/protocol.js";
 
 describe("createHostClientHandlers invocation company scope", () => {
+  it("gates the local order connector separately from outbound HTTP and manual sync", async () => {
+    const request = vi.fn(async () => ({ orders: [] }));
+    const sync = vi.fn(async () => ({ state: "queued" }));
+    const services = { autoSourcing: { request, sync } } as unknown as HostServices;
+    const context = { invocationScope: { companyId: "company-a" } };
+    const input = { companyId: "company-a", projectId: "project", operation: "orders" as const, accountId: "account" };
+    const denied = createHostClientHandlers({ pluginId: "orders", capabilities: ["http.outbound"], services });
+    await expect(denied["autoSourcing.request"](input, context)).rejects.toBeInstanceOf(CapabilityDeniedError);
+    const read = createHostClientHandlers({ pluginId: "orders", capabilities: ["auto-sourcing.orders.read"], services });
+    await expect(read["autoSourcing.request"]({ ...input, companyId: "company-b" }, context)).rejects.toBeInstanceOf(InvocationScopeDeniedError);
+    await read["autoSourcing.request"](input, context);
+    expect(request).toHaveBeenCalledExactlyOnceWith(input, context);
+    await expect(read["autoSourcing.sync"]({ companyId: "company-a", projectId: "project", accountId: "account", from: "2026-10-01", to: "2026-10-08" }, context)).rejects.toBeInstanceOf(CapabilityDeniedError);
+    expect(sync).not.toHaveBeenCalled();
+  });
+  it("gates Marketing host calls and forwards the opaque run scope", async () => {
+    const getContext = vi.fn(async () => ({ issueId: "task", projectId: "project", requiresProjectSelection: false, targets: [], media: [] }));
+    const services = { marketing: { getContext } } as unknown as HostServices;
+    const context = { invocationScope: { companyId: "company-a", agentRun: { agentId: "agent", runId: "run", projectId: "project" } } };
+    const denied = createHostClientHandlers({ pluginId: "drafts", capabilities: ["agent.tools.register"], services });
+    await expect(denied["marketing.getContext"]({ companyId: "company-a" }, context)).rejects.toBeInstanceOf(CapabilityDeniedError);
+    const handlers = createHostClientHandlers({ pluginId: "drafts", capabilities: ["marketing.drafts.read"], services });
+    await expect(handlers["marketing.getContext"]({ companyId: "company-b" }, context)).rejects.toBeInstanceOf(InvocationScopeDeniedError);
+    expect(getContext).not.toHaveBeenCalled();
+    await handlers["marketing.getContext"]({ companyId: "company-a" }, context);
+    expect(getContext).toHaveBeenCalledExactlyOnceWith({ companyId: "company-a" }, context);
+  });
   it("rejects worker-selected config and secret company ids without a host invocation scope", async () => {
     const configGet = vi.fn(async () => ({ apiKeyRef: "unreachable" }));
     const secretsResolve = vi.fn(async () => "unreachable");

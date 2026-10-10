@@ -98,6 +98,20 @@ export class InvocationScopeDeniedError extends Error {
  * All methods return promises to support async I/O (database, HTTP, etc.).
  */
 export interface HostServices {
+  autoSourcing?: {
+    catalogRead(params: WorkerToHostMethods["autoSourcing.catalogRead"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    catalogWrite(params: WorkerToHostMethods["autoSourcing.catalogWrite"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    processingRead(params: WorkerToHostMethods["autoSourcing.processingRead"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    processingWrite(params: WorkerToHostMethods["autoSourcing.processingWrite"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    request(params: WorkerToHostMethods["autoSourcing.request"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    sync(params: WorkerToHostMethods["autoSourcing.sync"][0], context?: WorkerHostCallContext): Promise<unknown>;
+    shipping(params: WorkerToHostMethods["autoSourcing.shipping"][0], context?: WorkerHostCallContext): Promise<unknown>;
+  };
+  marketing?: {
+    getContext(params: WorkerToHostMethods["marketing.getContext"][0], context?: WorkerHostCallContext): Promise<WorkerToHostMethods["marketing.getContext"][1]>;
+    uploadMedia(params: WorkerToHostMethods["marketing.uploadMedia"][0], context?: WorkerHostCallContext): Promise<WorkerToHostMethods["marketing.uploadMedia"][1]>;
+    submitDraft(params: WorkerToHostMethods["marketing.submitDraft"][0], context?: WorkerHostCallContext): Promise<WorkerToHostMethods["marketing.submitDraft"][1]>;
+  };
   /** Provides `config.get`. */
   config: {
     get(
@@ -377,6 +391,16 @@ export type HostClientHandlers = {
  * @see PLUGIN_SPEC.md §15 — Capability Model
  */
 const METHOD_CAPABILITY_MAP: Record<WorkerToHostMethodName, PluginCapability | null> = {
+  "autoSourcing.catalogRead": "auto-sourcing.products.read",
+  "autoSourcing.catalogWrite": "auto-sourcing.drafts.write",
+  "autoSourcing.processingRead": "auto-sourcing.products.read",
+  "autoSourcing.processingWrite": "auto-sourcing.drafts.write",
+  "autoSourcing.request": "auto-sourcing.orders.read",
+  "autoSourcing.sync": "auto-sourcing.orders.sync",
+  "autoSourcing.shipping": "auto-sourcing.shipping.write",
+  "marketing.getContext": "marketing.drafts.read",
+  "marketing.uploadMedia": "marketing.media.upload",
+  "marketing.submitDraft": "marketing.drafts.create",
   // Config — always allowed
   "config.get": null,
 
@@ -705,6 +729,46 @@ export function createHostClientHandlers(
 
   return {
     // Config
+    "autoSourcing.catalogRead": gated("autoSourcing.catalogRead", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.catalogRead(params, context);
+    }),
+    "autoSourcing.catalogWrite": gated("autoSourcing.catalogWrite", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.catalogWrite(params, context);
+    }),
+    "autoSourcing.processingRead": gated("autoSourcing.processingRead", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.processingRead(params, context);
+    }),
+    "autoSourcing.processingWrite": gated("autoSourcing.processingWrite", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.processingWrite(params, context);
+    }),
+    "autoSourcing.request": gated("autoSourcing.request", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.request(params, context);
+    }),
+    "autoSourcing.shipping": gated("autoSourcing.shipping", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.shipping(params, context);
+    }),
+    "autoSourcing.sync": gated("autoSourcing.sync", async (params, context) => {
+      if (!services.autoSourcing) throw new Error("Auto Sourcing bridge is unavailable");
+      return services.autoSourcing.sync(params, context);
+    }),
+    "marketing.getContext": gated("marketing.getContext", async (params, context) => {
+      if (!services.marketing) throw new Error("Marketing plugin bridge is unavailable");
+      return services.marketing.getContext(params, context);
+    }),
+    "marketing.uploadMedia": gated("marketing.uploadMedia", async (params, context) => {
+      if (!services.marketing) throw new Error("Marketing plugin bridge is unavailable");
+      return services.marketing.uploadMedia(params, context);
+    }),
+    "marketing.submitDraft": gated("marketing.submitDraft", async (params, context) => {
+      if (!services.marketing) throw new Error("Marketing plugin bridge is unavailable");
+      return services.marketing.submitDraft(params, context);
+    }),
     "config.get": gated("config.get", async (params, context) => {
       const companyId = resolveRequiredCompanyId("config.get", params, context);
       return services.config.get({ ...params, companyId }, context);

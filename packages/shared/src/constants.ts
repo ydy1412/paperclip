@@ -1320,6 +1320,14 @@ export type PluginCategory = (typeof PLUGIN_CATEGORIES)[number];
  * @see PLUGIN_SPEC.md §15 — Capability Model
  */
 export const PLUGIN_CAPABILITIES = [
+  "auto-sourcing.products.read",
+  "auto-sourcing.drafts.write",
+  "auto-sourcing.orders.read",
+  "auto-sourcing.orders.sync",
+  "auto-sourcing.shipping.write",
+  "marketing.drafts.read",
+  "marketing.drafts.create",
+  "marketing.media.upload",
   // Data Read
   "companies.read",
   "projects.read",

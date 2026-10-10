@@ -741,6 +741,20 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
 
   const ctx: PluginContext = {
     manifest,
+    autoSourcing: {
+      async catalogRead() { requireCapability(manifest, capabilitySet, "auto-sourcing.products.read"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async catalogWrite() { requireCapability(manifest, capabilitySet, "auto-sourcing.drafts.write"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async processingRead() { requireCapability(manifest, capabilitySet, "auto-sourcing.products.read"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async processingWrite() { requireCapability(manifest, capabilitySet, "auto-sourcing.drafts.write"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async request() { requireCapability(manifest, capabilitySet, "auto-sourcing.orders.read"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async sync() { requireCapability(manifest, capabilitySet, "auto-sourcing.orders.sync"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+      async shipping() { requireCapability(manifest, capabilitySet, "auto-sourcing.shipping.write"); throw new Error("Use a native host fixture for Auto Sourcing"); },
+    },
+    marketing: {
+      async getContext() { requireCapability(manifest, capabilitySet, "marketing.drafts.read"); throw new Error("Use a native host fixture for Marketing tools"); },
+      async uploadMedia() { requireCapability(manifest, capabilitySet, "marketing.media.upload"); throw new Error("Use a native host fixture for Marketing tools"); },
+      async submitDraft() { requireCapability(manifest, capabilitySet, "marketing.drafts.create"); throw new Error("Use a native host fixture for Marketing tools"); },
+    },
     config: {
       async get() {
         return { ...currentConfig };
