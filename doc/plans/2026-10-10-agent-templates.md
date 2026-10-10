@@ -79,7 +79,43 @@ Source validation for this correction:
   baseline. A selected compatibility rollout will record its source commit,
   file hashes, fresh rollback snapshot and actual API/browser proof below.
 
-Operating rollout and browser validation for this correction are pending.
+Operating rollout and browser validation completed for this correction:
+
+- Deployed the selected compatibility UI and five runtime JavaScript files
+  from source commit `eb6a0da4d64f12e8f708d34016aef9752640906e` to the managed
+  `2026.1001.0` install. No database migration was needed. The entry is
+  `index-Dqofugis.js`; the service worker uses the same build identity.
+- The rollback files and deployment receipt are saved under
+  `/Users/ydy1412/.paperclip/instances/default/data/backups/profile-editor-20261010T074655Z/`.
+  The receipt records every old/new package-file hash. After application, all
+  five installed hashes matched the candidate. The service restarted and
+  reported healthy; before/after active heartbeat, plugin, publication and
+  connection-check counts were zero.
+- Live authenticated profile/model APIs succeeded, unauthenticated profile
+  access was rejected, and all 48 referenced app-shell assets matched their
+  candidate hashes. The model API returned seven visible CLI models, including
+  `gpt-6.1-sol` and `gpt-6-sol`. This verifies catalog discovery, not execution
+  of an agent with those models.
+- Aside account `u1`, using an owned temporary tab, verified that role/title
+  controls are absent and both Sol model radios can be selected. A temporary
+  form retained its name, instructions and model after visiting Skills and
+  returning. An additional edit made without pressing temporary save survived
+  reload. Explicit temporary save worked and cancellation cleared the draft.
+  No existing draft was present before testing; the test draft was removed,
+  no production profile was permanently saved, and existing user tabs were
+  preserved. Drafts are local to the same browser/origin, not cross-device.
+- Browser evidence is in
+  `tmp/agent-profile-editor-operating/profile-editor-proof.json`,
+  `profile-editor-snapshots.json` and `profile-editor.png`. Initial tool probes
+  failed on a restored textarea's exact-label selector and an early startup
+  lookup; waiting for the rendered profile region and matching the observed
+  textbox role resolved those tool failures. The final browser flow passed.
+- To roll back, first confirm an idle operating instance, restore the five
+  `package/` files listed in the receipt and the saved `ui-dist/index.html` /
+  `sw.js` from that backup, then restart the managed service and verify health,
+  authenticated APIs and shell assets. Old hashed assets were retained for
+  already-open clients. The whole baseline remains unmerged and subject to
+  its separately recorded integration gates.
 
 ## Execution checklist
 
