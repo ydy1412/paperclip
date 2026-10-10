@@ -18,7 +18,8 @@ export async function startProcessingFixture(mode = "synthetic") {
   const scratch = mkdtempSync(path.join(process.env.PAPERCLIP_RUN_SCRATCH_DIR ?? tmpdir(), "processing-host-"));
   const previousKey = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
   process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(scratch, "fixture-master.key");
-  const child = spawn("dotnet", [path.resolve(root, "../auto-sourcing/tests/AutoSourcing.Tests/bin/Debug/net8.0/AutoSourcing.Tests.dll"), "processing-server", mode],
+  const sourcingRoot = process.env.AUTO_SOURCING_PROJECT_ROOT ?? path.resolve(root, "../auto-sourcing");
+  const child = spawn("dotnet", [path.resolve(sourcingRoot, "tests/AutoSourcing.Tests/bin/Debug/net8.0/AutoSourcing.Tests.dll"), "processing-server", mode],
     { stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, PAPERCLIP_RUN_SCRATCH_DIR: scratch } });
   const database = await startEmbeddedPostgresTestDatabase("processing-host-");
   const db = createDb(database.connectionString);

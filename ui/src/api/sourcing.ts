@@ -5,9 +5,10 @@ import type { CatalogRequest, StoreSettingRequest } from "@paperclipai/shared";
 
 export type SourcingAccount = { id: string; displayName: string; provider: string; enabled: boolean };
 export type SourcingCarrier = { code: string; name: string; lengths: number[]; format: "numeric" | "alphanumeric"; trackingSupported: boolean };
-export type OrderItem = { itemId: string; productId: string | null; quantity: number; cancelledQuantity: number; pendingCancellationQuantity: number; unitPrice: number | null; orderPrice: number | null; currency: string | null };
-export type SourcingOrder = { shipmentId: string; orderId: string; state: string; orderedAt: string | null; observedAt: string; quantity: number; amount: number | null; currency: string | null; items: OrderItem[] };
-export type SourcingOrderPage = { orders: SourcingOrder[]; total: number; page: number; pageSize: number };
+export type OrderItem = { itemId: string; productId: string | null; quantity: number; cancelledQuantity: number; pendingCancellationQuantity: number; unitPrice: number | null; orderPrice: number | null; currency: string | null; productName?: string | null };
+export type SourcingOrder = { shipmentId: string; orderId: string; state: string; orderedAt: string | null; observedAt: string; quantity: number; amount: number | null; currency: string | null; items: OrderItem[]; buyerName?: string | null; recipientName?: string | null };
+export type OrderSummary = { totalOrders: number; totalQuantity: number; newOrders: number; preparingOrders: number; shippingOrders: number; deliveredOrders: number; unknownAmountOrders: number; revenue: { currency: string; amount: number }[] };
+export type SourcingOrderPage = { orders: SourcingOrder[]; total: number; page: number; pageSize: number; summary?: OrderSummary | null };
 export type OrderSyncState = { state: string; jobId: string | null; startedAt: string | null; finishedAt: string | null; items: number | null; errorCode: string | null };
 export type DispatchTicket = { id: string; targetId: string; state: string; expiresAt: string; readbackVerified: boolean;
   results: { targetId: string; succeeded: boolean; code: string }[] };

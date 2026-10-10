@@ -104,6 +104,16 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
   if (!accountId) return <EmptyState icon={Unplug} message="연결된 판매 계정 없음" />;
   return <section aria-label="주문 목록" className="min-w-0 space-y-4">
     {forwarderOrder && <SourcingForwarders key={`${companyId}:${projectId}:${forwarderOrder}`} companyId={companyId} projectId={projectId} orderId={forwarderOrder} onClose={() => setForwarderOrder(null)} />}
+    {orders.data?.summary && <section aria-label="주문 통계" className="space-y-2">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[["주문 금액 합계", orders.data.summary.revenue.length ? orders.data.summary.revenue.map(r => money(r.amount, r.currency)).join(" / ") : "-"],
+          ["전체 주문", `${orders.data.summary.totalOrders.toLocaleString("ko-KR")}건`],
+          ["배송 완료", `${orders.data.summary.deliveredOrders.toLocaleString("ko-KR")}건`],
+          ["배송 중", `${orders.data.summary.shippingOrders.toLocaleString("ko-KR")}건`]].map(([label, value]) =>
+          <dl key={label} className="rounded-lg border border-border bg-card p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-2 break-words text-lg font-semibold tabular-nums">{value}</dd></dl>)}
+      </div>
+      <p className="text-xs text-muted-foreground">선택 계정 · 조회 기간·검색 전체 기준 · 신규 {orders.data.summary.newOrders}건 · 상품준비중 {orders.data.summary.preparingOrders}건 · 주문 수량 {orders.data.summary.totalQuantity}개{orders.data.summary.unknownAmountOrders > 0 && ` · 금액 미확인 ${orders.data.summary.unknownAmountOrders}건 제외`}</p>
+    </section>}
     <Tabs value={state || "all"} onValueChange={value => change({ state: value === "all" ? null : value, page: null })} className="min-w-0">
     <div className="min-w-0 overflow-x-auto border-b border-border pb-2">
       <TabsList variant="line" aria-label="주문 상태">
@@ -143,7 +153,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
         </PopoverContent>
       </Popover>
       <form className="flex min-w-0 flex-1 gap-2" onSubmit={event => { event.preventDefault(); change({ q: search.trim(), page: null }); }}>
-        <input aria-label="주문번호 검색" placeholder="주문번호 검색" maxLength={100} className={`${control} w-full`} value={search} onChange={event => setSearch(event.target.value)} />
+        <input aria-label="주문번호 검색" placeholder="주문번호·주문자·수령자·상품명 검색" maxLength={100} className={`${control} w-full`} value={search} onChange={event => setSearch(event.target.value)} />
         <button className={iconButton} aria-label="검색" title="검색"><Search className="size-4" /></button>
       </form>
       <button className={iconButton} aria-label="쿠팡 주문 새로고침" title="최근 31일 쿠팡 주문 새로고침" disabled={busy || !account?.enabled} onClick={() => sync.mutate()}>
@@ -162,12 +172,14 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
         <div className="min-w-0 overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">쿠팡 주문</caption>
           <thead><tr className="border-y border-border text-xs text-muted-foreground"><th scope="col" className="px-3 py-3"><Checkbox aria-label={selectAllLabel} disabled={!eligible.length || busy || orders.isFetching || !!orders.error || !account?.enabled}
             checked={selectedOrders.length > 0 && selectedOrders.length === eligible.length ? true : selectedOrders.length > 0 ? "indeterminate" : false}
-            onCheckedChange={checked => setSelection({ scope: selectionScope, ids: checked ? eligible.map(order => order.shipmentId) : [] })} /></th>{["주문번호", "상태", "수량", "금액", "주문일", ...(state === "Preparing" ? ["배송대행지"] : [])].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">{label}</th>)}</tr></thead>
+            onCheckedChange={checked => setSelection({ scope: selectionScope, ids: checked ? eligible.map(order => order.shipmentId) : [] })} /></th>{["주문번호", "주문자 / 수령자", "상품명", "상태", "수량", "금액", "주문일", ...(state === "Preparing" ? ["배송대행지"] : [])].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">{label}</th>)}</tr></thead>
           <tbody>{orders.data?.orders.map(order => <tr key={order.shipmentId} className={`cursor-pointer border-b border-border ${shipmentId === order.shipmentId ? "bg-accent" : "hover:bg-accent/50"}`} onClick={() => change({ item: order.shipmentId }, false)}>
             <td className="px-3 py-3" onClick={event => event.stopPropagation()}><Checkbox aria-label={`${order.orderId} ${selectionName} 선택`} title={canSelect(order) ? "처리할 주문 선택" : prepare ? "취소 대기가 없는 신규 주문만 변경할 수 있습니다." : "취소 대기가 없는 상품준비중 주문만 발송할 수 있습니다."}
               disabled={!canSelect(order) || busy || orders.isFetching || !!orders.error || !account?.enabled} checked={selected.includes(order.shipmentId) && canSelect(order)}
               onCheckedChange={checked => setSelection({ scope: selectionScope, ids: checked ? [...selected, order.shipmentId] : selected.filter(id => id !== order.shipmentId) })} /></td>
             <td className="px-3 py-3"><button type="button" className="break-all text-left font-medium text-foreground underline-offset-4 hover:underline">{order.orderId}</button><div className="mt-1 text-xs text-muted-foreground">{order.shipmentId}</div></td>
+            <td className="min-w-28 px-3 py-3"><p>{order.buyerName || "-"}</p><p className="text-xs text-muted-foreground">{order.recipientName || "-"}</p></td>
+            <td className="min-w-40 max-w-72 px-3 py-3"><p className="line-clamp-2">{order.items.map(item => item.productName || item.productId || item.itemId).join(" · ")}</p></td>
             <td className="whitespace-nowrap px-3 py-3"><span className={`inline-flex rounded px-2 py-1 text-xs ${["Shipped", "InTransit"].includes(order.state) ? "bg-warning/10 text-warning" : order.state === "Delivered" ? "bg-success/10 text-success" : "bg-accent text-foreground"}`}>{orderStates[order.state] ?? "확인 필요"}</span></td>
             <td className="px-3 py-3 tabular-nums">{order.quantity}</td><td className="whitespace-nowrap px-3 py-3 tabular-nums">{money(order.amount, order.currency)}</td><td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">{date(order.orderedAt)}</td>
             {state === "Preparing" && <td className="whitespace-nowrap px-3 py-3" onClick={event => event.stopPropagation()}><button type="button" className={`${control} hover:bg-accent`} aria-label={`${order.orderId} 배송대행지`} onClick={() => setForwarderOrder(order.orderId)}>배송대행지</button></td>}
@@ -183,8 +195,8 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
           {detail.isLoading && <p role="status" className="text-sm text-muted-foreground">상세 조회 중</p>}{detail.error && <p role="alert" className="text-sm text-destructive">주문 상세 조회 실패</p>}
           {dispatchStatus.data?.ticket && <p role="status" className="mb-4 text-xs text-muted-foreground">최근 발송 처리 · {dispatchLabels[dispatchStatus.data.ticket.state]}</p>}
           {dispatchStatus.error && <p className="mb-4 text-xs text-muted-foreground">발송 처리 기록 조회 실패</p>}
-          {detail.data && <div className="space-y-5 text-sm"><dl className="grid min-w-0 gap-2"><dt className="text-xs text-muted-foreground">주문번호</dt><dd className="break-all font-medium">{detail.data.orderId}</dd><dt className="text-xs text-muted-foreground">상태</dt><dd>{orderStates[detail.data.state] ?? "확인 필요"}</dd><dt className="text-xs text-muted-foreground">마지막 확인</dt><dd>{date(detail.data.observedAt)}</dd><dt className="text-xs text-muted-foreground">금액</dt><dd>{money(detail.data.amount, detail.data.currency)}</dd></dl>
-            <section aria-label="주문 품목" className="space-y-3 border-t border-border pt-4"><h3 className="text-xs font-medium text-muted-foreground">품목 {detail.data.items.length}개</h3>{detail.data.items.map(item => <div key={item.itemId} className="space-y-1 border-b border-border pb-3"><p className="break-all font-medium">{item.productId ?? item.itemId}</p><p className="break-all text-xs text-muted-foreground">옵션 {item.itemId}</p><p>수량 {item.quantity} · 취소 {item.cancelledQuantity} · 취소 대기 {item.pendingCancellationQuantity}</p><p>{money(item.orderPrice, item.currency)}</p></div>)}</section>
+          {detail.data && <div className="space-y-5 text-sm"><dl className="grid min-w-0 gap-2"><dt className="text-xs text-muted-foreground">주문번호</dt><dd className="break-all font-medium">{detail.data.orderId}</dd><dt className="text-xs text-muted-foreground">주문자</dt><dd>{detail.data.buyerName || "-"}</dd><dt className="text-xs text-muted-foreground">수령자</dt><dd>{detail.data.recipientName || "-"}</dd><dt className="text-xs text-muted-foreground">상태</dt><dd>{orderStates[detail.data.state] ?? "확인 필요"}</dd><dt className="text-xs text-muted-foreground">마지막 확인</dt><dd>{date(detail.data.observedAt)}</dd><dt className="text-xs text-muted-foreground">금액</dt><dd>{money(detail.data.amount, detail.data.currency)}</dd></dl>
+            <section aria-label="주문 품목" className="space-y-3 border-t border-border pt-4"><h3 className="text-xs font-medium text-muted-foreground">품목 {detail.data.items.length}개</h3>{detail.data.items.map(item => <div key={item.itemId} className="space-y-1 border-b border-border pb-3"><p className="break-all font-medium">{item.productName || item.productId || item.itemId}</p><p className="break-all text-xs text-muted-foreground">옵션 {item.itemId}</p><p>수량 {item.quantity} · 취소 {item.cancelledQuantity} · 취소 대기 {item.pendingCancellationQuantity}</p><p>{money(item.orderPrice, item.currency)}</p></div>)}</section>
           </div>}
         </>}
       </aside>

@@ -31,6 +31,18 @@ describe("Native order workspace", () => {
     await act(async () => root.render(<MemoryRouter initialEntries={[url]}><QueryClientProvider client={cache}><SourcingOrders companyId="company" projectId="project" /><Location /></QueryClientProvider></MemoryRouter>));
     for (let i = 0; i < 4; i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   }
+  it("shows actual response names and full-scope summary rather than page totals", async () => {
+    const original = mock.data.getMockImplementation();
+    mock.data.mockImplementation(async (...args) => args[3] === "orders" ? { orders: [{ ...row, buyerName: "테스트 주문자", recipientName: "테스트 수령자", items: [{ ...row.items[0], productName: "테스트 상품" }] }], total: 47, page: 1, pageSize: 20,
+      summary: { totalOrders: 47, totalQuantity: 60, newOrders: 3, preparingOrders: 4, shippingOrders: 30, deliveredOrders: 10, unknownAmountOrders: 1, revenue: [{ currency: "KRW", amount: 123000 }] } } : original?.(...args));
+    await render();
+    expect(container.querySelector("tbody")?.textContent).toContain("테스트 주문자");
+    expect(container.querySelector("tbody")?.textContent).toContain("테스트 수령자");
+    expect(container.querySelector("tbody")?.textContent).toContain("테스트 상품");
+    const stats = container.querySelector('[aria-label="주문 통계"]')!;
+    expect(stats.textContent).toContain("123,000 KRW"); expect(stats.textContent).toContain("47건");
+    expect(stats.textContent).toContain("금액 미확인 1건 제외");
+  });
   it("opens the Preparing order's scoped forwarder chooser without opening order details", async () => {
     const original = mock.data.getMockImplementation();
     mock.data.mockImplementation(async (...args) => args[3] === "orders"

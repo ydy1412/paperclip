@@ -17,7 +17,7 @@ export function sourcingCatalogRoutes(db: Db, options: { processingPort?: number
     const service = autoSourcingPluginService(db, plugin.id, options); const context = { invocationScope: { companyId: scope.companyId } };
     const input = { ...req.body, ...scope }; // Route scope is authoritative.
     const result = ["business", "store", "attach"].includes(input.operation) ? await service.operatorSettings(input, context)
-      : ["settings", "list", "sources", "get", "jobs", "import-status"].includes(input.operation) ? await service.catalogRead(input, context) : await service.catalogWrite(input, context);
+      : ["settings", "list", "stages", "sources", "get", "jobs", "import-status"].includes(input.operation) ? await service.catalogRead(input, context) : await service.catalogWrite(input, context);
     if (["business", "store", "attach"].includes(input.operation)) {
       const actor = getActorInfo(req);
       await logActivity(db, { companyId: scope.companyId, actorType: actor.actorType, actorId: actor.actorId, agentId: actor.agentId, runId: actor.runId,

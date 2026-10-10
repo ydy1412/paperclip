@@ -30,7 +30,7 @@ export function SourcingProductEditor({ companyId, projectId, product, settings,
   const busy = save.isPending || queue.isPending || !!request.current;
   return <aside aria-label="상품 편집" className="min-w-0 space-y-4 rounded-lg border border-border bg-card p-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">상품 편집</h2><span className="text-xs text-muted-foreground">{dirty ? "저장하지 않은 변경 있음" : "저장됨"} · 버전 {draft.revision}</span></div>
-    {draft.mainImage && <img src={draft.mainImage} alt="상품 대표 이미지" className="aspect-square w-full rounded-md object-contain" loading="lazy" referrerPolicy="no-referrer" />}
+    {draft.mainImage && <img src={draft.mainImage} alt="상품 대표 이미지" className="mx-auto size-40 rounded-md object-contain sm:size-48" loading="lazy" referrerPolicy="no-referrer" />}
     <fieldset disabled={busy} className="min-w-0 space-y-3">
       <label className="grid gap-1 text-sm">상품명<input aria-label="상품명" className={fieldClass} maxLength={100} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
       <label className="grid gap-1 text-sm">대표 이미지 URL<input aria-label="대표 이미지 URL" className={fieldClass} value={draft.mainImage} onChange={e => setDraft({ ...draft, mainImage: e.target.value })} /></label>

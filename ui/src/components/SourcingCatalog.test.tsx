@@ -23,6 +23,8 @@ beforeEach(() => {
     stores: [storeA, storeB].map((id, index) => ({ id, businessId: business, accountId: id, provider: "coupang", name: `쿠팡 ${index + 1}`, enabled: true, revision: 1, templateProductId: "900", hasCredentials: true, catalogSupported: true, importState: "idle", importError: "" })), legacyAccounts: [] };
   product = { id: productId, title: "상품 A", mainImage: "https://images.example.test/main.jpg", description: "상세 설명", categoryCode: "100", revision: 1, sourceProvider: "coupang", sourceProductId: "101", skus: [{ id: "11", name: "빨강", image: "https://images.example.test/main.jpg", options: [{ name: "색상", value: "빨강" }] }], listings: [{ storeId: storeA, remoteProductId: "101", state: "registered", publishedRevision: 1 }] };
   mock.request.mockReset(); mock.request.mockImplementation(async (_company, _project, request) => {
+    if (request.operation === "import-status") return { state: "idle", errorCode: "", products: 0 };
+    if (request.operation === "stages") return { all: 1, processing: 0, ready: 1, queued: 0, attention: 0, uploaded: 0 };
     if (request.operation === "settings") return structuredClone(settings);
     if (request.operation === "list") return [structuredClone(product)];
     if (request.operation === "sources") return [{ sourceProvider: "taobao", sourceProductId: "123", title: "수집 상품", mainImage: "" }];
@@ -34,6 +36,26 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 describe("store settings and common product editor", () => {
+  it("reads stage totals from the server and sends the selected filter before paging", async () => {
+    await render(<SourcingProducts companyId="company" projectId="project" view="source" />);
+    expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("업로드 준비 (1)");
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(el => el.textContent === "업로드 준비 (1)")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    await settle();
+    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "list", view: "source", page: 1, stage: "ready" });
+  });
+  it("starts selected-store import and refreshes cards on verified completion", async () => {
+    const original = mock.request.getMockImplementation(); let imported = false;
+    mock.request.mockImplementation(async (...args) => {
+      const request = args[2];
+      if (request.operation === "import") { imported = true; return { state: "succeeded", products: 1, errorCode: "" }; }
+      if (request.operation === "import-status") return { state: imported ? "succeeded" : "idle", products: imported ? 1 : 0, errorCode: "" };
+      return original?.(...args);
+    });
+    await render(<SourcingProducts companyId="company" projectId="project" view="uploads" />);
+    await click("쿠팡 상품 가져오기");
+    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "import", storeId: storeA });
+    expect(document.body.textContent).toContain("가져오기 완료 · 저장 상품 1개");
+  });
   it("shows all registered stores and opens the selected store's dynamic secret-safe connection dialog", async () => {
     await render(<SourcingStoreSettings companyId="company" projectId="project" />);
     expect(document.body.textContent).toContain("쿠팡 1"); expect(document.body.textContent).toContain("쿠팡 2");

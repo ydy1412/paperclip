@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type Db, agents, heartbeatRuns, issues, projects, pluginConfig } from "@paperclipai/db";
-import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema } from "@paperclipai/shared";
+import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema } from "@paperclipai/shared";
 import type { HostServices, WorkerHostCallContext } from "@paperclipai/plugin-sdk";
 import { forbidden } from "../errors.js";
 import { pluginRegistryService } from "./plugin-registry.js";
@@ -46,10 +46,10 @@ const configSchema = z.object({ serviceToken: envBindingSecretRefSchema,
 });
 const itemSchema = z.object({ itemId: z.string(), productId: z.string().nullable(), quantity: z.number().int().nonnegative(),
   cancelledQuantity: z.number().int().nonnegative(), pendingCancellationQuantity: z.number().int().nonnegative(),
-  unitPrice: z.number().nullable(), orderPrice: z.number().nullable(), currency: z.string().nullable() });
+  unitPrice: z.number().nullable(), orderPrice: z.number().nullable(), currency: z.string().nullable(), productName: z.string().max(500).nullable().optional() });
 const orderSchema = z.object({ shipmentId: z.string(), orderId: z.string(), state: z.string(),
   orderedAt: z.string().nullable(), observedAt: z.string(), quantity: z.number().int().nonnegative(),
-  amount: z.number().nullable(), currency: z.string().nullable(), items: z.array(itemSchema).max(1000) });
+  amount: z.number().nullable(), currency: z.string().nullable(), items: z.array(itemSchema).max(1000), buyerName: z.string().max(200).nullable().optional(), recipientName: z.string().max(200).nullable().optional() });
 const syncStateSchema = z.object({ state: z.enum(["not_synced", "unknown", "queued", "running", "completed", "failed"]),
   jobId: z.string().nullable(), startedAt: z.string().nullable(), finishedAt: z.string().nullable(),
   items: z.number().int().nullable(), errorCode: z.string().nullable() });
@@ -102,7 +102,7 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   }
   async function catalog(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = catalogRequestSchema.parse(value);
-    const reads = ["settings", "list", "sources", "get", "jobs", "import-status"];
+    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status"];
     if (reads.includes(input.operation) === write) throw forbidden("허용되지 않은 상품 작업입니다.");
     if (context?.invocationScope?.agentRun && write && !["save", "source"].includes(input.operation)) throw forbidden("상품 가져오기와 실제 업로드는 운영 화면에서 실행해 주세요.");
     const { config, accounts } = await authorize(input, context, true);
@@ -117,6 +117,7 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
       if (context?.invocationScope?.agentRun) settings.businesses = settings.businesses.map(b => ({ ...b, registrationNumber: "" }));
       result = settings;
     } else if (operation === "list") result = z.array(managedProductSchema).parse(raw);
+    else if (operation === "stages") result = catalogStageCountsSchema.parse(raw);
     else if (operation === "sources") result = z.array(z.object({ sourceProvider: z.string(), sourceProductId: z.string(), title: z.string(), mainImage: z.string() })).parse(raw);
     else if (["get", "save", "source"].includes(operation)) result = managedProductSchema.parse(raw);
     else if (["jobs", "queue"].includes(operation)) result = z.array(publicationJobSchema).parse(raw);
@@ -260,7 +261,7 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
       if (input.operation === "detail") return orderSchema.parse(result);
       if (input.operation === "sync-state") return syncStateSchema.parse(result);
       return z.object({ orders: z.array(orderSchema).max(20), total: z.number().int().nonnegative(),
-        page: z.number().int().positive(), pageSize: z.literal(20) }).parse(result);
+        page: z.number().int().positive(), pageSize: z.literal(20), summary: z.object({ totalOrders: z.number().int().nonnegative(), totalQuantity: z.number().int().nonnegative(), newOrders: z.number().int().nonnegative(), preparingOrders: z.number().int().nonnegative(), shippingOrders: z.number().int().nonnegative(), deliveredOrders: z.number().int().nonnegative(), unknownAmountOrders: z.number().int().nonnegative(), revenue: z.array(z.object({ currency: z.string().regex(/^[A-Z]{3}$/), amount: z.number() })).max(100) }).nullable().optional() }).parse(result);
     },
     async sync(value, context) {
       const input = syncSchema.parse(value);

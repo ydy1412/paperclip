@@ -46,6 +46,10 @@ describe("catalog real worker/host/HTTP/SQLite and credential vault", () => {
     expect(saved.revision).toBe(2); expect(saved.skus).toHaveLength(2);
     const read = managedProductSchema.parse((await f.tool("get-managed-product", { productId: created.id })).data); expect(read.title).toBe("책상 10cm");
     const list = (await f.tool("list-managed-products", { view: "source" })).data as unknown[]; expect(list).toHaveLength(1);
+    const counts = await f.service.catalogRead({ ...scope, operation: "stages" }, context);
+    expect(counts).toMatchObject({ all: 1, processing: 1, ready: 0, queued: 0, uploaded: 0, attention: 0 });
+    expect(await f.service.catalogRead({ ...scope, operation: "list", view: "source", stage: "ready" }, context)).toEqual([]);
+    await expect(f.service.catalogRead({ ...scope, operation: "stages" }, { invocationScope: { companyId: "11111111-1111-4111-8111-111111111111" } })).rejects.toThrow("회사 범위");
     await expect(f.service.catalogWrite({ ...scope, operation: "save", productId: created.id, expectedRevision: 1, title: "stale", mainImage: created.mainImage, description: "", categoryCode: "", skus: created.skus }, context)).rejects.toThrow("publication_conflict");
     const agent = { invocationScope: { companyId: f.companyId, agentRun: { agentId: f.agent.id, runId: f.run.id, projectId: f.projectId } } };
     await expect(f.service.catalogWrite({ ...scope, operation: "queue", productId: created.id, expectedRevision: 2, storeIds: ["a".repeat(32)], requestId: crypto.randomUUID() }, agent)).rejects.toThrow("운영 화면");
