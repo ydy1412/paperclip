@@ -69,6 +69,39 @@ function makeExternalObjectSummary(overrides: Partial<ExternalObjectSummary> = {
 }
 
 describe("issue filters", () => {
+  it("combines Failed with ordinary statuses without treating every blocked task as failed", () => {
+    const issues = [
+      makeIssue({ id: "failure", status: "blocked" }),
+      makeIssue({ id: "dependency", status: "blocked" }),
+      makeIssue({ id: "normal", status: "todo" }),
+      makeIssue({ id: "finished", status: "done" }),
+    ];
+    const context = { failedIssueIds: new Set(["failure", "finished"]) };
+    expect(applyIssueFilters(issues, { ...defaultIssueFilterState, statuses: ["failed"] }, null, false, undefined, context).map(i => i.id))
+      .toEqual(["failure"]);
+    expect(applyIssueFilters(issues, { ...defaultIssueFilterState, statuses: ["failed", "todo"] }, null, false, undefined, context).map(i => i.id))
+      .toEqual(["failure", "normal"]);
+    expect(applyIssueFilters(issues, { ...defaultIssueFilterState, statuses: ["failed"] }, null, false, new Set(["failure"]), context))
+      .toEqual([]);
+  });
+
+  it("includes unresolved failed recovery and excludes resolved recovery", () => {
+    const issue = makeIssue({
+      activeRecoveryAction: {
+        id: "recovery", companyId: "company-1", sourceIssueId: "issue-1", recoveryIssueId: null,
+        status: "active", kind: "configuration_validation", cause: "configuration_incomplete", outcome: null,
+        ownerType: "board", ownerAgentId: null, ownerUserId: null, previousOwnerAgentId: null, returnOwnerAgentId: null,
+        fingerprint: "fixture", nextAction: "Repair configuration", wakePolicy: null, monitorPolicy: null,
+        attemptCount: 0, maxAttempts: null, timeoutAt: null, lastAttemptAt: null,
+        resolutionNote: null, resolvedAt: null, createdAt: new Date(), updatedAt: new Date(),
+        evidence: { latestRunStatus: "failed" },
+      },
+    });
+    const state = { ...defaultIssueFilterState, statuses: ["failed"] };
+    expect(applyIssueFilters([issue], state)).toEqual([issue]);
+    expect(applyIssueFilters([{ ...issue, activeRecoveryAction: { ...issue.activeRecoveryAction!, status: "resolved" } }], state)).toEqual([]);
+  });
+
   it("searches filter options case-insensitively without mutating the source", () => {
     const options = [{ name: "Alpha Agent" }, { name: "Release QA" }];
     expect(searchIssueFilterOptions(options, "  qa ", (option) => option.name)).toEqual([

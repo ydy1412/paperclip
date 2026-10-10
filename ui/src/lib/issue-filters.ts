@@ -1,4 +1,5 @@
 import type { ExternalObjectSummary, Issue } from "@paperclipai/shared";
+import { deriveActiveRecoveryDisplayState } from "./recovery-display";
 
 export type IssueFilterWorkspaceLookup = {
   mode?: string | null;
@@ -10,6 +11,8 @@ export type IssueFilterWorkspaceContext = {
   defaultProjectWorkspaceIdByProjectId?: ReadonlyMap<string, string>;
   externalObjectSummaryByIssueId?: ReadonlyMap<string, ExternalObjectSummary>;
   externalObjectSummariesReady?: boolean;
+  /** Latest failed/timed-out run per task, used by the Inbox Failed status filter. */
+  failedIssueIds?: ReadonlySet<string>;
 };
 
 export type IssueFilterState = {
@@ -221,7 +224,18 @@ export function applyIssueFilters(
   if (enableRoutineVisibilityFilter && state.hideRoutineExecutions) {
     result = result.filter((issue) => issue.originKind !== "routine_execution");
   }
-  if (state.statuses.length > 0) result = result.filter((issue) => state.statuses.includes(issue.status));
+  if (state.statuses.length > 0) {
+    result = result.filter((issue) => {
+      if (state.statuses.includes(issue.status)) return true;
+      if (!state.statuses.includes("failed") || issue.status === "done" || issue.status === "cancelled") return false;
+      if (liveIssueIds?.has(issue.id) || issue.activeRun?.status === "running" || issue.activeRun?.status === "queued") return false;
+      const action = issue.activeRecoveryAction;
+      const recoveryState = action ? deriveActiveRecoveryDisplayState(action, { scheduledRetry: issue.scheduledRetry }) : null;
+      const failedRecovery = (recoveryState === "needed" || recoveryState === "escalated")
+        && (action?.evidence.latestRunStatus === "failed" || action?.evidence.latestRunStatus === "timed_out");
+      return failedRecovery || workspaceContext.failedIssueIds?.has(issue.id) === true;
+    });
+  }
   if (state.priorities.length > 0) result = result.filter((issue) => state.priorities.includes(issue.priority));
   if (state.assignees.length > 0) {
     result = result.filter((issue) => {

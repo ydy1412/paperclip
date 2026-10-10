@@ -1072,11 +1072,14 @@ identity shows no failed runs. All retains company-wide failed-run visibility.
 Company health alerts do not contribute to the personal inbox badge.
 Run list responses, including summaries, retain `responsibleUserId`.
 
-Inbox category choices, including **Failed**, are available inside the Filter
-menu in both UI presentations and from every inbox tab. Selecting a category
-opens the company-wide All inbox with that category applied. The choice is
-persisted, counted in the filter badge, and reset by Clear. This does not change
-the existing latest-run failure selection or Mine ownership rules.
+Inbox **Failed** is a checkbox in Filter → Status in both UI presentations,
+not a category or a new persisted task lifecycle status. It selects open tasks
+whose latest task run failed or timed out, or whose unresolved recovery still
+records such a failure. A live retry and completed/cancelled tasks do not match.
+Failed-run rows match Failed; approvals, join requests and alerts do not match
+task status filters. Multiple selected statuses are combined with OR. Tab and
+Mine ownership scopes remain intact. Selection persists and Clear resets it.
+Old saved `failed_runs` category choices migrate to the Failed status checkbox.
 
 Ownership split:
 

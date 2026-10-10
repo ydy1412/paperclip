@@ -424,62 +424,59 @@ describe("Inbox toolbar", () => {
 
   it.each(["mine", "recent", "unread", "blocked", "all"].flatMap((tab) =>
     [true, false].map((streamlined) => ({ tab, streamlined })),
-  ))("selects and clears Failed from $tab (streamlined=$streamlined)", async ({ tab, streamlined }) => {
+  ))("filters Failed in Status on $tab (streamlined=$streamlined)", async ({ tab, streamlined }) => {
     routerMock.location.pathname = `/inbox/${tab}`;
     routerMock.navigate.mockClear();
-    apiMocks.experimentalSettings.mockResolvedValue({
-      enableIsolatedWorkspaces: false,
-      enableStreamlinedUi: streamlined,
-    });
+    apiMocks.experimentalSettings.mockResolvedValue({ enableIsolatedWorkspaces: false, enableStreamlinedUi: streamlined });
+    const attention: NonNullable<Issue["blockedInboxAttention"]> = {
+      kind: "blocked", state: "needs_attention", reason: "blocked_chain_stalled", severity: "medium",
+      stoppedSinceAt: "2026-03-11T00:00:00Z", owner: { type: "board", agentId: null, userId: null, label: "Board" },
+      action: { label: "Inspect task", detail: null }, sourceIssue: null, leafIssue: null, recoveryIssue: null,
+      approvalId: null, interactionId: null, sampleIssueIdentifier: null,
+      redaction: { externalDetailsRedacted: false, secretFieldsOmitted: true },
+    };
     apiMocks.issuesList.mockResolvedValue([
-      createIssue({ title: "Ordinary inbox task" }),
+      createIssue({ title: "Ordinary inbox task", isUnreadForMe: true }),
+      createIssue({ id: "failed-task", title: "Failed task", status: "blocked", isUnreadForMe: true, blockedInboxAttention: attention }),
+      createIssue({ id: "dependency", title: "Blocked dependency", status: "blocked", isUnreadForMe: true, blockedInboxAttention: attention }),
     ]);
+    apiMocks.approvalsList.mockResolvedValue([createApproval()]);
+    apiMocks.joinRequestsList.mockResolvedValue([createJoinRequest()]);
     apiMocks.heartbeatRunsList.mockResolvedValue([
-      createFailedRun({ id: "visible-failure", error: "Unique failed execution" }),
+      createFailedRun({ id: "visible-failure", error: "Unique failed execution", contextSnapshot: { issueId: "failed-task" } }),
       createFailedRun({ id: "successful-run", agentId: "agent-2", status: "succeeded" }),
     ]);
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: 0 } },
-    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: 0 } } });
     const root = createRoot(container);
     const render = () => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>);
     try {
       await act(render);
       await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
       await act(() => (container.querySelector('button[title="Filter"]') as HTMLButtonElement).click());
-      const failedButton = Array.from(document.querySelectorAll('[data-filter-options="inbox-category"] button'))
-        .find((button) => button.textContent?.trim() === "Failed") as HTMLButtonElement;
-      expect(failedButton).toBeDefined();
-      await act(() => failedButton.click());
-      if (tab !== "all") expect(routerMock.navigate).toHaveBeenCalledWith("/inbox/all");
-      else expect(routerMock.navigate).not.toHaveBeenCalled();
-
-      routerMock.location.pathname = "/inbox/all";
-      await act(render);
+      expect(document.querySelector('[data-filter-options="inbox-category"]')?.textContent).not.toContain("Failed");
+      const checkbox = document.querySelector('[data-filter-options="issue-status"] [role="checkbox"][aria-label="Failed"]') as HTMLButtonElement;
+      expect(checkbox).not.toBeNull();
+      await act(() => checkbox.click());
+      expect(routerMock.navigate).not.toHaveBeenCalled();
       await vi.waitFor(() => {
-        expect(container.textContent).toContain("Unique failed execution");
+        expect(container.textContent).toContain("Failed task");
         expect(container.textContent).not.toContain("Ordinary inbox task");
+        expect(container.textContent).not.toContain("Blocked dependency");
       });
+      if (tab !== "blocked") expect(container.textContent).toContain("Unique failed execution");
       expect(container.querySelector('a[to$="/runs/successful-run"]')).toBeNull();
-      if (!document.querySelector('[data-filter-options="inbox-category"]')) {
-        await act(() => (container.querySelector('button[title^="Filter"]') as HTMLButtonElement).click());
-      }
-      expect(document.querySelector('[data-filter-options="inbox-category"] button[aria-pressed="true"]')?.textContent)
-        .toBe("Failed");
+      expect(checkbox.getAttribute("aria-checked")).toBe("true");
 
-      // Reload the page component to verify that the category survives navigation.
       await act(() => root.render(null));
       await act(render);
-      await vi.waitFor(() => expect(container.textContent).toContain("Unique failed execution"));
-      expect(container.textContent).not.toContain("Ordinary inbox task");
+      await vi.waitFor(() => expect(container.textContent).toContain("Failed task"));
+      expect(container.textContent).not.toContain("Blocked dependency");
       await act(() => (container.querySelector('button[title^="Filter"]') as HTMLButtonElement).click());
-      const clearButton = Array.from(document.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Clear") as HTMLButtonElement;
-      expect(clearButton).toBeDefined();
+      expect(document.querySelector('[data-filter-options="issue-status"] [aria-label="Failed"]')?.getAttribute("aria-checked")).toBe("true");
+      const clearButton = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Clear") as HTMLButtonElement;
       await act(() => clearButton.click());
-      await vi.waitFor(() => expect(container.textContent).toContain("Ordinary inbox task"));
-      expect(document.querySelector('[data-filter-options="inbox-category"] button[aria-pressed="true"]')?.textContent)
-        .toBe("All categories");
+      await vi.waitFor(() => expect(container.textContent).toContain("Blocked dependency"));
+      expect(document.querySelector('[data-filter-options="issue-status"] [aria-label="Failed"]')?.getAttribute("aria-checked")).toBe("false");
     } finally {
       await act(() => root.unmount());
       queryClient.clear();

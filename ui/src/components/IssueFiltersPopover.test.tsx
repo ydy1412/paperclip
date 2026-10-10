@@ -29,7 +29,9 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: ({ checked }: { checked?: boolean }) => <input type="checkbox" checked={checked} readOnly />,
+  Checkbox: ({ checked, onCheckedChange, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { onCheckedChange?: (checked: boolean) => void }) => (
+    <input type="checkbox" {...props} checked={checked} onChange={() => onCheckedChange?.(!checked)} />
+  ),
 }));
 
 vi.mock("./StatusIcon", () => ({
@@ -209,11 +211,12 @@ describe("IssueFiltersPopover", () => {
     const categoryOptions = container.querySelector('[data-filter-options="inbox-category"]');
     const approvalOptions = container.querySelector('[data-filter-options="inbox-approval-status"]');
     expect(categoryOptions?.textContent).toContain("All categories");
-    const failedButton = Array.from(categoryOptions?.querySelectorAll("button") ?? [])
-      .find((button) => button.textContent?.trim() === "Failed");
-    expect(failedButton).toBeDefined();
-    act(() => failedButton?.click());
-    expect(onCategoryChange).toHaveBeenCalledWith("failed_runs");
+    expect(categoryOptions?.textContent).not.toContain("Failed");
+    const failedCheckbox = container.querySelector('[data-filter-options="issue-status"] input[aria-label="Failed"]') as HTMLInputElement;
+    expect(failedCheckbox).not.toBeNull();
+    act(() => failedCheckbox.click());
+    expect(onChange).toHaveBeenCalledWith({ statuses: ["failed"] });
+    expect(onCategoryChange).not.toHaveBeenCalled();
     expect(categoryOptions?.querySelector('button[aria-pressed="true"]')?.textContent).toContain("Approvals");
     expect(approvalOptions?.querySelector('button[aria-pressed="true"]')?.textContent).toContain("Needs action");
 

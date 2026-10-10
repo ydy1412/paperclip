@@ -138,6 +138,7 @@ import {
   getInboxWorkItems,
   getInboxSearchSupplementIssues,
   getLatestFailedRunsByAgent,
+  getLatestFailedIssueIds,
   matchesInboxIssueSearch,
   getRecentTouchedIssues,
   isInboxEntityDismissed,
@@ -216,12 +217,14 @@ function normalizeInboxCollectionViewState(value: unknown): StreamlinedInboxView
       category === "issues_i_touched"
       || category === "join_requests"
       || category === "approvals"
-      || category === "failed_runs"
       || category === "alerts"
         ? category
         : "everything",
     allApprovalFilter: approval === "actionable" || approval === "resolved" ? approval : "all",
-    issueFilters: normalizeIssueFilterState(candidate.issueFilters),
+    issueFilters: {
+      ...normalizeIssueFilterState(candidate.issueFilters),
+      ...(category === "failed_runs" ? { statuses: ["failed"] } : {}),
+    },
     showDateGroupSeparators: candidate.showDateGroupSeparators !== false,
   };
 }
@@ -1144,10 +1147,12 @@ function StreamlinedInbox({
     selectedCompanyId,
     inboxIssueIdsForExternalObjectSummaries,
   );
+  const failedIssueIds = useMemo(() => getLatestFailedIssueIds(heartbeatRuns ?? []), [heartbeatRuns]);
   const issueFilterContext = useMemo(() => ({
+    failedIssueIds,
     externalObjectSummaryByIssueId,
     externalObjectSummariesReady: externalObjectSummariesReady && !externalObjectSummariesLoading,
-  }), [externalObjectSummariesLoading, externalObjectSummariesReady, externalObjectSummaryByIssueId]);
+  }), [failedIssueIds, externalObjectSummariesLoading, externalObjectSummariesReady, externalObjectSummaryByIssueId]);
   const visibleMineIssues = useMemo(
     () => applyIssueFilters(mineIssues, issueFilters, currentUserId, true, liveIssueIds, issueFilterContext),
     [mineIssues, issueFilters, currentUserId, liveIssueIds, issueFilterContext],
@@ -1371,8 +1376,9 @@ function StreamlinedInbox({
         approvals: tab === "all" && !showApprovalsCategory ? [] : approvalsToRender,
         failedRuns: failedRunsForTab,
         joinRequests: joinRequestsForTab,
+        statuses: issueFilters.statuses,
       }),
-    [approvalsToRender, issuesToRender, showApprovalsCategory, showTouchedCategory, tab, failedRunsForTab, joinRequestsForTab],
+    [approvalsToRender, issuesToRender, showApprovalsCategory, showTouchedCategory, tab, failedRunsForTab, joinRequestsForTab, issueFilters.statuses],
   );
 
   const filteredWorkItems = useMemo(() => {
@@ -2357,7 +2363,7 @@ function StreamlinedInbox({
   }
 
   const hasRunFailures = failedRuns.length > 0;
-  const showCompanyAlerts = shouldShowCompanyAlerts(tab) && showAlertsCategory;
+  const showCompanyAlerts = shouldShowCompanyAlerts(tab) && showAlertsCategory && issueFilters.statuses.length === 0;
   const showAggregateAgentError =
     showCompanyAlerts &&
     !!dashboard &&
@@ -2724,7 +2730,7 @@ function StreamlinedInbox({
           currentUserId={currentUserId}
           liveIssueIds={liveIssueIds}
           subtreeLiveCounts={subtreeLiveCounts}
-          workspaceFilterContext={inboxWorkspaceGrouping}
+          workspaceFilterContext={{ ...inboxWorkspaceGrouping, ...issueFilterContext }}
           showStatusColumn={visibleIssueColumnSet.has("status") && availableIssueColumnSet.has("status")}
           showIdentifierColumn={visibleIssueColumnSet.has("id") && availableIssueColumnSet.has("id")}
           showUpdatedColumn={visibleIssueColumnSet.has("updated") && availableIssueColumnSet.has("updated")}
