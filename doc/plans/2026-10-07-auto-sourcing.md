@@ -1379,3 +1379,7 @@ Shopping ideas evidence and handoff:
   missing source OpenAPI entries for preserved routes. The continuity gate,
   route coverage collector, and typed API request documentation were fixed;
   affected HTTP authorization and source API contract tests passed.
+- Operating browser verification found registered Coupang products with empty
+  exposed option values. The read schema now preserves these original values,
+  while the existing save schema still requires complete input. No source
+  values were fabricated, removed, or resubmitted to Coupang for this fix.
