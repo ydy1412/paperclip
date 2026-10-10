@@ -1,0 +1,19 @@
+{
+  "name": "@paperclipai/plugin-marketing-drafts",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Agent tools for channel-specific Marketing drafts and native media submission.",
+  "files": ["dist", "README.md"],
+  "paperclipPlugin": { "manifest": "./dist/manifest.js", "worker": "./dist/worker.js" },
+  "scripts": {
+    "prebuild": "pnpm --filter @paperclipai/plugin-sdk ensure-build-deps",
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "@paperclipai/plugin-sdk": "workspace:*" },
+  "devDependencies": { "@paperclipai/shared": "workspace:*", "@types/node": "^24.0.0", "esbuild": "^0.28.2", "typescript": "^7.0.2", "vitest": "^4.1.11" },
+  "engines": { "node": ">=24.11.0" },
+  "license": "MIT"
+}
