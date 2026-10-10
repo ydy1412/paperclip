@@ -40,9 +40,10 @@ describe("agent profile cards and linked editing", () => {
     expect(mock.create).toHaveBeenCalledWith("company", expect.objectContaining({ config: expect.objectContaining({ dangerouslyBypassApprovalsAndSandbox: true, search: true }) }));
   });
   it("shows saved options and includes them in an opt-in linked edit", async () => {
-    mock.get.mockResolvedValue({ ...profile, config: { ...config, dangerouslyBypassApprovalsAndSandbox: false, search: true } });
+    mock.get.mockResolvedValue({ ...profile, config: { ...config, dangerouslyBypassApprovalsAndSandbox: false, search: true }, bindings: profile.bindings.map(b => ({ ...b, overrides: ["dangerouslyBypassApprovalsAndSandbox", "search"] })) });
     await render(); await click(profile.name);
     expect(container.textContent).toContain("Bypass sandbox: 꺼짐"); expect(container.textContent).toContain("Enable search: 켜짐");
+    expect(container.textContent).toContain("개별 설정 유지: Bypass sandbox, Enable search");
     await click("수정"); await toggle("Bypass sandbox"); await toggle("Enable search");
     const apply = Array.from(container.querySelectorAll("label")).find(l => l.textContent?.includes("연결된 에이전트 1개에도 반영"))!.querySelector("input")!;
     await act(async () => apply.click());
