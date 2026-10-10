@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockApi = vi.hoisted(() => ({
   get: vi.fn(),
 }));
+const issueCalls=vi.hoisted(()=>({listDocuments:vi.fn(),deleteDocument:vi.fn(),listWorkProducts:vi.fn(),deleteWorkProduct:vi.fn(),listAttachments:vi.fn(),deleteAttachment:vi.fn()}));
+vi.mock("./issues",()=>({issuesApi:issueCalls}));
 
 vi.mock("./client", () => ({
   api: mockApi,
@@ -106,5 +108,44 @@ describe("artifactsApi.list", () => {
     mockApi.get.mockResolvedValue([artifact]);
     const result = await artifactsApi.list("company-1");
     expect(result).toEqual({ artifacts: [artifact], nextCursor: null });
+  });
+});
+
+describe("artifactsApi.remove",()=>{
+  beforeEach(()=>{vi.clearAllMocks();issueCalls.listWorkProducts.mockResolvedValue([{id:"wp-1",metadata:{attachmentId:"file-1"}}]);issueCalls.listAttachments.mockResolvedValue([{id:"file-1"}]);});
+  it("removes only a registration by default",async()=>{
+    await artifactsApi.remove(sampleArtifact({id:"work_product:wp-1"}));
+    expect(issueCalls.deleteWorkProduct).toHaveBeenCalledWith("wp-1");
+    expect(issueCalls.deleteAttachment).not.toHaveBeenCalled();
+  });
+  it("removes explicitly selected attachment bytes before the registration",async()=>{
+    await artifactsApi.remove(sampleArtifact({id:"work_product:wp-1"}),true);
+    expect(issueCalls.deleteAttachment).toHaveBeenCalledWith("file-1");
+    expect(issueCalls.deleteAttachment.mock.invocationCallOrder[0]).toBeLessThan(issueCalls.deleteWorkProduct.mock.invocationCallOrder[0]);
+  });
+  it("does not remove the registration when attachment deletion fails",async()=>{
+    issueCalls.deleteAttachment.mockRejectedValueOnce(new Error("permission denied"));
+    await expect(artifactsApi.remove(sampleArtifact({id:"work_product:wp-1"}),true)).rejects.toThrow("permission denied");
+    expect(issueCalls.deleteWorkProduct).not.toHaveBeenCalled();
+  });
+  it("can retry after attachment removal without deleting the file twice",async()=>{
+    issueCalls.listAttachments.mockResolvedValueOnce([]);
+    await artifactsApi.remove(sampleArtifact({id:"work_product:wp-1"}),true);
+    expect(issueCalls.deleteAttachment).not.toHaveBeenCalled();
+    expect(issueCalls.deleteWorkProduct).toHaveBeenCalledWith("wp-1");
+  });
+  it("resolves document keys from the actual ID rather than display title",async()=>{
+    issueCalls.listDocuments.mockResolvedValue([{id:"doc-1",key:"notes/v1"}]);
+    await artifactsApi.remove(sampleArtifact({id:"document:doc-1",source:"document",title:"not the key"}));
+    expect(issueCalls.deleteDocument).toHaveBeenCalledWith("issue-1","notes/v1");
+  });
+  it("rejects mismatched projected IDs before any API mutation",async()=>{
+    await expect(artifactsApi.remove(sampleArtifact({id:"attachment:wp-1"}))).rejects.toThrow("식별자");
+    expect(issueCalls.listWorkProducts).not.toHaveBeenCalled();
+    expect(issueCalls.deleteAttachment).not.toHaveBeenCalled();
+  });
+  it("deletes a directly attached artifact through its authorized endpoint",async()=>{
+    await artifactsApi.remove(sampleArtifact({id:"attachment:file-1",source:"attachment"}));
+    expect(issueCalls.deleteAttachment).toHaveBeenCalledWith("file-1");
   });
 });

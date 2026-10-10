@@ -613,6 +613,7 @@ export function FolderFormDialog({
   onOpenChange,
   onSubmit,
   pending = false,
+  error,
 }: {
   open: boolean;
   kind: FolderKind;
@@ -620,6 +621,7 @@ export function FolderFormDialog({
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: { name: string; color: string | null }) => void;
   pending?: boolean;
+  error?: string | null;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(FOLDER_COLORS[0] ?? null);
@@ -637,7 +639,7 @@ export function FolderFormDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit folder" : "Create folder"}</DialogTitle>
           <DialogDescription>
-            {kind === "routine" ? "Organize routines in this organization." : "Organize installed organization skills."}
+            {kind === "routine" ? "Organize routines in this organization." : kind === "artifact" ? "Organize artifacts in this organization." : "Organize installed organization skills."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -649,7 +651,7 @@ export function FolderFormDialog({
               onChange={(event) => setName(event.target.value)}
               autoFocus
               onKeyDown={(event) => {
-                if (event.key === "Enter" && name.trim()) onSubmit({ name: name.trim(), color });
+                if (event.key === "Enter" && name.trim() && !pending) onSubmit({ name: name.trim(), color });
               }}
             />
           </div>
@@ -682,6 +684,7 @@ export function FolderFormDialog({
             </div>
           </div>
         </div>
+        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
