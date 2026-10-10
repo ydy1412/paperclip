@@ -1308,3 +1308,68 @@ Project Hindsight decisions were queried; changed catalog source AST was merged 
 Next operator step: register the real business, attach the existing Coupang account in this project, then run `쿠팡 상품 가져오기`. Real merchant GET/PUT/POST, other marketplace adapters, crop pixel output and automatic category validation remain unverified/pending. Current editor shows local values and per-store published revision; field-level source/remote diffs, URL item restoration and image-failure placeholders remain CAT-UX.
 
 최종 정리: 선택 런타임 11개 파일 해시는 적용본과 일치한다. 두 프로젝트 Hindsight bank에 비민감 구현·회복 계약만 선별 저장하고 document_id/출처를 포함한 재조회로 확인했다. 기존 source-only 노출 상태는 이번 운영 검증으로 갱신하고 실제 판매 계정/크롭 미검증 범위는 유지했다. 사용한 테스트 탭·서버를 종료하고 의존성 후보 복사본과 이관 실험용 DB를 제거했다. selected-runtime/manifest·검증 기록·원본 롤백 백업은 유지한다. staging 적용 스크립트는 당시 설치본 해시에 고정된 일회성 기록이며 재실행 전 현재 버전에서 다시 준비해야 한다.
+
+
+## Todoist shopping ideas implementation — 2026-10-10
+
+The user requested all open ideas in the Todoist project named `프로젝트 아이디어`.
+Three parent headings contain four concrete changes. Completion requires real
+implementation and verification, followed by Todoist completion of each child
+and its fully completed parent.
+
+- Orders: show buyer name, recipient name and product names in list/detail.
+  Preserve unavailable names as missing rather than inventing data. Summaries
+  come from all stored orders in the selected account/search/date range, not
+  the current page. Show order revenue, total/new/preparing/shipping/delivered
+  order counts, with explicit currency and stored-data scope.
+- Product registration: bound the shared right-panel representative image to
+  a compact preview. Finish real Coupang product import, persist products and
+  business/store mappings, show progress/errors/counts in the registration
+  view, and verify read-back. Do not publish or modify remote products as part
+  of import validation.
+- Sourcing: add stage tabs with server-derived counts and filtering over real
+  scoped managed products. Keep source evidence and the shared editor. Define
+  draft, ready, queued/in-progress, uploaded and attention from stored product,
+  listing and latest publication state; do not insert mock products or counts.
+- Git: use `master` and `dev`; work on `feature/shopping-ideas` from dev. Existing
+  coupled Dovix baseline/profile commits are preserved on this feature until
+  the combined integration gates pass. The old develop ref is historical and
+  is not treated as dev. Submit a dev-target PR, inspect review/CI, merge within
+  the user's authorized dev rollout, then restart and verify the service.
+  Master promotion is outside this task.
+- Auto Sourcing changes must preserve its existing dirty baseline in an
+  isolated checkout. Retain the domain repository/application/adapter split,
+  add only necessary additive schema changes, and test actual SQLite.
+
+Verification: focused UI, server boundary, actual SQLite/provider protocol,
+source type/build and baseline blockers; live import and browser list/filter/
+statistics/editor checks; actual PR/merge/deployed commit receipts. Only verified
+requirements are checked in Todoist. Keep secret values, order names and raw
+provider responses out of logs and public PR text. Implementation is pending.
+
+Shopping ideas evidence and handoff:
+- Order list/detail now display persisted buyer/recipient/product names. The
+  service summary covers account/date/search before status and pagination.
+  Missing amounts stay unknown and currency totals remain separate.
+- Both catalog entry points share the compact product editor. Uploads provide
+  selected-store import, progress, completion refresh, and retry.
+- Sourcing phase tabs/counts read scoped SQLite product/listing/job state,
+  including sourced items after publication; filtering precedes pagination.
+- 86 focused UI/baseline tests passed. Final native host/HTTP/SQLite and UI slice:
+  39 passed. Workspace typecheck and full build passed. Compatible operating
+  shopping pages pass their scoped typecheck and build; the old UI's unrelated
+  keyboard-shortcut type differences remain outside that compatibility check.
+- The recovered baseline's unknown worker params, unit-test instance collision,
+  stale menu assertions, and skill inventory source anchors were reconciled.
+  Existing evaluation records were preserved; the inventory completeness check
+  passed without installing or accessing a separate evaluation corpus.
+- Auto Sourcing PR #6 merged into dev; actual DB-copy import verified 244 named,
+  imaged products with store mappings. Read-only order sync verified 49 stored
+  orders, 48 with names and one retained record without provider fields.
+  Full-scope summaries match across states/pages. Current scoped source count
+  is zero; no fabricated sourcing rows were inserted.
+- Graphify AST graphs were refreshed and important relationships cross-checked
+  with current source. JSON/config files that produced zero nodes are not
+  claimed as analyzed code. No semantic extraction or watcher was installed.
+- The final regression result, dev merge and operating deployment/readback
+  receipt are recorded in this task's PR, with backups and source commit hashes.

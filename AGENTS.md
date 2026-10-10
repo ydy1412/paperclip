@@ -31,8 +31,9 @@ submission.
 Dovix development follows the repository-specific Git Flow in
 `doc/DEVELOPING.md` (Dovix Git and release workflow). `origin` is the Dovix
 repository; `upstream` is a read-only Paperclip source. Work on `feature/*`,
-integrate verified changes into `develop`, and promote a tested release to
-`master`. Unvalidated recovery checkpoints must remain on their working branch.
+open a PR into `dev` after tests, review it, and merge verified changes into `dev`.
+For the current personal service, redeploy the verified `dev` commit and finish.
+Promote to `master` only after subsequent validation and an explicit release request. Unvalidated recovery checkpoints must remain on their working branch.
 
 - `server/`: Express REST API and orchestration services
 - `ui/`: React + Vite board UI

@@ -162,3 +162,12 @@ Future work starts on a purpose-specific feature branch. Resolve the recorded
 baseline blockers and rerun the failed checks, then complete the full test and
 build gates before merging this baseline into `develop`. A release remains a
 separate verified promotion to `master` and a commit/tag-linked deployment.
+
+## User workflow revision — 2026-10-10
+
+The user superseded the earlier develop/release workflow: master and dev are the
+long-lived branches; dev → feature → tests → PR to dev → review → merge dev →
+restart/verify the personal service. Master promotion is a later explicit release.
+Historical develop/recovery refs remain preserved. Shopping ideas recover the
+combined baseline and profile changes on feature/shopping-ideas for one reviewed
+integration into dev; no direct feature-to-master merge.
