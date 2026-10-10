@@ -1750,7 +1750,8 @@ function StreamlinedInbox({
   ]);
   const updateAllCategoryFilter = useCallback((value: InboxCategoryFilter) => {
     updateFilterPreferences((previous) => ({ ...previous, allCategoryFilter: value }));
-  }, [updateFilterPreferences]);
+    if (tab !== "all") navigate("/inbox/all");
+  }, [navigate, tab, updateFilterPreferences]);
   const updateAllApprovalFilter = useCallback((value: InboxApprovalFilter) => {
     updateFilterPreferences((previous) => ({ ...previous, allApprovalFilter: value }));
   }, [updateFilterPreferences]);
@@ -2406,6 +2407,18 @@ function StreamlinedInbox({
       + Number(showApprovalsCategory && allApprovalFilter !== "all")
     : 0;
   const activeFilterCount = activeIssueFilterCount + activeInboxScopeFilterCount;
+  const inboxScopeFilters = {
+    category: (tab === "all" ? allCategoryFilter : "everything") as InboxCategoryFilter,
+    approvalStatus: allApprovalFilter,
+    showApprovalStatus: tab === "all" && showApprovalsCategory,
+    onCategoryChange: updateAllCategoryFilter,
+    onApprovalStatusChange: updateAllApprovalFilter,
+    onClear: () => updateFilterPreferences((previous) => ({
+      ...previous,
+      allCategoryFilter: "everything",
+      allApprovalFilter: "all",
+    })),
+  };
   const showGeneralIssueToolbarControls = tab !== "blocked";
   const activeStatusFilterApplied =
     issueFilters.statuses.length === 4
@@ -2484,6 +2497,7 @@ function StreamlinedInbox({
                 iconOnly
                 workspaces={isolatedWorkspacesEnabled ? executionWorkspaces.filter((w) => w.mode === "isolated_workspace").map((w) => ({ id: w.id, name: w.name })) : undefined}
                 presentation={streamlinedUiEnabled ? "streamlined" : "legacy"}
+                inboxScopeFilters={inboxScopeFilters}
               />
               <Popover>
                 <PopoverTrigger asChild>
@@ -2590,20 +2604,7 @@ function StreamlinedInbox({
                 iconOnly
                 workspaces={isolatedWorkspacesEnabled ? executionWorkspaces.filter((w) => w.mode === "isolated_workspace").map((w) => ({ id: w.id, name: w.name })) : undefined}
                 presentation={streamlinedUiEnabled ? "streamlined" : "legacy"}
-                inboxScopeFilters={tab === "all" ? {
-                  category: allCategoryFilter,
-                  approvalStatus: allApprovalFilter,
-                  showApprovalStatus: showApprovalsCategory,
-                  onCategoryChange: updateAllCategoryFilter,
-                  onApprovalStatusChange: updateAllApprovalFilter,
-                  onClear: () => {
-                    updateFilterPreferences((previous) => ({
-                      ...previous,
-                      allCategoryFilter: "everything",
-                      allApprovalFilter: "all",
-                    }));
-                  },
-                } : undefined}
+                inboxScopeFilters={inboxScopeFilters}
               />
               <Popover>
                 <PopoverTrigger asChild>

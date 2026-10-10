@@ -179,7 +179,7 @@ describe("IssueFiltersPopover", () => {
     act(() => root.unmount());
   });
 
-  it("integrates Inbox category and approval status into the filter menu", () => {
+  it.each(["streamlined", "legacy"] as const)("integrates Inbox category and approval status into the %s filter menu", (presentation) => {
     const root = createRoot(container);
     const onChange = vi.fn();
     const onCategoryChange = vi.fn();
@@ -189,7 +189,7 @@ describe("IssueFiltersPopover", () => {
     act(() => {
       root.render(
         <IssueFiltersPopover
-          presentation="streamlined"
+          presentation={presentation}
           state={defaultIssueFilterState}
           onChange={onChange}
           activeFilterCount={2}
@@ -209,6 +209,11 @@ describe("IssueFiltersPopover", () => {
     const categoryOptions = container.querySelector('[data-filter-options="inbox-category"]');
     const approvalOptions = container.querySelector('[data-filter-options="inbox-approval-status"]');
     expect(categoryOptions?.textContent).toContain("All categories");
+    const failedButton = Array.from(categoryOptions?.querySelectorAll("button") ?? [])
+      .find((button) => button.textContent?.trim() === "Failed");
+    expect(failedButton).toBeDefined();
+    act(() => failedButton?.click());
+    expect(onCategoryChange).toHaveBeenCalledWith("failed_runs");
     expect(categoryOptions?.querySelector('button[aria-pressed="true"]')?.textContent).toContain("Approvals");
     expect(approvalOptions?.querySelector('button[aria-pressed="true"]')?.textContent).toContain("Needs action");
 

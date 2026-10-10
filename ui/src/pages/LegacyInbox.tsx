@@ -99,13 +99,6 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Inbox as InboxIcon,
@@ -1605,7 +1598,8 @@ export function Inbox() {
   ]);
   const updateAllCategoryFilter = useCallback((value: InboxCategoryFilter) => {
     updateFilterPreferences((previous) => ({ ...previous, allCategoryFilter: value }));
-  }, [updateFilterPreferences]);
+    if (tab !== "all") navigate("/inbox/all");
+  }, [navigate, tab, updateFilterPreferences]);
   const updateAllApprovalFilter = useCallback((value: InboxApprovalFilter) => {
     updateFilterPreferences((previous) => ({ ...previous, allApprovalFilter: value }));
   }, [updateFilterPreferences]);
@@ -2256,6 +2250,23 @@ export function Inbox() {
     .map((issue) => issue.id);
   const canMarkAllRead = unreadIssueIds.length > 0;
   const activeIssueFilterCount = countActiveIssueFilters(issueFilters, true);
+  const activeInboxScopeFilterCount = tab === "all"
+    ? Number(allCategoryFilter !== "everything")
+      + Number(showApprovalsCategory && allApprovalFilter !== "all")
+    : 0;
+  const activeFilterCount = activeIssueFilterCount + activeInboxScopeFilterCount;
+  const inboxScopeFilters = {
+    category: (tab === "all" ? allCategoryFilter : "everything") as InboxCategoryFilter,
+    approvalStatus: allApprovalFilter,
+    showApprovalStatus: tab === "all" && showApprovalsCategory,
+    onCategoryChange: updateAllCategoryFilter,
+    onApprovalStatusChange: updateAllApprovalFilter,
+    onClear: () => updateFilterPreferences((previous) => ({
+      ...previous,
+      allCategoryFilter: "everything",
+      allApprovalFilter: "all",
+    })),
+  };
   const showGeneralIssueToolbarControls = tab !== "blocked";
   return (
     <div className="space-y-6">
@@ -2343,7 +2354,8 @@ export function Inbox() {
                 presentation="legacy"
                 state={issueFilters}
                 onChange={updateIssueFilters}
-                activeFilterCount={activeIssueFilterCount}
+                activeFilterCount={activeFilterCount}
+                inboxScopeFilters={inboxScopeFilters}
                 agents={agents}
                 creators={creatorOptions}
                 projects={projects?.map((project) => ({ id: project.id, name: project.name }))}
@@ -2442,7 +2454,8 @@ export function Inbox() {
                 presentation="legacy"
                 state={issueFilters}
                 onChange={updateIssueFilters}
-                activeFilterCount={activeIssueFilterCount}
+                activeFilterCount={activeFilterCount}
+                inboxScopeFilters={inboxScopeFilters}
                 agents={agents}
                 creators={creatorOptions}
                 projects={projects?.map((project) => ({ id: project.id, name: project.name }))}
@@ -2541,43 +2554,6 @@ export function Inbox() {
         </div>
         </div>
       </div>
-
-      {tab === "all" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={allCategoryFilter}
-            onValueChange={(value) => updateAllCategoryFilter(value as InboxCategoryFilter)}
-          >
-            <SelectTrigger className="h-8 w-(--sz-170px) text-xs">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="everything">All categories</SelectItem>
-              <SelectItem value="issues_i_touched">My recent tasks</SelectItem>
-              <SelectItem value="join_requests">Join requests</SelectItem>
-              <SelectItem value="approvals">Approvals</SelectItem>
-              <SelectItem value="failed_runs">Failed runs</SelectItem>
-              <SelectItem value="alerts">Alerts</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {showApprovalsCategory && (
-            <Select
-              value={allApprovalFilter}
-              onValueChange={(value) => updateAllApprovalFilter(value as InboxApprovalFilter)}
-            >
-              <SelectTrigger className="h-8 w-(--sz-170px) text-xs">
-                <SelectValue placeholder="Approval status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All approval statuses</SelectItem>
-                <SelectItem value="actionable">Needs action</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      )}
 
       {approvalsError && <p className="text-sm text-destructive">{approvalsError.message}</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}

@@ -1072,6 +1072,12 @@ identity shows no failed runs. All retains company-wide failed-run visibility.
 Company health alerts do not contribute to the personal inbox badge.
 Run list responses, including summaries, retain `responsibleUserId`.
 
+Inbox category choices, including **Failed**, are available inside the Filter
+menu in both UI presentations and from every inbox tab. Selecting a category
+opens the company-wide All inbox with that category applied. The choice is
+persisted, counted in the filter badge, and reset by Clear. This does not change
+the existing latest-run failure selection or Mine ownership rules.
+
 Ownership split:
 
 - **Core / Free:** permission key and scoped-grant enforcement; responsible-user resolution; default-open, disabled, and allowlist policy modes; archive/unarchive APIs; per-user archive persistence; resurfacing behavior; activity audit records; and stable denial codes.
