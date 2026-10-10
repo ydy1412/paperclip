@@ -884,6 +884,7 @@ async function startServerWithDatabaseTeardown(
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = managedConfig?.plugins.autoInstall ?? null;
   const app = await createApp(db as any, {
+    marketingConnectionString: activeDatabaseConnectionString,
     uiMode,
     serverPort: listenPort,
     storageService,

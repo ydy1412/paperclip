@@ -19,6 +19,7 @@ export const agents = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     name: text("name").notNull(),
+    seatAlias: text("seat_alias"),
     role: text("role").notNull().default("general"),
     title: text("title"),
     icon: text("icon"),
@@ -43,6 +44,7 @@ export const agents = pgTable(
   },
   (table) => ({
     companyIdUq: unique("agents_company_id_uq").on(table.companyId, table.id),
+    seatAliasUq: unique("agents_company_seat_alias_uq").on(table.companyId, table.seatAlias),
     companyStatusIdx: index("agents_company_status_idx").on(table.companyId, table.status),
     companyReportsToIdx: index("agents_company_reports_to_idx").on(table.companyId, table.reportsTo),
     companyDefaultEnvironmentIdx: index("agents_company_default_environment_idx").on(table.companyId, table.defaultEnvironmentId),

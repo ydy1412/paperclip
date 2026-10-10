@@ -34,6 +34,9 @@ import { agentService } from "./agents.js";
 import { projectService } from "./projects.js";
 import { executionWorkspaceService } from "./execution-workspaces.js";
 import { issueService } from "./issues.js";
+import { marketingPluginService } from "./marketing-plugin.js";
+import { autoSourcingPluginService } from "./auto-sourcing-plugin.js";
+import { workProductService } from "./work-products.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 import { goalService } from "./goals.js";
 import { documentService } from "./documents.js";
@@ -748,6 +751,7 @@ export function buildHostServices(
   const projects = projectService(db);
   const executionWorkspaces = executionWorkspaceService(db);
   const issues = issueService(db);
+  const workProducts = workProductService(db);
   const documents = documentService(db);
   const goals = goalService(db);
   const access = accessService(db);
@@ -1577,6 +1581,9 @@ export function buildHostServices(
       },
     },
 
+    marketing: marketingPluginService(db, pluginId),
+    autoSourcing: autoSourcingPluginService(db, pluginId),
+
     http: {
       async fetch(params) {
         // SSRF protection: validate protocol whitelist + block private IPs.
@@ -1910,7 +1917,8 @@ export function buildHostServices(
         const companyId = ensureCompanyId(params.companyId);
         await ensurePluginAvailableForCompany(companyId);
         const issue = await issues.getById(params.issueId);
-        return (inCompany(issue, companyId) ? issue : null) as Issue | null;
+        if (!inCompany(issue, companyId)) return null;
+        return { ...issue, workProducts: await workProducts.listForIssue(issue.id) } as Issue;
       },
       async create(params) {
         const companyId = ensureCompanyId(params.companyId);

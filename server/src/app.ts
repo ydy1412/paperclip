@@ -51,10 +51,18 @@ import { companySkillPolicyRoutes } from "./routes/company-skill-policy.js";
 import { inboxAgentPolicyRoutes } from "./routes/inbox-agent-policy.js";
 import { builtInAgentRoutes } from "./routes/built-in-agents.js";
 import { folderRoutes } from "./routes/folders.js";
+import { sourcingForwarderRoutes } from "./routes/sourcing-forwarders.js";
+import { agentProfileRoutes } from "./routes/agent-profiles.js";
+import { sourcingCatalogRoutes } from "./routes/sourcing-catalog.js";
+import { sourcingForwarderBrowser } from "./services/sourcing-forwarder-browser.js";
+import { marketingRoutes } from "./routes/marketing.js";
+import { startMarketingConnectionWorker } from "./services/marketing-connection-workflow.js";
+import { marketingAsideTransport } from "./services/marketing-aside-transport.js";
 import { summarySlotRoutes } from "./routes/summary-slots.js";
 import { statusCardRoutes } from "./routes/status-cards.js";
 import { teamsCatalogRoutes } from "./routes/teams-catalog.js";
 import { agentRoutes } from "./routes/agents.js";
+import { agentContinuityRoutes } from "./routes/agent-continuity.js";
 import type { SetupTokenSessionService } from "./services/setup-token-session.js";
 import {
   buildSetupTokenLoginTransport,
@@ -462,6 +470,7 @@ export async function createApp(
   db: Db,
   opts: {
     uiMode: UiMode;
+    marketingConnectionString?: string;
     serverPort: number;
     storageService: StorageService;
     feedbackExportService?: {
@@ -653,10 +662,18 @@ export async function createApp(
     }),
   );
   api.use(openApiRoutes());
+  api.use(agentContinuityRoutes(db));
   api.use("/cloud", cloudRoutes());
   api.use("/companies", companyRoutes(db, opts.storageService));
   api.use(llmRoutes(db));
   api.use(folderRoutes(db));
+  const forwarderBrowser = sourcingForwarderBrowser();
+  api.use(sourcingForwarderRoutes(db, forwarderBrowser.open));
+  api.use(agentProfileRoutes(db));
+  api.use(sourcingCatalogRoutes(db));
+  api.use(marketingRoutes(db, process.env.PAPERCLIP_MARKETING_PUBLICATION_ENABLED === "true" ? marketingAsideTransport(db) : undefined, opts.storageService));
+  const connectionWorker = opts.marketingConnectionString
+    ? await startMarketingConnectionWorker(db, { connectionString: opts.marketingConnectionString }) : null;
   api.use(companySkillRoutes(db));
   api.use(companySkillPolicyRoutes(db));
   api.use(inboxAgentPolicyRoutes(db));
@@ -748,7 +765,6 @@ export async function createApp(
     }),
   );
   api.use(assetRoutes(db, opts.storageService));
-  api.use(projectToolRoutes(db));
   api.use(projectRoutes(db));
   api.use(caseRoutes(db, opts.storageService));
   api.use(issueTreeControlRoutes(db, { pluginWorkerManager: workerManager }));
@@ -834,6 +850,7 @@ export async function createApp(
     oauthGrantRefresher: (input) =>
       gatewayOAuthAccess.refreshOAuthGrantCredentials(input),
   });
+  api.use(projectToolRoutes(db, toolGateway));
   // Issue routes are intentionally mounted after the gateway is constructed because
   // issue approval endpoints delegate to it. The intervening routers use distinct
   // route prefixes, so this dependency does not change issue-route precedence.
@@ -1319,6 +1336,8 @@ export async function createApp(
       // The scheduler tick queries the database. Stop it here, inside the
       // awaited teardown, so no tick runs after the caller ends the pool.
       scheduler.stop();
+      await connectionWorker?.shutdown();
+      await forwarderBrowser.close();
       jobCoordinator.stop();
       disableFeedbackExportFlushes();
       unsubscribeChatPublicationSignals();

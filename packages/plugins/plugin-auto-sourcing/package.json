@@ -1,0 +1,14 @@
+{
+  "name": "@paperclipai/plugin-auto-sourcing",
+  "version": "0.5.0",
+  "type": "module",
+  "private": true,
+  "description": "Auto Sourcing order reads, manual sync and operator-confirmed dispatch.",
+  "files": ["dist", "README.md"],
+  "paperclipPlugin": { "manifest": "./dist/manifest.js", "worker": "./dist/worker.js" },
+  "scripts": { "build": "node esbuild.config.mjs", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@paperclipai/plugin-sdk": "workspace:*" },
+  "devDependencies": { "@paperclipai/shared": "workspace:*", "@types/node": "^24.0.0", "esbuild": "^0.28.2", "typescript": "^7.0.2", "vitest": "^4.1.11" },
+  "engines": { "node": ">=24.11.0" },
+  "license": "MIT"
+}

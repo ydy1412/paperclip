@@ -83,6 +83,7 @@ export interface Agent {
   id: string;
   companyId: string;
   name: string;
+  seatAlias?: string | null;
   urlKey: string;
   role: AgentRole;
   title: string | null;

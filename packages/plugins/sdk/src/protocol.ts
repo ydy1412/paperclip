@@ -48,11 +48,18 @@ import type {
   ExternalObjectMentionConfidence,
   ExternalObjectMentionSourceKind,
   EnvSecretRefBinding,
+  MarketingContent,
+  MarketingMediaChoice,
 } from "@paperclipai/shared";
 export type { PluginLauncherRenderContextSnapshot } from "@paperclipai/shared";
 
 import type {
   PluginEvent,
+  AutoSourcingReadRequest,
+  AutoSourcingProcessingRequest,
+  AutoSourcingSyncRequest,
+  AutoSourcingShippingRequest,
+  PluginMarketingDraftContext,
   PluginIssueCheckoutOwnership,
   PluginIssueOrchestrationSummary,
   PluginIssueRelationSummary,
@@ -282,6 +289,8 @@ export type PluginRpcErrorCode =
  */
 export interface PluginInvocationScope {
   companyId: string;
+  /** Minted only for authenticated executeTool calls, not worker-provided params. */
+  agentRun?: { agentId: string; runId: string; projectId: string };
 }
 
 /**
@@ -1518,6 +1527,19 @@ export const HOST_TO_WORKER_OPTIONAL_METHODS: readonly HostToWorkerMethodName[] 
  * host to access platform services (state, entities, config, etc.).
  */
 export interface WorkerToHostMethods {
+  "autoSourcing.catalogRead": [params: Record<string, unknown> & { companyId: string; projectId: string; operation: string }, result: unknown];
+  "autoSourcing.catalogWrite": [params: Record<string, unknown> & { companyId: string; projectId: string; operation: string }, result: unknown];
+  "autoSourcing.processingRead": [params: AutoSourcingProcessingRequest, result: unknown];
+  "autoSourcing.processingWrite": [params: AutoSourcingProcessingRequest, result: unknown];
+  "autoSourcing.request": [params: AutoSourcingReadRequest, result: unknown];
+  "autoSourcing.sync": [params: AutoSourcingSyncRequest, result: unknown];
+  "autoSourcing.shipping": [params: AutoSourcingShippingRequest, result: unknown];
+  "marketing.getContext": [params: { companyId: string; projectId?: string }, result: PluginMarketingDraftContext];
+  "marketing.uploadMedia": [params: { companyId: string; path: string; contentType: string }, result: MarketingMediaChoice];
+  "marketing.submitDraft": [
+    params: { companyId: string; projectId: string; channelId: string; topic: string; content: MarketingContent },
+    result: { id: string; projectId: string; channelId: string; revision: number; state: "draft"; href: string },
+  ];
   // Config
   "config.get": [params: { companyId?: string }, result: Record<string, unknown>];
 

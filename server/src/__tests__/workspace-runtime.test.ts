@@ -139,6 +139,14 @@ if (!embeddedPostgresSupport.supported) {
   );
 }
 const provisionWorktreeScriptPath = new URL("../../../scripts/provision-worktree.sh", import.meta.url);
+const originalPath = process.env.PATH;
+const originalTmpdir = process.env.TMPDIR;
+
+beforeAll(async () => { process.env.TMPDIR = await fs.realpath(os.tmpdir()); });
+afterAll(() => {
+  if (originalTmpdir === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = originalTmpdir;
+});
 
 async function runGit(cwd: string, args: string[]) {
   await execFileAsync("git", args, { cwd });
@@ -161,6 +169,14 @@ async function writeRegisteredSourceConfig(baseCwd: string, instanceId = "source
     `PAPERCLIP_INSTANCE_ID=${instanceId}\n`,
     "utf8",
   );
+  // These fixtures test dependency provisioning, not the operator's installed CLI.
+  const fixtureBin = path.join(configDir, "fixture-bin");
+  await fs.mkdir(fixtureBin, { recursive: true });
+  await fs.writeFile(path.join(fixtureBin, "paperclipai"), "#!/bin/sh\nexit 127\n", { mode: 0o755 });
+  process.env.PATH = `${fixtureBin}${path.delimiter}${process.env.PATH ?? ""}`;
+  if (existsSync(path.join(baseCwd, ".git", "info"))) {
+    await fs.appendFile(path.join(baseCwd, ".git", "info", "exclude"), "\n.paperclip/\n");
+  }
 }
 
 async function createTempRepo(defaultBranch = "main") {
@@ -453,6 +469,8 @@ afterEach(async () => {
   delete process.env.PAPERCLIP_INSTANCE_ID;
   delete process.env.PAPERCLIP_WORKTREES_DIR;
   delete process.env.DATABASE_URL;
+  if (originalPath === undefined) delete process.env.PATH;
+  else process.env.PATH = originalPath;
   await resetRuntimeServicesForTests();
 });
 

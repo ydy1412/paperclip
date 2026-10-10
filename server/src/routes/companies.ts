@@ -15,6 +15,7 @@ import {
   DEFAULT_FEEDBACK_DATA_SHARING_TERMS_VERSION,
   SETTINGS_OPERATOR_MANAGED_ERROR_CODE,
   companyArtifactsQuerySchema,
+  moveArtifactFolderEntrySchema,
   companyPortabilityExportSchema,
   companyPortabilityImportSchema,
   companyPortabilityPreviewSchema,
@@ -65,6 +66,7 @@ import {
   workTimelineService,
 } from "../services/index.js";
 import { isCloudManagedInstance } from "../services/cloud-instance.js";
+import { artifactFolderService } from "../services/artifact-folders.js";
 import { getHiddenSettings } from "../services/settings-visibility.js";
 import type { StorageService } from "../storage/types.js";
 import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo, hasCompanyAccess } from "./authz.js";
@@ -424,6 +426,16 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     res.json(await artifacts.list(companyId, query, {
       userId: query.starred && req.actor.type === "board" ? req.actor.userId : undefined,
     }));
+  });
+
+  router.put("/:companyId/artifact-folder-entry",async(req,res)=>{
+    const companyId=req.params.companyId as string;
+    assertBoard(req);assertCompanyAccess(req,companyId);
+    const input=moveArtifactFolderEntrySchema.parse(req.body);
+    const entry=await artifactFolderService(db).moveEntry(companyId,input.artifactId,input.folderId);
+    const actor=getActorInfo(req);
+    await logActivity(db,{companyId,actorType:actor.actorType,actorId:actor.actorId,action:"artifact.folder_entry_moved",entityType:"company",entityId:companyId,details:entry});
+    res.json(entry);
   });
 
   router.get("/:companyId/timeline", async (req, res) => {

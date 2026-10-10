@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { HttpError, unprocessable } from "../errors.js";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { type Db, companySecrets, connectionGrants } from "@paperclipai/db";
 import {
@@ -142,6 +144,24 @@ done`,
   }
   let directory =
     typeof config.cwd === "string" ? path.resolve(config.cwd) : process.cwd();
+  let projectRoot: string | null = null;
+  if (provider === "openai") {
+    try {
+      const { stdout } = await promisify(execFile)(
+        "git", ["-C", directory, "rev-parse", "--show-toplevel"],
+        { timeout: 3000, maxBuffer: 16_384 },
+      );
+      const candidate = await realpath(stdout.trim());
+      const canonicalDirectory = await realpath(directory);
+      const relative = path.relative(candidate, canonicalDirectory);
+      if (stdout.trim() && !path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`)) {
+        projectRoot = candidate;
+        directory = canonicalDirectory;
+      }
+    } catch {
+      // Unknown/non-Git roots retain the conservative ancestor scan below.
+    }
+  }
   for (;;) {
     for (const relative of files) {
       try {
@@ -161,7 +181,7 @@ done`,
       }
     }
     const parent = path.dirname(directory);
-    if (parent === directory) break;
+    if (directory === projectRoot || parent === directory) break;
     directory = parent;
   }
 }

@@ -56,6 +56,8 @@ import type {
   PrincipalPermissionGrant,
   PrincipalType,
   EnvSecretRefBinding,
+  MarketingContent,
+  MarketingMediaChoice,
 } from "@paperclipai/shared";
 import type { PluginPerformActionContext } from "./protocol.js";
 
@@ -274,6 +276,26 @@ export interface ToolRunContext {
   projectId: string;
 }
 
+export interface PluginMarketingDraftContext {
+  issueId: string;
+  projectId: string | null;
+  requiresProjectSelection: boolean;
+  targets: Array<{
+    projectId: string; projectName: string; profileId: string; profileName: string;
+    channelId: string; name: string; platform: string; accountId: string;
+    concept: string; tone: string; audience: string; writingRules: string;
+  }>;
+  media: MarketingMediaChoice[];
+}
+
+export interface PluginMarketingClient {
+  getContext(input: { companyId: string; projectId?: string }): Promise<PluginMarketingDraftContext>;
+  uploadMedia(input: { companyId: string; path: string; contentType: string }): Promise<MarketingMediaChoice>;
+  submitDraft(input: { companyId: string; projectId: string; channelId: string; topic: string; content: MarketingContent }): Promise<{
+    id: string; projectId: string; channelId: string; revision: number; state: "draft"; href: string;
+  }>;
+}
+
 /**
  * Result returned from a plugin tool handler.
  *
@@ -449,6 +471,54 @@ export interface PluginConfigClient {
    * companyId; otherwise callers must pass it explicitly.
    */
   get(companyId?: string): Promise<Record<string, unknown>>;
+}
+
+export interface AutoSourcingProcessingRequest {
+  companyId: string;
+  projectId: string;
+  accountId: string;
+  operation: "source" | "list" | "get" | "validate" | "create" | "save";
+  sourceProvider?: string;
+  productId?: string;
+  draftId?: string;
+  expectedRevision?: number;
+  skuIds?: string[];
+  name?: string;
+  items?: { sourceSkuId: string; name: string; representativeImageUrl: string; options: { ordinal: number; name: string; value: string }[] }[];
+  cropPlans?: { sourceSkuId: string; imageUrl: string; sourceWidth: number; sourceHeight: number; x: number; y: number; width: number; height: number; outputWidth: number; outputHeight: number; purpose: string }[];
+}
+
+export interface AutoSourcingReadRequest {
+  companyId: string;
+  projectId: string;
+  operation: "accounts" | "orders" | "detail" | "sync-state" | "carriers";
+  accountId?: string;
+  shipmentId?: string;
+  state?: string;
+  q?: string;
+  page?: number;
+  /** Inclusive Korean order-date range; provide both YYYY-MM-DD dates or neither. */
+  from?: string;
+  to?: string;
+}
+export interface AutoSourcingShippingRequest {
+  companyId: string;
+  projectId: string;
+  accountId: string;
+  shipmentId: string;
+  /** Operator shipping workflow, including the required Paid -> Preparing step. */
+  operation: "preview" | "dispatch" | "status" | "prepare-preview" | "prepare" | "prepare-status";
+  carrierCode?: string;
+  invoiceNumber?: string;
+  confirmation?: string;
+}
+
+export interface AutoSourcingSyncRequest {
+  companyId: string;
+  projectId: string;
+  accountId: string;
+  from: string;
+  to: string;
 }
 
 export interface PluginLocalFolderProblem {
@@ -2178,6 +2248,19 @@ export interface PluginContext {
 
   /** Read and write issues, comments, and documents. Requires issue capabilities. */
   issues: PluginIssuesClient;
+
+  /** Run-bound drafting only; never grants approval or external publication. */
+  marketing: PluginMarketingClient;
+  autoSourcing: {
+    catalogRead(input: Record<string, unknown> & { companyId: string; projectId: string; operation: string }): Promise<unknown>;
+    catalogWrite(input: Record<string, unknown> & { companyId: string; projectId: string; operation: string }): Promise<unknown>;
+    processingRead(input: AutoSourcingProcessingRequest): Promise<unknown>;
+    processingWrite(input: AutoSourcingProcessingRequest): Promise<unknown>;
+    request(input: AutoSourcingReadRequest): Promise<unknown>;
+    sync(input: AutoSourcingSyncRequest): Promise<unknown>;
+    /** Authenticated board only. Preview before dispatch; never replay unknown outcomes. */
+    shipping(input: AutoSourcingShippingRequest): Promise<unknown>;
+  };
 
   /** Read and decide company approvals. Requires `approvals.read` / `approvals.respond`. */
   approvals: PluginApprovalsClient;

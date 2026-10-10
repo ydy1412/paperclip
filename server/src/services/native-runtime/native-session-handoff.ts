@@ -3,6 +3,8 @@ import { documents, heartbeatRunEvents, heartbeatRuns, issueComments, issueDocum
 import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { buildLowTrustSourceTrust, redactQuarantinedBodyForHigherTrust, sanitizeQuarantinedCommentForHigherTrust } from "../source-trust.js";
 import { resolveCoreTrustPreset } from "../trust-preset-resolver.js";
+import type { StructuredHandoff } from "@paperclipai/shared";
+import { renderStructuredHandoff } from "../agent-continuity.js";
 
 export const NATIVE_HANDOFF_MAX_BYTES = 24_000;
 const ENTRY_MAX_CHARS = 4_000;
@@ -10,9 +12,13 @@ const LIMIT = 10;
 
 export type HandoffEntry = { kind: string; id: string; body: string; truncated?: boolean; [key: string]: unknown };
 
-export function createNativeSessionHandoffLoader(input: Parameters<typeof buildNativeSessionHandoff>[0]): () => Promise<string | null> {
+export function createNativeSessionHandoffLoader(input: Parameters<typeof buildNativeSessionHandoff>[0] & { structuredHandoff?: StructuredHandoff | null }): () => Promise<string | null> {
   let packet: Promise<string | null> | undefined;
-  return () => packet ??= buildNativeSessionHandoff(input);
+  return () => packet ??= (async () => {
+    const history = await buildNativeSessionHandoff(input);
+    if (!input.structuredHandoff) return history;
+    return [renderStructuredHandoff(input.structuredHandoff, "context"), history].filter(Boolean).join("\n\n");
+  })();
 }
 
 /** Deterministic background, never a substitute for the current authorized wake. */

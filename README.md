@@ -1,3 +1,13 @@
+# Dovix
+
+주인님의 개인 마스터 프로그램. 기존 Paperclip 개발 프로젝트의 코드와
+Git 이력을 이어받아 독립 로컬 저장소로 개발합니다.
+
+개발 루트: `/Users/ydy1412/projects/Dovix`.
+[프로젝트 이동 기록](doc/plans/2026-10-08-dovix-relocation.md).
+
+## Paperclip upstream
+
 <p align="center">
   <img src="doc/assets/banner.jpg" alt="Paperclip is the app people use to manage AI agents for work." width="720" />
 </p>

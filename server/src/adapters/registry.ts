@@ -1062,10 +1062,9 @@ export async function listAdapterModels(type: string): Promise<{ id: string; lab
   if (declaredModels) return declaredModels;
   const adapter = findActiveServerAdapter(type);
   if (!adapter) return [];
-  // The built-in Codex adapter's OpenAI discovery includes image, audio, and
-  // embedding models that Codex cannot run. Use its curated list; declared
-  // models above and custom adapter discovery remain authoritative.
-  if (adapter === codexLocalAdapter) return adapter.models ?? [];
+  // The Codex CLI catalog excludes unrelated OpenAI API image/audio models.
+  // Never substitute a fixed model list when its account catalog is unavailable.
+  if (adapter === codexLocalAdapter) return listCodexModels();
   if (adapter.listModels) {
     const discovered = await adapter.listModels();
     if (discovered.length > 0) return discovered;
@@ -1076,7 +1075,7 @@ export async function listAdapterModels(type: string): Promise<{ id: string; lab
 export async function refreshAdapterModels(type: string): Promise<{ id: string; label: string }[]> {
   const declaredModels = declaredModelsForAdapter(type);
   if (declaredModels) return declaredModels;
-  if (findActiveServerAdapter(type) === codexLocalAdapter) return listAdapterModels(type);
+  if (findActiveServerAdapter(type) === codexLocalAdapter) return refreshCodexModels();
   const adapter = findActiveServerAdapter(type);
   if (!adapter) return [];
   if (adapter.refreshModels) {

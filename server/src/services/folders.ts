@@ -1,6 +1,6 @@
 import { and, asc, eq, max, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companySkills, folders, routines } from "@paperclipai/db";
+import { artifactFolderEntries, companySkills, folders, routines } from "@paperclipai/db";
 import type {
   CreateFolder,
   Folder,
@@ -159,7 +159,7 @@ export function folderService(db: Db, mutationLockHeld = false) {
   async function list(companyId: string, kind: FolderKind): Promise<FolderListResult> {
     const [folderRows, countRows] = await Promise.all([
       getRows(companyId, kind),
-      kind === "routine" ? routineCounts(companyId) : skillCounts(companyId),
+      kind === "routine" ? routineCounts(companyId) : kind === "skill" ? skillCounts(companyId) : db.select({folderId:artifactFolderEntries.folderId,count:sql<number>`count(*)::int`}).from(artifactFolderEntries).where(eq(artifactFolderEntries.companyId,companyId)).groupBy(artifactFolderEntries.folderId),
     ]);
     const views = buildFolderViews(folderRows);
     const countsByFolderId = new Map<string | null, number>();
@@ -364,6 +364,7 @@ export function folderService(db: Db, mutationLockHeld = false) {
   }
 
   async function moveItem(companyId: string, input: MoveFolderItem) {
+    if(input.kind==="artifact") throw unprocessable("Use the artifact folder entry endpoint with a projected artifact ID");
     if (input.folderId) {
       const target = await getFolder(companyId, input.folderId);
       if (!target) throw notFound("Folder not found");

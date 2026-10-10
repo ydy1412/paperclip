@@ -1,5 +1,6 @@
 export type CompanyArtifactSource = "document" | "attachment" | "work_product";
 
+
 export type CompanyArtifactMediaKind = "image" | "video" | "text" | "document" | "file" | "empty";
 
 export type CompanyArtifactGroupBy = "none" | "task" | "parent_task";

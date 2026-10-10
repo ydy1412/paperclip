@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { agentProfileService } from "../services/agent-profiles.js";
 import { connectionIntentService } from "../services/connection-intents.js";
 import { completeConnectionIntentSchema } from "@paperclipai/shared";
 import { agentFileStore, agentFileTokenFromHash } from "../services/agent-file-store.js";
@@ -93,7 +95,7 @@ import {
   syncInstructionsBundleConfigFromFilePath,
   workspaceOperationService,
 } from "../services/index.js";
-import { badRequest, conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
+import { unauthorized, badRequest, conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { ONBOARDING_FIRST_TASK_SKILL_KEY, PAPERCLIP_CORE_SKILL_KEYS } from "../services/company-skills.js";
 import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, assertInstanceAdmin, buildActorSecretContext, getAccessibleResource, getActorInfo, hasCompanyAccess } from "./authz.js";
@@ -4472,7 +4474,25 @@ export function agentRoutes(
   // adapter-config secret lands in the activity log.
   const hireFingerprint = (body: unknown): string => sha256Digest(body);
 
-  router.post("/companies/:companyId/agent-hires", validate(createAgentHireSchema), async (req, res) => {
+  router.post("/companies/:companyId/agent-hires", async (req, res, next) => {
+    if (req.body?.profileId === undefined && req.body?.profileVersion === undefined) { next(); return; }
+    assertCompanyAccess(req, req.params.companyId as string); assertBoard(req);
+    if (!req.actor.userId) throw unauthorized("로그인이 필요합니다.");
+    const parsedSelection = z.object({ profileId: z.string().uuid(), profileVersion: z.number().int().positive() }).safeParse(req.body);
+    if (!parsedSelection.success) throw badRequest("프로필과 버전을 다시 선택해 주세요.");
+    const selection = parsedSelection.data;
+    const profile = await agentProfileService(db).get(req.params.companyId as string, selection.profileId);
+    if (profile.version !== selection.profileVersion) throw conflict("프로필이 변경되었습니다. 다시 선택해 주세요.");
+    if (req.body.adapterType !== profile.config.adapterType) throw conflict("프로필의 실행 방식으로 에이전트를 생성해 주세요.");
+    const { profileId: _profileId, profileVersion: _profileVersion, ...input } = req.body;
+    const runnerConfig = profile.config.adapterType === "paperclip_runner" ?
+      (profile.config.runnerProvider === "claude" || profile.config.runnerProvider === "grok" ? { provider: "acpx", acpxAgent: profile.config.runnerProvider } : { provider: profile.config.runnerProvider }) : {};
+    req.body = { ...input, role: "general", title: null, capabilities: profile.config.capabilities,
+      desiredSkills: profile.config.skills, instructionsBundle: { files: { "AGENTS.md": profile.config.instructions } },
+      adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...input.adapterConfig, ...runnerConfig } };
+    res.locals.agentProfileSelection = selection;
+    next();
+  }, validate(createAgentHireSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertCanCreateAgentsForCompany(req, companyId);
     const sourceIssueIds = parseSourceIssueIds(req.body);
@@ -4783,6 +4803,8 @@ export function agentRoutes(
         });
       }
 
+      const selectedProfile = res.locals.agentProfileSelection;
+      if (selectedProfile) await agentProfileService(db).bind(companyId, selectedProfile.profileId, selectedProfile.profileVersion, agent.id, req.actor.userId!);
       return { status: 201, body: { agent, approval } };
     };
 
@@ -5428,6 +5450,7 @@ export function agentRoutes(
     }
 
     const patchData = { ...(req.body as Record<string, unknown>) };
+    if (hasOwn(patchData, "seatAlias")) await assertBoardCanManageAgentsForCompany(req, existing.companyId);
     const replaceAdapterConfig = patchData.replaceAdapterConfig === true;
     delete patchData.replaceAdapterConfig;
     // The apply-existing flag is not an agent column. The server binds the fixed

@@ -83,6 +83,7 @@ export {
 } from "./pipeline_cases.js";
 export { pipelineCaseEvents } from "./pipeline_case_events.js";
 export { issueWorkProducts } from "./issue_work_products.js";
+export { artifactFolderEntries } from "./artifact_folders.js";
 export { labels } from "./labels.js";
 export { issueLabels } from "./issue_labels.js";
 export { issueApprovals } from "./issue_approvals.js";
@@ -218,3 +219,9 @@ export { browserUseSettings, browserUseSessions, browserUseRuns, browserUseBrows
 
 
 export * from "./company_skill_sources.js";
+export { marketingProfiles, marketingChannels, marketingDrafts, marketingPublishJobs, marketingConnectionChecks, marketingConnectionMonitors } from "./marketing.js";
+export { agentMailboxMessages, agentHandoffs } from "./agent_continuity.js";
+
+export { sourcingForwarders } from "./sourcing_forwarders.js";
+export { sourcingForwarderProviders } from "./sourcing_forwarder_providers.js";
+export { agentProfiles, agentProfileVersions, agentProfileBindings } from "./agent_profiles.js";

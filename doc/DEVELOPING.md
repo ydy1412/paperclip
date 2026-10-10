@@ -20,11 +20,49 @@ Current implementation status:
 
 ## Dependency Lockfile Policy
 
-GitHub Actions owns `pnpm-lock.yaml`.
+For the Paperclip upstream repository, GitHub Actions owns `pnpm-lock.yaml`.
 
 - Do not commit `pnpm-lock.yaml` in pull requests.
 - Pull request CI validates dependency resolution when manifests change.
 - Pushes to `master` regenerate `pnpm-lock.yaml` with `pnpm install --lockfile-only --no-frozen-lockfile`, commit it back if needed, and then run verification with `--frozen-lockfile`.
+
+For Dovix, commit manifest changes with the matching `pnpm-lock.yaml` so a
+checkout can reproduce its dependencies. Do not assume the upstream trusted
+runner or package-publishing workflow runs successfully in this fork. Validate
+the lockfile and existing local checks before integration.
+
+## Dovix Git and release workflow
+
+- `origin` is `ydy1412/paperclip`, the Dovix repository. `upstream` is
+  `paperclipai/paperclip`, retained for explicit source synchronization only.
+  Default pushes target `origin`; pushes to `upstream` are disabled locally.
+- `master` is the accepted release line. `dev` is the integration line. New work
+  starts on a descriptive `feature/<scope>` branch from `dev`; use a separate
+  worktree when another checkout is busy. Historical `develop` is preserved.
+- Keep one purpose per commit. Preserve unrelated work; recovered baselines
+  require their own explicit checkpoint and verification record.
+- Complete relevant tests, push the feature, then create a PR targeting `dev`.
+  Review the PR and confirm checks before merging. For this personal service,
+  redeploy the verified `dev` commit and confirm actual service/UI behavior.
+- Promotion to `master` follows additional testing and an explicit release
+  request. Never merge directly from feature to master or skip the PR.
+- Upstream synchronization is a distinct branch and review. Never advance the
+  Dovix release branch merely because `upstream/master` advanced. Preserve old
+  refs under `archive/*` before changing an existing local branch's role.
+- The installed `2026.1001.0` runtime and the `production-compatible` worktree
+  are separate from this checkout. A Git commit or successful build does not
+  establish which source files are running. A deployment record must identify
+  the commit/tag, installed file hashes, backups and actual health/UI checks.
+- The first recovery uses `feature/dovix-baseline`: existing mixed work is
+  preserved in purpose-specific checkpoints with shared wiring and migration
+  metadata reconciled together. Those intermediate checkpoints are not
+  independent release candidates. Keep the branch out of `dev` until the
+  final combined tree meets the integration gates; record any failing gates.
+- Do not use force-push, remove remote branches, change repository protection,
+  install Git hooks, or restart production as part of routine cleanup.
+
+See [the initial Git reorganization record](plans/2026-10-10-git-reorganization.md)
+for recovered refs, checkpoint scope, verification and remaining limits.
 
 ## Trusted PR Workflow
 

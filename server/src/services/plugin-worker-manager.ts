@@ -1116,6 +1116,13 @@ export function createPluginWorkerHandle(
     method: HostToWorkerMethodName | string,
     params: unknown,
   ): PluginInvocationScope | null {
+    if (method === "executeTool" && isRecord(params) && isRecord(params.runContext)) {
+      const companyId = readNonEmptyString(params.runContext.companyId);
+      const agentId = readNonEmptyString(params.runContext.agentId);
+      const runId = readNonEmptyString(params.runContext.runId);
+      if (!companyId || !agentId || !runId) return null;
+      return { companyId, agentRun: { agentId, runId, projectId: readNonEmptyString(params.runContext.projectId) ?? "" } };
+    }
     if (!isRecord(params)) return null;
 
     const directCompanyId = readNonEmptyString(params.companyId);
@@ -1126,10 +1133,6 @@ export function createPluginWorkerHandle(
       return companyId ? { companyId } : null;
     }
 
-    if (method === "executeTool" && isRecord(params.runContext)) {
-      const companyId = readNonEmptyString(params.runContext.companyId);
-      return companyId ? { companyId } : null;
-    }
 
     if (method === "onEvent" && isRecord(params.event)) {
       const companyId = readNonEmptyString(params.event.companyId);

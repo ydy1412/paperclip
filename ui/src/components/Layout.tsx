@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Outlet, useLocation, useNavigate, useNavigationType, useParams } from "@/lib/router";
 import { Sidebar } from "./Sidebar";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar";
+import { SourcingSidebar } from "./SourcingSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar";
 import { AppDetailSidebar } from "./AppConnectionSidebar";
@@ -120,6 +121,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const shellRoute = classifyShellRoute(location.pathname, companyPrefix);
   const isCompanySettingsRoute = shellRoute.builtInContextualSurface === "settings";
   const companyPathSegments = shellRoute.companySegments;
+  const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
   const isTaskDetailRoute = shellRoute.isTaskDetail;
   const { enabled: agentChatEnabled } = useAgentChatEnabled();
   const isAgentChatRoute = agentChatEnabled && companyPathSegments[0]?.toLowerCase() === "chats";
@@ -178,6 +180,8 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   // beside the persistent company nav.
   const sharedSecondarySidebar = isCompanySettingsRoute ? (
     <CompanySettingsSidebar />
+  ) : isSourcingRoute ? (
+    <SourcingSidebar />
   ) : !streamlinedUiEnabled && shellRoute.builtInContextualSurface === "skills" ? (
     <SkillsContextualSidebar />
   ) : appDetailConnectionId ? (
@@ -223,6 +227,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     || shellRoute.builtInContextualSurface === "routine"
     || isAppsRoute
     || isToolsRoute
+    || isSourcingRoute
   );
   const replacesPrimarySidebar = streamlinedUiEnabled && hasSecondarySidebar && !keepsPrimarySidebar;
   const showsAdjacentSecondarySidebar = hasSecondarySidebar && (!streamlinedUiEnabled || keepsPrimarySidebar);

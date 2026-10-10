@@ -1,0 +1,1 @@
+ALTER TABLE "marketing_publish_jobs" ADD COLUMN "position" integer DEFAULT 0 NOT NULL;

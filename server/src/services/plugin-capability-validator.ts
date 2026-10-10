@@ -42,6 +42,16 @@ import { logger } from "../middleware/logger.js";
  * @see PLUGIN_SPEC.md §15 — Capability Model
  */
 const OPERATION_CAPABILITIES: Record<string, readonly PluginCapability[]> = {
+  "autoSourcing.processingRead": ["auto-sourcing.products.read"],
+  "autoSourcing.catalogRead": ["auto-sourcing.products.read"],
+  "autoSourcing.catalogWrite": ["auto-sourcing.drafts.write"],
+  "autoSourcing.processingWrite": ["auto-sourcing.drafts.write"],
+  "autoSourcing.request": ["auto-sourcing.orders.read"],
+  "autoSourcing.sync": ["auto-sourcing.orders.sync"],
+  "autoSourcing.shipping": ["auto-sourcing.shipping.write"],
+  "marketing.getContext": ["marketing.drafts.read"],
+  "marketing.uploadMedia": ["marketing.media.upload"],
+  "marketing.submitDraft": ["marketing.drafts.create"],
   // Data read operations
   "companies.list": ["companies.read"],
   "companies.get": ["companies.read"],

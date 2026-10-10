@@ -7,6 +7,8 @@ import {
   companyMemberships,
   createDb,
   invites,
+  issues,
+  issueWorkProducts,
   principalPermissionGrants,
 } from "@paperclipai/db";
 import { buildHostServices } from "../services/plugin-host-services.js";
@@ -52,6 +54,8 @@ describeEmbeddedPostgres("plugin access and authorization host services", () => 
   }, 20_000);
 
   afterEach(async () => {
+    await db.delete(issueWorkProducts);
+    await db.delete(issues);
     await db.delete(activityLog);
     await db.delete(principalPermissionGrants);
     await db.delete(invites);
@@ -62,6 +66,18 @@ describeEmbeddedPostgres("plugin access and authorization host services", () => 
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("projects work-product summaries through issues.get only after company validation",async()=>{
+    const company=await createCompany(db,"PKN");
+    const other=await createCompany(db,"PKO");
+    const [issue]=await db.insert(issues).values({companyId:company.id,title:"Completed knowledge source",status:"done"}).returning();
+    const [product]=await db.insert(issueWorkProducts).values({companyId:company.id,issueId:issue.id,title:"Verified result",type:"document",provider:"local",status:"ready",summary:"실제 결과물 요약"}).returning();
+    const services=buildHostServices(db,pluginId,"knowledge-extension",createEventBusStub());
+    const result=await services.issues.get({issueId:issue.id,companyId:company.id});
+    expect(result?.workProducts).toEqual(expect.arrayContaining([expect.objectContaining({id:product.id,summary:"실제 결과물 요약"})]));
+    expect(await services.issues.get({issueId:issue.id,companyId:other.id})).toBeNull();
+    services.dispose();
   });
 
   it("rejects grant writes for principals outside the requested company", async () => {

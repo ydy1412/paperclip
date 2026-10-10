@@ -75,6 +75,10 @@ vi.mock("./CompanySettingsSidebar", () => ({
   CompanySettingsSidebar: () => <div>Company settings sidebar</div>,
 }));
 
+vi.mock("./SourcingSidebar", () => ({
+  SourcingSidebar: () => <nav aria-label="쇼핑몰 관리">Shopping mall sidebar</nav>,
+}));
+
 vi.mock("./AppsSidebar", () => ({
   AppsSidebar: () => <div>Apps sidebar</div>,
 }));
@@ -368,6 +372,20 @@ describe("Layout", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it.each([false, true])("hosts Shopping mall navigation beside the primary menu (streamlined=%s)", async streamlined => {
+    currentPathname = "/PAP/sourcing";
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableApps: true, enableStreamlinedUi: streamlined });
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><Layout /></QueryClientProvider>));
+    await flushReact();
+    await flushReact();
+    expect(container.textContent).toContain("Main company nav");
+    expect(container.querySelector('nav[aria-label="쇼핑몰 관리"]')).not.toBeNull();
+    expect(container.querySelectorAll("[data-secondary-sidebar]")).toHaveLength(1);
+    await act(async () => root.unmount());
   });
 
   it("scopes the Streamlined task-detail surface while preserving balanced horizontal gutters", async () => {

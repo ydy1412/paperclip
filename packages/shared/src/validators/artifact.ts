@@ -10,9 +10,12 @@ export const companyArtifactMediaKindSchema = z.enum(["image", "video", "text", 
 
 export const companyArtifactGroupBySchema = z.enum(["none", "task", "parent_task"]);
 
+export const moveArtifactFolderEntrySchema=z.object({artifactId:z.string().regex(/^(document|attachment|work_product):[0-9a-f-]{36}$/i),folderId:z.string().guid().nullable()});
+
 export const companyArtifactsQuerySchema = z.object({
   kind: z.enum(["image", "video", "text", "document", "file", "all"]).optional().default("all"),
   projectId: z.string().guid().optional(),
+  folderId: z.string().guid().optional(),
   /** Only artifacts attributed to this agent (the `createdByAgent` on each result). */
   agentId: z.string().guid().optional(),
   q: z.string().trim().max(COMPANY_ARTIFACTS_MAX_QUERY_LENGTH).optional(),

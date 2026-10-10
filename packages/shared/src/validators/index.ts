@@ -569,6 +569,7 @@ export {
 
 export {
   COMPANY_ARTIFACTS_DEFAULT_LIMIT,
+  moveArtifactFolderEntrySchema,
   COMPANY_ARTIFACTS_MAX_LIMIT,
   COMPANY_ARTIFACTS_MAX_QUERY_LENGTH,
   companyArtifactGroupBySchema,
@@ -990,3 +991,7 @@ export * from "./email.js";
 export { restoreAgentInstructionSchema } from "./agent.js";
 
 export * from "./skill-source.js";
+export * from "./marketing.js";
+
+export * from "./sourcing-forwarders.js";
+export * from "./agent-profiles.js";

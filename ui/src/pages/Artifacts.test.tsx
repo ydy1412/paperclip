@@ -18,6 +18,13 @@ const breadcrumbState = vi.hoisted(() => ({
 
 const artifactsApiMock = vi.hoisted(() => ({
   list: vi.fn(),
+  moveToFolder: vi.fn(),
+}));
+const folderApiMock = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), update: vi.fn(), moveFolder: vi.fn() }));
+vi.mock("../api/folders", () => ({ foldersApi: folderApiMock }));
+vi.mock("../components/artifacts/ArtifactImportButton", () => ({ ArtifactImportButton: () => null }));
+vi.mock("../components/folders/FolderControls", () => ({
+  FolderFormDialog: ({ open, folder, onSubmit }: { open: boolean; folder: unknown; onSubmit: (payload: {name: string; color: null}) => void }) => open ? <button onClick={() => onSubmit({name: "Research", color: null})}>{folder ? "Save test folder" : "Create test folder"}</button> : null,
 }));
 
 vi.mock("../context/CompanyContext", () => ({
@@ -161,6 +168,11 @@ describe("Artifacts page", () => {
     document.body.appendChild(container);
     breadcrumbState.setBreadcrumbs.mockReset();
     artifactsApiMock.list.mockReset();
+    artifactsApiMock.moveToFolder.mockReset().mockResolvedValue({});
+    folderApiMock.list.mockReset().mockResolvedValue({ folders: [{ id: "folder-a", name: "Sources", path: "sources", parentId: null }, { id: "folder-b", name: "Notes", path: "notes", parentId: null }], allCount: 0, unfiledCount: 0 });
+    folderApiMock.create.mockReset().mockResolvedValue({});
+    folderApiMock.update.mockReset().mockResolvedValue({});
+    folderApiMock.moveFolder.mockReset().mockResolvedValue({});
     latestObserverCallback = null;
     originalIntersectionObserver = window.IntersectionObserver;
     window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
@@ -169,6 +181,50 @@ describe("Artifacts page", () => {
   afterEach(() => {
     window.IntersectionObserver = originalIntersectionObserver as typeof IntersectionObserver;
     container.remove();
+  });
+
+  it("creates folders under the selected parent and renames through canonical folder APIs", async () => {
+    artifactsApiMock.list.mockResolvedValue({ artifacts: [], groups: [], nextCursor: null });
+    const { root } = renderArtifacts(container, ["/artifacts?folderId=folder-a"]);
+    await waitForAssertion(() => expect(container.querySelector('[aria-label="Rename artifact folder"]')).not.toBeNull());
+    const click = (label: string) => flushSync(() => (container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement).click());
+    click("Create artifact folder");
+    flushSync(() => [...container.querySelectorAll("button")].find(button => button.textContent === "Create test folder")!.click());
+    await waitForAssertion(() => expect(folderApiMock.create).toHaveBeenCalledWith("company-1", { kind: "artifact", parentId: "folder-a", name: "Research", color: null }));
+    await waitForAssertion(() => expect(container.textContent).not.toContain("Create test folder"));
+    click("Rename artifact folder");
+    flushSync(() => [...container.querySelectorAll("button")].find(button => button.textContent === "Save test folder")!.click());
+    await waitForAssertion(() => expect(folderApiMock.update).toHaveBeenCalledWith("company-1", "folder-a", { name: "Research", color: null }));
+    flushSync(() => root.unmount());
+  });
+
+  it("filters before pagination and moves artifact membership without deleting content", async () => {
+    artifactsApiMock.list.mockResolvedValue({ artifacts: [sampleArtifact()], nextCursor: null });
+    const { root } = renderArtifacts(container, ["/artifacts?groupBy=none&folderId=folder-a"]);
+    await waitForAssertion(() => expect(container.querySelector('[aria-label="Move Launch Brief to folder"]')).not.toBeNull());
+    expect(artifactsApiMock.list).toHaveBeenCalledWith("company-1", expect.objectContaining({folderId: "folder-a", limit: 30}));
+    const select = container.querySelector('[aria-label="Move Launch Brief to folder"]') as HTMLSelectElement;
+    flushSync(() => { select.value = "folder-b"; select.dispatchEvent(new Event("change", {bubbles: true})); });
+    await waitForAssertion(() => expect(artifactsApiMock.moveToFolder).toHaveBeenCalledWith("company-1", "artifact-1", "folder-b"));
+    await waitForAssertion(() => expect(select.disabled).toBe(false));
+    flushSync(() => { select.value = "unfiled"; select.dispatchEvent(new Event("change", {bubbles: true})); });
+    await waitForAssertion(() => expect(artifactsApiMock.moveToFolder).toHaveBeenCalledWith("company-1", "artifact-1", null));
+    flushSync(() => root.unmount());
+  });
+
+  it("moves a folder to another parent and keeps failed operations visible", async () => {
+    artifactsApiMock.list.mockResolvedValue({ artifacts: [], groups: [], nextCursor: null });
+    folderApiMock.moveFolder.mockRejectedValue(new Error("Folder move denied"));
+    const { root } = renderArtifacts(container, ["/artifacts?folderId=folder-a"]);
+    await waitForAssertion(() => expect(container.querySelector('[aria-label="Move artifact folder"]')).not.toBeNull());
+    flushSync(() => (container.querySelector('[aria-label="Move artifact folder"]') as HTMLButtonElement).click());
+    const select = document.querySelector('[aria-label="Destination parent folder"]') as HTMLSelectElement;
+    expect([...select.options].map(option => option.value)).not.toContain("folder-a");
+    flushSync(() => { select.value = "folder-b"; select.dispatchEvent(new Event("change", {bubbles:true})); });
+    flushSync(() => [...document.querySelectorAll("button")].find(button => button.textContent === "Move folder")!.click());
+    await waitForAssertion(() => expect(folderApiMock.moveFolder).toHaveBeenCalledWith("company-1", "folder-a", { parentId: "folder-b", position: 0 }));
+    await waitForAssertion(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Folder move denied"));
+    flushSync(() => root.unmount());
   });
 
   it("requests task-grouped artifact stacks by default", async () => {

@@ -6,6 +6,15 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import {
+  saveHandoffSchema, sendAgentMessageSchema,
+  createAgentProfileSchema, updateAgentProfileSchema, restoreAgentProfileSchema, deleteAgentProfileSchema,
+  createSourcingForwarderSchema, updateSourcingForwarderSchema,
+  catalogRequestSchema, storeSettingRequestSchema, moveArtifactFolderEntrySchema,
+  createMarketingProfileSchema, updateMarketingProfileSchema, createMarketingChannelSchema, updateMarketingChannelSchema,
+  createMarketingDraftSchema, updateMarketingDraftSchema, queueMarketingDraftsSchema,
+  generateMarketingDraftsSchema, importMarketingDraftsSchema,
+} from "@paperclipai/shared";
+import {
   createAiConnectionSchema,
   aiConnectionLoginIntentSchema,
   localAiConnectionSchema,
@@ -1655,6 +1664,10 @@ function operationKey(method: string, path: string) {
 
 function isBoardOnlyOperation(method: string, path: string) {
   const key = operationKey(method, path);
+  if (path.startsWith("/api/companies/{companyId}/agent-profiles")
+    || path.startsWith("/api/companies/{companyId}/sourcing/")
+    || path === "/api/companies/{companyId}/artifact-folder-entry"
+    || path.startsWith("/api/companies/{companyId}/marketing") && !path.endsWith("/draft-tools")) return true;
   if (BOARD_ONLY_OPERATIONS.has(key)) return true;
   return BOARD_ONLY_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
@@ -11615,4 +11628,80 @@ for (const [method, path, summary] of [
     400: r.badRequest, 401: r.unauthorized, 403: r.forbidden,
     404: r.notFound, 409: r.conflict, 422: r.unprocessable,
   },
+});
+
+// Dovix routes that were preserved in the local feature baseline.
+for (const [method, path, summary, body, status] of [
+  ["get", "/api/agents/{id}/continuity", "Read agent continuity", undefined, 200],
+  ["get", "/api/agents/{id}/handoffs", "List agent handoffs", undefined, 200],
+  ["post", "/api/agents/{id}/handoffs", "Save an agent handoff", saveHandoffSchema, 201],
+  ["get", "/api/agents/{id}/mailbox", "Read the agent mailbox", undefined, 200],
+  ["post", "/api/agents/{id}/mailbox", "Send an agent mailbox message", sendAgentMessageSchema, 201],
+  ["post", "/api/agents/{id}/mailbox/{messageId}/read", "Mark a mailbox message read", undefined, 200],
+] as const) registerCurrentRoute({ method, path, summary, tags: ["agent-continuity"], ...(body ? { body } : {}),
+  ...(path.endsWith("/mailbox") && method === "get" ? { query: z.object({ threadId: z.string().uuid().optional(), unread: z.enum(["true", "false"]).optional() }) } : {}),
+  responses: { [status]: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
+});
+
+for (const [method, path, summary, body, status] of [
+  ["get", "/api/companies/{companyId}/agent-profiles", "List saved agent profiles", undefined, 200],
+  ["get", "/api/companies/{companyId}/agent-profiles/{profileId}", "Read an agent profile", undefined, 200],
+  ["post", "/api/companies/{companyId}/agent-profiles", "Create an agent profile", createAgentProfileSchema, 201],
+  ["post", "/api/companies/{companyId}/agent-profiles/from-agent", "Create a profile from an agent", z.object({ agentId: z.string().uuid() }).strict(), 201],
+  ["patch", "/api/companies/{companyId}/agent-profiles/{profileId}", "Update an agent profile and its linked agents", updateAgentProfileSchema, 200],
+  ["post", "/api/companies/{companyId}/agent-profiles/{profileId}/restore", "Restore an agent profile version", restoreAgentProfileSchema, 200],
+  ["delete", "/api/companies/{companyId}/agent-profiles/{profileId}", "Delete an agent profile", deleteAgentProfileSchema, 204],
+] as const) registerCurrentRoute({ method, path, summary, tags: ["agent-profiles"], ...(body ? { body } : {}),
+  responses: { [status]: status === 204 ? { description: "Deleted" } : r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
+});
+
+const catalogBody = z.union([...catalogRequestSchema.options, ...storeSettingRequestSchema.options]
+  .map(schema => (schema as z.ZodObject<z.ZodRawShape>).omit({ companyId: true, projectId: true })));
+registerCurrentRoute({ method: "post", path: "/api/companies/{companyId}/sourcing/projects/{projectId}/catalog", tags: ["sourcing"],
+  summary: "Read and manage the scoped product catalog", body: catalogBody,
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
+});
+for (const [method, suffix, summary, body, status] of [
+  ["get", "", "List saved shipping forwarders", undefined, 200],
+  ["get", "/providers", "List shipping forwarder providers", undefined, 200],
+  ["post", "", "Save a shipping forwarder account", createSourcingForwarderSchema, 201],
+  ["patch", "/{id}", "Update a shipping forwarder account", updateSourcingForwarderSchema, 200],
+  ["delete", "/{id}", "Remove a shipping forwarder account", undefined, 204],
+  ["post", "/{id}/open", "Open the shipping forwarder login in a browser", z.object({}).strict(), 200],
+] as const) registerCurrentRoute({ method, path: "/api/companies/{companyId}/sourcing/projects/{projectId}/forwarders" + suffix, summary, tags: ["sourcing"], ...(body ? { body } : {}),
+  responses: { [status]: status === 204 ? { description: "Deleted" } : r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
+});
+registerCurrentRoute({ method: "put", path: "/api/companies/{companyId}/artifact-folder-entry", tags: ["artifacts"],
+  summary: "Move an artifact folder entry", body: moveArtifactFolderEntrySchema,
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: r.unprocessable },
+});
+
+for (const [method, suffix, summary, body, status] of [
+  ["get", "", "Read marketing projects and drafts", undefined, 200],
+  ["get", "/draft-tools", "Read the agent's task-scoped draft context", undefined, 200],
+  ["post", "/draft-tools", "Submit an agent's task-scoped marketing draft", createMarketingDraftSchema.extend({ issueId: z.string().uuid() }), 200],
+  ["get", "/connection-checks", "Read marketing connection checks", undefined, 200],
+  ["post", "/connection-checks", "Queue marketing connection checks", z.object({ projectId: z.string().uuid(), channelIds: z.array(z.string().uuid()).min(1).max(100).optional() }).strict(), 202],
+  ["patch", "/projects/{id}/connection-monitor", "Set the marketing connection monitor", z.object({ enabled: z.boolean() }).strict(), 200],
+  ["post", "/generation-instructions", "Read marketing generation instructions", generateMarketingDraftsSchema, 200],
+  ["post", "/import-generated", "Import generated marketing drafts", importMarketingDraftsSchema, 200],
+  ["get", "/media", "List marketing media", undefined, 200],
+  ["get", "/browser-profiles", "List available marketing browser profiles", undefined, 200],
+  ["post", "/channels/{id}/check-account", "Check the marketing channel account", undefined, 200],
+  ["post", "/profiles", "Create a marketing profile", createMarketingProfileSchema, 201],
+  ["patch", "/profiles/{id}", "Update a marketing profile", updateMarketingProfileSchema, 200],
+  ["post", "/channels", "Create a marketing channel", createMarketingChannelSchema, 201],
+  ["patch", "/channels/{id}", "Update a marketing channel", updateMarketingChannelSchema, 200],
+  ["post", "/drafts", "Create a marketing draft", createMarketingDraftSchema, 201],
+  ["patch", "/drafts/{id}", "Update a marketing draft", updateMarketingDraftSchema, 200],
+  ["post", "/queue", "Queue approved marketing drafts", queueMarketingDraftsSchema, 201],
+  ["post", "/dispatch", "Dispatch approved marketing jobs", z.object({ projectId: z.string().uuid(), jobIds: z.array(z.string().uuid()).min(1).max(50).optional() }).strict(), 200],
+  ["post", "/profiles/{id}/resume", "Resume an authenticated marketing profile", z.object({ channelId: z.string().uuid() }).strict(), 200],
+  ["post", "/jobs/{id}/cancel", "Cancel a queued marketing job", undefined, 200],
+  ["post", "/jobs/{id}/reconcile", "Read back the marketing publication result", z.object({}).strict(), 200],
+  ["post", "/jobs/{id}/retry", "Queue a safe marketing job retry", z.object({}).strict(), 200],
+] as const) registerCurrentRoute({ method, path: "/api/companies/{companyId}/marketing" + suffix, summary, tags: ["marketing"], ...(body ? { body } : {}),
+  ...(method === "get" && suffix === "/draft-tools" ? { query: z.object({ issueId: z.string().uuid() }) } : {}),
+  ...(method === "get" && suffix === "/connection-checks" ? { query: z.object({ projectId: z.string().uuid() }) } : {}),
+  responses: { [status]: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict, 422: r.unprocessable },
 });

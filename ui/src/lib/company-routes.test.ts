@@ -7,6 +7,33 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it("scopes Agent Profiles navigation without treating its menu path as a company", () => {
+    expect(isBoardPathWithoutPrefix("/agent-profiles")).toBe(true);
+    expect(extractCompanyPrefixFromPath("/agent-profiles")).toBeNull();
+    expect(applyCompanyPrefix("/agent-profiles?selected=profile-1#details", "dob"))
+      .toBe("/DOB/agent-profiles?selected=profile-1#details");
+    expect(applyCompanyPrefix("/NEW/agent-profiles", "DOB"))
+      .toBe("/NEW/agent-profiles");
+    expect(toCompanyRelativePath("/DOB/agent-profiles?selected=profile-1#details"))
+      .toBe("/agent-profiles?selected=profile-1#details");
+  });
+
+  it("keeps Sourcing navigation scoped to its company", () => {
+    expect(isBoardPathWithoutPrefix("/sourcing")).toBe(true);
+    expect(extractCompanyPrefixFromPath("/sourcing")).toBeNull();
+    expect(applyCompanyPrefix("/sourcing?project=one#products", "dob"))
+      .toBe("/DOB/sourcing?project=one#products");
+    expect(toCompanyRelativePath("/DOB/sourcing?project=one#products"))
+      .toBe("/sourcing?project=one#products");
+    expect(applyCompanyPrefix("/NEW/sourcing", "DOB")).toBe("/NEW/sourcing");
+  });
+  it("keeps Knowledge navigation scoped to its company", () => {
+    expect(isBoardPathWithoutPrefix("/knowledge")).toBe(true);
+    expect(extractCompanyPrefixFromPath("/knowledge")).toBeNull();
+    expect(applyCompanyPrefix("/knowledge?id=page&tab=sources", "DOB")).toBe("/DOB/knowledge?id=page&tab=sources");
+    expect(toCompanyRelativePath("/DOB/knowledge?id=page")).toBe("/knowledge?id=page");
+    expect(applyCompanyPrefix("/DOB/knowledge", "DOB")).toBe("/DOB/knowledge");
+  });
   it("treats the task-list alias as an unprefixed board route", () => {
     expect(isBoardPathWithoutPrefix("/tasks")).toBe(true);
     expect(extractCompanyPrefixFromPath("/tasks")).toBeNull();

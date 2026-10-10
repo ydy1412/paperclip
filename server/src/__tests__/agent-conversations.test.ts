@@ -1016,6 +1016,16 @@ describe("conversation execution wake policy", () => {
 });
 
 describe("chat prompt policy", () => {
+  it("keeps bounded Marketing draft submission in standard-mode chat without granting publication authority", () => {
+    expect(AGENT_CHAT_DIRECTIVE).toContain("use the available Marketing Drafts plugin tools in this conversation");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("Do not create an execution task merely to submit that draft");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("Verify the tool receipt");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("This exception grants no new permissions");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("Never approve, queue or publish a post through this handoff");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("Ask and Plan modes remain non-mutating for draft submission");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("Put implementation and substantial execution into separate tasks");
+  });
+
   it("preserves explicit plan approval while avoiding ritual confirmations for ordinary chat", () => {
     expect(AGENT_CHAT_DIRECTIVE).toContain("When the user asks to approve a plan before handoff");
     expect(AGENT_CHAT_DIRECTIVE).toContain('interactionKind: "confirmation"');

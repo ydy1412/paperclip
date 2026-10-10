@@ -42,6 +42,7 @@ import { toolsApi } from "../api/tools";
 import { getUIAdapter, buildTranscript, onAdapterChange } from "../adapters";
 import { StatusBadge } from "../components/StatusBadge";
 import { MarkdownBody } from "../components/MarkdownBody";
+import { AgentContinuity } from "../components/AgentContinuity";
 import { CopyText } from "../components/CopyText";
 import { IssueRow } from "../components/IssueRow";
 import { StatusGlyph } from "../components/StatusGlyph";
@@ -1406,6 +1407,7 @@ export function AgentDetail() {
         />
       )}
 
+      {activeView === "continuity" && <AgentContinuity agent={agent} />}
       {activeView === "runtime" && (
         <div>
           <ConfigurationTab

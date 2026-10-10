@@ -799,6 +799,21 @@ export function startWorkerRpcHost(options: WorkerRpcHostOptions): WorkerRpcHost
         },
       },
 
+      marketing: {
+        getContext: (input) => callHost("marketing.getContext", input),
+        uploadMedia: (input) => callHost("marketing.uploadMedia", input),
+        submitDraft: (input) => callHost("marketing.submitDraft", input),
+      },
+      autoSourcing: {
+        catalogRead: (input) => callHost("autoSourcing.catalogRead", input),
+        catalogWrite: (input) => callHost("autoSourcing.catalogWrite", input),
+        processingRead: (input) => callHost("autoSourcing.processingRead", input),
+        processingWrite: (input) => callHost("autoSourcing.processingWrite", input),
+        request: (input) => callHost("autoSourcing.request", input),
+        sync: (input) => callHost("autoSourcing.sync", input),
+        shipping: (input) => callHost("autoSourcing.shipping", input),
+      },
+
       issues: {
         async list(input) {
           return callHost("issues.list", {

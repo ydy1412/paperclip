@@ -1,0 +1,11 @@
+const identity = { projectId: { type: "string", format: "uuid" } };
+const product = { productId: { type: "string", pattern: "^[a-f0-9]{32}$" } };
+export const catalogTools = [["list-managed-products", "list"], ["get-managed-product", "get"], ["list-product-stores", "settings"], ["save-managed-product", "save"]] as const;
+export const catalogToolDeclarations = [
+  { name: "list-managed-products", displayName: "상품 목록", description: "Read common products in the current project. No external publication.", parametersSchema: { type: "object", properties: { ...identity, view: { type: "string", enum: ["source", "uploads"] } }, required: ["projectId", "view"], additionalProperties: false } },
+  { name: "get-managed-product", displayName: "상품 편집 정보", description: "Read a common product and its store registrations.", parametersSchema: { type: "object", properties: { ...identity, ...product }, required: ["projectId", "productId"], additionalProperties: false } },
+  { name: "list-product-stores", displayName: "연결 쇼핑몰 목록", description: "Read configured business/store names and capabilities. Credentials and registration numbers are never exposed.", parametersSchema: { type: "object", properties: identity, required: ["projectId"], additionalProperties: false } },
+  { name: "save-managed-product", displayName: "공통 상품 가공 저장", description: "Save local title, images, description and options with revision checking. Never uploads externally.", parametersSchema: { type: "object", properties: { ...identity, ...product,
+    expectedRevision: { type: "integer", minimum: 1 }, title: { type: "string", maxLength: 100 }, mainImage: { type: "string" }, description: { type: "string", maxLength: 200000 }, categoryCode: { type: "string", pattern: "^\\d{0,30}$" },
+    skus: { type: "array", minItems: 1, maxItems: 200, items: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, image: { type: "string" }, options: { type: "array", items: { type: "object", properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"], additionalProperties: false } } }, required: ["id", "name", "image", "options"], additionalProperties: false } } }, required: ["projectId", "productId", "expectedRevision", "title", "mainImage", "description", "categoryCode", "skus"], additionalProperties: false } },
+];

@@ -92,6 +92,7 @@ async function inventory(directory: string, base = ""): Promise<string[]> {
 
 async function matches(spec: CacheSpec, entry = spec.entry): Promise<boolean> {
   try {
+    if ((await fs.lstat(entry)).mode & 0o222) return false;
     await assertDirectories(path.join(entry, "files"), path.dirname(path.dirname(spec.root)));
     const manifest = JSON.parse((await readRegularFile(path.join(entry, "manifest.json"))).toString("utf8"));
     if (manifest.format !== FORMAT || manifest.fingerprint !== spec.fingerprint || !Array.isArray(manifest.files)
@@ -170,6 +171,17 @@ async function removeTree(directory: string): Promise<void> {
   await fs.rm(directory, { recursive: true, force: true });
 }
 
+async function renameCacheRevision(source: string, target: string): Promise<void> {
+  const stat = await fs.lstat(source);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Unsafe runtime skill cache revision");
+  // macOS requires owner-write on the moved directory. Descendants stay sealed,
+  // and matches() rejects the writable root until publication restores its mode.
+  await fs.chmod(source, 0o700);
+  let moved = false;
+  try { await fs.rename(source, target); moved = true; }
+  finally { await fs.chmod(moved ? target : source, stat.mode & 0o777); }
+}
+
 export async function resolveRuntimeSkillCache(
   spec: CacheSpec, read: (relativePath: string) => Promise<string>, materialize = true,
   stillInstalled: () => Promise<boolean> = async () => true,
@@ -202,9 +214,9 @@ export async function resolveRuntimeSkillCache(
         if (!await matches(spec, staging)) throw new Error("Runtime skill cache validation failed");
         // Lifecycle mutations can update the DB while this builder owns the filesystem lock.
         if (!await stillInstalled()) throw new Error("Skill was renamed or removed during preparation");
-        await fs.rename(spec.entry, path.join(spec.root, `.invalid-${spec.fingerprint}-${randomUUID()}`))
+        await renameCacheRevision(spec.entry, path.join(spec.root, `.invalid-${spec.fingerprint}-${randomUUID()}`))
           .catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; });
-        await fs.rename(staging, spec.entry);
+        await renameCacheRevision(staging, spec.entry);
         return path.join(spec.entry, "files");
       } finally { await removeTree(staging); }
     });

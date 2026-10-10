@@ -1,4 +1,4 @@
-import { agentAppearanceSchema, randomAgentAppearance, resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
+import { seatAliasSchema, agentAppearanceSchema, randomAgentAppearance, resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -336,6 +336,15 @@ export function deduplicateAgentName(
     }
   }
   return `${candidateName} ${Date.now()}`;
+}
+
+function rethrowSeatAliasConflict(error: unknown): never {
+  const outer = error as { code?: string; constraint_name?: string; cause?: unknown };
+  const detail = (outer?.cause ?? outer) as { code?: string; constraint_name?: string };
+  if (detail?.code === "23505" && detail.constraint_name === "agents_company_seat_alias_uq") {
+    throw conflict("Seat alias is already used in this company");
+  }
+  throw error;
 }
 
 export function agentService(db: Db) {
@@ -703,6 +712,11 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    if (data.seatAlias != null) {
+      data = { ...data, seatAlias: seatAliasSchema.parse(data.seatAlias) };
+      const [duplicate] = await db.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, existing.companyId), eq(agents.seatAlias, data.seatAlias!), ne(agents.id, id)));
+      if (duplicate) throw conflict("Seat alias is already used in this company");
+    }
 
     if (existing.status === "terminated" && data.status && data.status !== "terminated") {
       throw conflict("Terminated agents cannot be resumed");
@@ -793,7 +807,7 @@ export function agentService(db: Db) {
         .set({ ...normalizedPatch, updatedAt: new Date() })
         .where(eq(agents.id, id))
         .returning()
-        .then((rows) => rows[0] ?? null);
+        .then((rows) => rows[0] ?? null).catch(rethrowSeatAliasConflict);
       if (!updated) return null;
 
       const priorAdapterConfig = isPlainRecord(existing.adapterConfig) ? existing.adapterConfig : {};
@@ -876,6 +890,11 @@ export function agentService(db: Db) {
     getById,
 
     create: async (companyId: string, data: Omit<typeof agents.$inferInsert, "companyId">, options?: CreateAgentOptions) => {
+      if (data.seatAlias != null) {
+        data = { ...data, seatAlias: seatAliasSchema.parse(data.seatAlias) };
+        const [duplicate] = await db.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.seatAlias, data.seatAlias!)));
+        if (duplicate) throw conflict("Seat alias is already used in this company");
+      }
       assertBuiltInAgentMetadataMutationAllowed(null, data.metadata, options);
       if (data.reportsTo) {
         await ensureManager(companyId, data.reportsTo);
@@ -929,7 +948,7 @@ export function agentService(db: Db) {
             runtimeConfig,
           })
           .returning()
-          .then((rows) => rows[0]);
+          .then((rows) => rows[0]).catch(rethrowSeatAliasConflict);
         if (options?.aiConnectionInstall) {
           await tx.insert(toolConnectionInstalls).values({
             companyId, connectionId: options.aiConnectionInstall.connectionId,
@@ -1382,6 +1401,10 @@ export function agentService(db: Db) {
       }
 
       const urlKey = normalizeAgentUrlKey(raw);
+      const [byAlias] = await db.select().from(agents).where(and(
+        eq(agents.companyId, companyId), eq(agents.seatAlias, raw.toLowerCase()), ne(agents.status, "terminated"),
+      )).limit(1);
+      if (byAlias) return { agent: await getById(byAlias.id), ambiguous: false } as const;
       if (!urlKey) {
         return { agent: null, ambiguous: false } as const;
       }

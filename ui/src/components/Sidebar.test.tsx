@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
+import { Sidebar as ProductionSidebar } from "./Sidebar.production";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const mockHeartbeatsApi = vi.hoisted(() => ({
@@ -123,6 +124,16 @@ vi.mock("./SidebarRecentTasks", () => ({
   SidebarRecentTasks: () => <div data-testid="sidebar-recent-tasks">Recent Tasks</div>,
 }));
 
+vi.mock("./SidebarCompanyMenu.production", () => ({
+  SidebarCompanyMenu: () => <div>Company menu</div>,
+}));
+vi.mock("./SidebarAgents.production", () => ({
+  SidebarAgents: () => <div>Active agents</div>,
+}));
+vi.mock("./SidebarStarredProjects.production", () => ({
+  SidebarStarredProjects: () => <div data-testid="sidebar-starred-projects" />,
+}));
+
 async function flushReact() {
   for (let index = 0; index < 5; index += 1) {
     await Promise.resolve();
@@ -134,7 +145,7 @@ async function flushReact() {
 describe("Sidebar", () => {
   let container: HTMLDivElement;
 
-  async function renderSidebar() {
+  async function renderSidebar(production = false) {
     const root = createRoot(container);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -144,7 +155,7 @@ describe("Sidebar", () => {
       root.render(
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
-            <Sidebar />
+            {production ? <ProductionSidebar /> : <Sidebar />}
           </TooltipProvider>
         </QueryClientProvider>,
       );
@@ -171,6 +182,34 @@ describe("Sidebar", () => {
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
+  });
+
+  it("keeps Knowledge visible in the production Work navigation", async () => {
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({});
+    const root = await renderSidebar(true);
+    try {
+      const link = [...container.querySelectorAll("nav a")].find(item => item.textContent === "Knowledge");
+      expect(link?.getAttribute("href")).toBe("/knowledge");
+      expect(link?.closest('[data-slot="collapsible"]')?.textContent).toContain("Work");
+    } finally {
+      flushSync(() => root.unmount());
+    }
+  });
+
+  it.each([false, true])("places Shopping mall management after Marketing in Work (production=%s)", async (production) => {
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({});
+    const root = await renderSidebar(production);
+    try {
+      const links = [...container.querySelectorAll("nav a")];
+      const marketingIndex = links.findIndex(item => item.textContent === "마케팅");
+      const sourcing = links[marketingIndex + 1];
+      expect(marketingIndex).toBeGreaterThanOrEqual(0);
+      expect(sourcing?.textContent).toBe("쇼핑몰 관리");
+      expect(sourcing?.getAttribute("href")).toBe("/sourcing");
+      expect(sourcing?.closest('[data-slot="collapsible"]')?.textContent).toContain("Work");
+    } finally {
+      flushSync(() => root.unmount());
+    }
   });
 
   it("keeps the default sidebar edge borderless", async () => {
@@ -523,8 +562,8 @@ describe("Sidebar", () => {
     const labels = (section: Element | undefined) => [...(section?.querySelectorAll("a") ?? [])]
       .map((anchor) => anchor.textContent?.trim());
 
-    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "Knowledge"]);
-    expect(labels(orgSection)).toEqual(["Agents", "Skills", "Connectors", "Audit"]);
+    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "Knowledge", "마케팅", "쇼핑몰 관리"]);
+    expect(labels(orgSection)).toEqual(["Agents", "에이전트 프로필", "Skills", "Connectors", "Audit"]);
     expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
     expect(
       workSection?.querySelector('a[href="/issues"] svg')?.classList.contains("lucide-circle-check"),

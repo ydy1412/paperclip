@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  artifactFolderEntries,
   assets,
   companies,
   documentMemberships,
@@ -340,6 +341,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
       const fetchLimit = Math.min(query.limit + 1, COMPANY_ARTIFACTS_MAX_LIMIT + 1);
       const sourceFetchLimit = groupBy ? GROUPED_ARTIFACT_FETCH_LIMIT : fetchLimit;
       const q = query.q ? `%${escapeLikePattern(query.q)}%` : null;
+      const folderCondition=(artifactId:SQL<string>)=>query.folderId?sql`EXISTS (SELECT 1 FROM ${artifactFolderEntries} WHERE ${artifactFolderEntries.companyId}=${companyId} AND ${artifactFolderEntries.folderId}=${query.folderId} AND ${artifactFolderEntries.artifactId}=${artifactId})`:undefined;
       const issueConditions: SQL[] = [
         isNull(issues.hiddenAt),
         isNull(issues.harnessKind),
@@ -368,6 +370,8 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
               notInArray(issueDocuments.key, [...SYSTEM_ISSUE_DOCUMENT_KEYS]),
             ]),
         ];
+        const documentFolder=folderCondition(documentArtifactId);
+        if(documentFolder) documentConditions.push(documentFolder);
         const documentSortDate = query.starred
           ? sql<Date>`${documentMemberships.starredAt}`
           : sql<Date>`${documents.updatedAt}`;
@@ -485,6 +489,8 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
           ...issueConditions,
         ];
         const workProductConditions: SQL[] = [...workProductBaseConditions];
+        const workProductFolder=folderCondition(workProductArtifactId);
+        if(workProductFolder) workProductConditions.push(workProductFolder);
         const workProductCursor = groupBy
           ? undefined
           : cursorCondition(sql<Date>`${issueWorkProducts.updatedAt}`, workProductArtifactId, cursor);
@@ -627,6 +633,8 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
         const attachmentCursor = groupBy
           ? undefined
           : cursorCondition(sql<Date>`${issueAttachments.updatedAt}`, attachmentArtifactId, cursor);
+        const attachmentFolder=folderCondition(attachmentArtifactId);
+        if(attachmentFolder) attachmentConditions.push(attachmentFolder);
         const attachmentKind = contentTypeKindCondition(sql<string>`${assets.contentType}`, query.kind);
         if (attachmentCursor) attachmentConditions.push(attachmentCursor);
         if (groupBy === "task" && query.groupIssueId) attachmentConditions.push(eq(issues.id, query.groupIssueId));

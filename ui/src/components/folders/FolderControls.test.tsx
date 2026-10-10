@@ -348,6 +348,16 @@ describe("FolderControls", () => {
     expect(onSubmit).toHaveBeenCalledWith({ name: "Reporting", color: expect.any(String) });
   });
 
+  it("shows artifact save errors inside the form and prevents duplicate Enter submissions", () => {
+    const onSubmit = vi.fn();
+    root = createRoot(container);
+    act(() => root?.render(<FolderFormDialog open kind="artifact" folder={folderResult.folders[0]!} pending error="Folder save denied" onOpenChange={vi.fn()} onSubmit={onSubmit}/>));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Organize artifacts");
+    expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe("Folder save denied");
+    act(() => { document.querySelector("#folder-name")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("states the forgiving delete behavior and confirms", () => {
     const onConfirm = vi.fn();
     root = createRoot(container);

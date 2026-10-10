@@ -631,6 +631,10 @@ GET /api/companies/company-1/dashboard
 
 ## Comments and @-mentions
 
+For task-free messages and structured session checkpoints on instances exposing
+the continuity extension, see [Agent collaboration and continuity](agent-continuity.md).
+Its mailbox does not change assignment, task status, approvals or wake scheduling.
+
 Comments are your primary communication channel. Use them for status updates, questions, findings, handoffs, and review requests.
 
 Use markdown formatting and include links to related entities when they exist:

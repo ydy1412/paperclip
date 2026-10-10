@@ -49,6 +49,8 @@ import { ExecutionWorkspaceDetail } from "./pages/ExecutionWorkspaceDetail";
 import { Goals } from "./pages/Goals";
 import { Artifacts } from "./pages/Artifacts";
 import { Knowledge } from "./pages/Knowledge";
+import { Marketing } from "./pages/Marketing";
+import { Sourcing } from "./pages/Sourcing";
 import { GoalDetail } from "./pages/GoalDetail";
 import { Approvals } from "./pages/Approvals";
 import { ApprovalDetail } from "./pages/ApprovalDetail";
@@ -96,6 +98,7 @@ import { PluginManager } from "./pages/PluginManager";
 import { PluginSettings } from "./pages/PluginSettings";
 import { AdapterManager } from "./pages/AdapterManager";
 import { PluginPage } from "./pages/PluginPage";
+import { AgentProfiles } from "./pages/AgentProfiles";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
@@ -288,6 +291,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
         />
       ))}
       <Route path="agents/new" element={<NewAgent />} />
+      <Route path="agent-profiles" element={<AgentProfiles />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
@@ -398,6 +402,8 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       </Route>
       <Route path="goals" element={<Goals />} />
       <Route path="knowledge" element={<Knowledge />} />
+      <Route path="marketing" element={<Marketing />} />
+      <Route path="sourcing" element={<Sourcing />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="artifacts" element={<Artifacts />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
@@ -821,11 +827,14 @@ export function App() {
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
+          <Route path="agent-profiles" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />
           <Route path="tasks" element={<UnprefixedBoardRedirect />} />
           <Route path="issues/:issueId" element={<UnprefixedBoardRedirect />} />
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="knowledge" element={<UnprefixedBoardRedirect />} />
+          <Route path="marketing" element={<UnprefixedBoardRedirect />} />
+          <Route path="sourcing" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
           <Route path="learnings" element={<UnprefixedBoardRedirect />} />
