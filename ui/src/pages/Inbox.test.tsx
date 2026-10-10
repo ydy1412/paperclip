@@ -422,6 +422,70 @@ describe("Inbox toolbar", () => {
     },
   );
 
+  it.each(["mine", "recent", "unread", "blocked", "all"].flatMap((tab) =>
+    [true, false].map((streamlined) => ({ tab, streamlined })),
+  ))("selects and clears Failed from $tab (streamlined=$streamlined)", async ({ tab, streamlined }) => {
+    routerMock.location.pathname = `/inbox/${tab}`;
+    routerMock.navigate.mockClear();
+    apiMocks.experimentalSettings.mockResolvedValue({
+      enableIsolatedWorkspaces: false,
+      enableStreamlinedUi: streamlined,
+    });
+    apiMocks.issuesList.mockResolvedValue([
+      createIssue({ title: "Ordinary inbox task" }),
+    ]);
+    apiMocks.heartbeatRunsList.mockResolvedValue([
+      createFailedRun({ id: "visible-failure", error: "Unique failed execution" }),
+      createFailedRun({ id: "successful-run", agentId: "agent-2", status: "succeeded" }),
+    ]);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: 0 } },
+    });
+    const root = createRoot(container);
+    const render = () => root.render(<QueryClientProvider client={queryClient}><Inbox /></QueryClientProvider>);
+    try {
+      await act(render);
+      await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      await act(() => (container.querySelector('button[title="Filter"]') as HTMLButtonElement).click());
+      const failedButton = Array.from(document.querySelectorAll('[data-filter-options="inbox-category"] button'))
+        .find((button) => button.textContent?.trim() === "Failed") as HTMLButtonElement;
+      expect(failedButton).toBeDefined();
+      await act(() => failedButton.click());
+      if (tab !== "all") expect(routerMock.navigate).toHaveBeenCalledWith("/inbox/all");
+      else expect(routerMock.navigate).not.toHaveBeenCalled();
+
+      routerMock.location.pathname = "/inbox/all";
+      await act(render);
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain("Unique failed execution");
+        expect(container.textContent).not.toContain("Ordinary inbox task");
+      });
+      expect(container.querySelector('a[to$="/runs/successful-run"]')).toBeNull();
+      if (!document.querySelector('[data-filter-options="inbox-category"]')) {
+        await act(() => (container.querySelector('button[title^="Filter"]') as HTMLButtonElement).click());
+      }
+      expect(document.querySelector('[data-filter-options="inbox-category"] button[aria-pressed="true"]')?.textContent)
+        .toBe("Failed");
+
+      // Reload the page component to verify that the category survives navigation.
+      await act(() => root.render(null));
+      await act(render);
+      await vi.waitFor(() => expect(container.textContent).toContain("Unique failed execution"));
+      expect(container.textContent).not.toContain("Ordinary inbox task");
+      await act(() => (container.querySelector('button[title^="Filter"]') as HTMLButtonElement).click());
+      const clearButton = Array.from(document.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Clear") as HTMLButtonElement;
+      expect(clearButton).toBeDefined();
+      await act(() => clearButton.click());
+      await vi.waitFor(() => expect(container.textContent).toContain("Ordinary inbox task"));
+      expect(document.querySelector('[data-filter-options="inbox-category"] button[aria-pressed="true"]')?.textContent)
+        .toBe("All categories");
+    } finally {
+      await act(() => root.unmount());
+      queryClient.clear();
+    }
+  });
+
   it("restores the legacy toolbar and issue-row presentation when Streamlined UI is off", async () => {
     routerMock.location.pathname = "/inbox/mine";
     apiMocks.experimentalSettings.mockResolvedValue({
