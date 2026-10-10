@@ -7,7 +7,7 @@ import { agentContinuityService } from "../services/agent-continuity.js";
 import { accessService } from "../services/access.js";
 import { forbidden, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { assertBoard, assertCompanyAccess } from "./authz.js";
+import { assertBoard, assertCompanyAccess, hasCompanyAccess } from "./authz.js";
 
 export function agentContinuityRoutes(db: Db) {
   const router = Router();
@@ -16,7 +16,7 @@ export function agentContinuityRoutes(db: Db) {
   async function scope(req: Request, write = false) {
     const id = z.string().uuid().parse(req.params.id);
     const agent = await agentService(db).getById(id);
-    if (!agent) throw notFound("Agent not found");
+    if (!agent || !hasCompanyAccess(req, agent.companyId)) throw notFound("Agent not found");
     assertCompanyAccess(req, agent.companyId);
     if (req.actor.type === "agent") {
       if (req.actor.agentId !== id) throw forbidden("Agents may only access their own continuity and mailbox");

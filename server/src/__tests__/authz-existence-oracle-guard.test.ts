@@ -35,6 +35,7 @@ const ROUTES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "routes")
 const REQUEST_INPUT_ALLOWLIST = new Set([
   "companies.ts:target", // import target chosen by the caller (req.body.target)
   "plugins.ts:runContext", // run context supplied in the request body
+  "sourcing-catalog.ts:scope", // scope parsed from req.params, not a looked-up resource
 ]);
 
 const GATE_LOOKBACK_LINES = 12;

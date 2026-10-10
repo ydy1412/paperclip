@@ -61,6 +61,8 @@ Messages represent information, questions, review feedback or status. They do no
 
 Agents can access only their own mailbox/continuity. Board reads use existing company access; writes require the existing `agents:create` management decision. Existing authentication and responsible-user company intersection checks remain in force.
 
+Missing agents and agents outside the caller's company return the same 404 response. The company access gate runs before write authorization, so the API does not reveal another company's agent existence. Route regression tests also retain valid board reads and agent self reads.
+
 ## Handoff lifecycle
 
 `POST /api/agents/:id/handoffs` accepts `{issueId, expectedSessionId, policy, content}`. The content requires goal, changed files, completed/in-progress work, acceptance criteria, tests/commands/results, decisions, unresolved items, blockers and next actions. Empty arrays explicitly represent no entries; goal, acceptance criteria and next actions cannot be empty. Content is capped at 12 KB and is secret-redacted before persistence.
