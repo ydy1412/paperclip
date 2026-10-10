@@ -6,6 +6,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { SourcingStoreSettings } from "./SourcingStoreSettings";
 import { SourcingProducts } from "./SourcingProducts";
 import type { ManagedProduct, StoreSettings } from "@paperclipai/shared";
+import { ApiError } from "../api/client";
 
 const mock = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("../api/sourcing", () => ({ sourcingCatalogApi: mock }));
@@ -27,6 +28,8 @@ beforeEach(() => {
     if (request.operation === "stages") return { all: 1, processing: 0, ready: 1, queued: 0, attention: 0, uploaded: 0 };
     if (request.operation === "settings") return structuredClone(settings);
     if (request.operation === "list") return [structuredClone(product)];
+    if (request.operation === "workspace") return [{ id: product.id, kind: "product", title: product.title, mainImage: product.mainImage, stage: "ready", product: structuredClone(product), candidate: null, source: null }];
+    if (request.operation === "price-preview") return { productRevision: product.revision, confirmation: "e".repeat(64), stores: [] };
     if (request.operation === "sources") return [{ sourceProvider: "taobao", sourceProductId: "123", title: "수집 상품", mainImage: "" }];
     if (request.operation === "jobs" || request.operation === "queue") return [];
     if (request.operation === "get") return structuredClone(product);
@@ -36,18 +39,72 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 describe("store settings and common product editor", () => {
+  it("compares edited prices before saving, preserves cancelled edits and requires a fresh store confirmation", async () => {
+    product.skus[0].salePrice = 10000;
+    const original = mock.request.getMockImplementation(); let rejectQueue = true;
+    mock.request.mockImplementation(async (...args) => {
+      if (args[2].operation === "price-preview") return { productRevision: product.revision, confirmation: "e".repeat(64), stores: [{ storeId: storeA, accountRevision: 1, snapshotDigest: "digest", changes: [{ skuId: "11", name: "빨강", before: 11000, after: 12000 }] }] };
+      if (args[2].operation === "queue" && rejectQueue) { rejectQueue = false; throw new ApiError("price_confirmation_required", 409, {}); }
+      return original?.(...args);
+    });
+    await render(<SourcingProducts companyId="company" projectId="project" view="uploads" />);
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="업로드 상품 목록"] button')!.click()); await settle();
+    expect(document.querySelector('iframe')?.getAttribute("sandbox")).toBe("");
+    await input("옵션 1 판매가격", "12000"); await click("변경 저장");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("10,000원");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("12,000원");
+    expect(mock.request.mock.calls.some(c => c[2].operation === "save")).toBe(false);
+    await click("취소"); expect(document.querySelector<HTMLInputElement>('[aria-label="옵션 1 판매가격"]')?.value).toBe("12000");
+    await click("변경 저장"); await click("가격 변경 저장");
+    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "save", confirmPriceChanges: true, skus: [expect.objectContaining({ salePrice: 12000 })] }));
+    await act(async () => document.querySelector<HTMLInputElement>('[aria-label="상품 편집"] input[type="checkbox"]')!.click());
+    await click("선택 쇼핑몰 업로드"); expect(document.querySelector('[role="dialog"]')?.textContent).toContain("11,000원");
+    expect(mock.request.mock.calls.some(c => c[2].operation === "queue")).toBe(false);
+    await click("확인 후 큐 등록"); expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('[aria-label="상품명"]')?.disabled).toBe(false);
+    const rejectedId = mock.request.mock.calls.find(c => c[2].operation === "queue")![2].requestId;
+    await click("선택 쇼핑몰 업로드"); await click("확인 후 큐 등록");
+    const requests = mock.request.mock.calls.filter(c => c[2].operation === "queue");
+    expect(requests[1][2].requestId).not.toBe(rejectedId); expect(requests[1][2].priceConfirmation).toBe("e".repeat(64));
+  });
+  it("keeps candidates and unprocessed originals separate and promotes only after an explicit click", async () => {
+    const original = mock.request.getMockImplementation(); let imported = false; let promoted = false;
+    const candidate = { id: "candidate", kind: "candidate", title: "소싱 후보 A", mainImage: "", stage: "candidate", product: null, source: null, candidate: { id: "candidate", sourceProductId: "123", url: "https://item.taobao.com/item.htm?id=123", mainKeyword: "키워드", subKeyword: "보조", collectionState: "idle", errorCode: "" } };
+    const source = { id: "source", kind: "source", title: "수집 원본 B", mainImage: "", stage: "unprocessed", product: null, candidate: null, source: { sourceProvider: "taobao", sourceProductId: "456", title: "수집 원본 B", mainImage: "", url: "https://item.taobao.com/item.htm?id=456", description: "<p>상세 HTML</p>", optionCount: 1 } };
+    mock.request.mockImplementation(async (...args) => {
+      const request = args[2];
+      if (request.operation === "candidate-import") { imported = true; return { added: 1 }; }
+      if (request.operation === "workspace") return promoted ? [{ id: product.id, kind: "product", title: product.title, mainImage: product.mainImage, stage: "processing", product, candidate: null, source: null }] : imported ? [candidate, source] : [];
+      if (request.operation === "stages") return { all: imported ? 2 : 0, candidate: imported ? 1 : 0, unprocessed: imported && !promoted ? 1 : 0, processing: promoted ? 1 : 0, ready: 0, queued: 0, uploaded: 0, attention: 0 };
+      if (request.operation === "source") { promoted = true; return { ...product, listings: [], stage: "processing" }; }
+      return original?.(...args);
+    });
+    await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await click("기존 소싱 후보 불러오기");
+    expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("소싱 후보 (1)");
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')[0].click()); await settle();
+    expect(document.querySelector('[aria-label="소싱 후보 정보"]')?.textContent).toContain("키워드");
+    expect(mock.request.mock.calls.some(c => c[2].operation === "candidate-collect")).toBe(false);
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')[1].click()); await settle();
+    expect(document.querySelector('[aria-label="가공 전 상품 정보"] iframe')).not.toBeNull();
+    expect(mock.request.mock.calls.some(c => c[2].operation === "source")).toBe(false);
+    await click("가공 시작"); expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "source", sourceProvider: "taobao", sourceProductId: "456" });
+    expect(document.querySelector('[aria-label="상품 편집"]')).not.toBeNull();
+  });
   it.each(["source", "uploads"] as const)("searches and clears %s across server pages without losing unsaved edits", async view => {
     const original = mock.request.getMockImplementation();
     mock.request.mockImplementation(async (...args) => {
       const request = args[2];
-      if (request.operation === "list") return request.query === "없음" ? [] : Array.from({ length: 20 }, (_, i) => ({ ...structuredClone(product), id: `${i}` }));
+      if (["list", "workspace"].includes(request.operation)) {
+        const products = request.query === "없음" ? [] : Array.from({ length: 20 }, (_, i) => ({ ...structuredClone(product), id: `${i}` }));
+        return request.operation === "workspace" ? products.map(p => ({ id: p.id, kind: "product", title: p.title, mainImage: p.mainImage, stage: "ready", product: p, candidate: null, source: null })) : products;
+      }
       return original?.(...args);
     });
     await render(<SourcingProducts companyId="company" projectId="project" view={view} />);
     await click("다음");
-    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "list", page: 2 }));
+    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: view === "source" ? "workspace" : "list", page: 2 }));
     await input("상품 검색 키워드", "  없음  "); await click("검색");
-    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "list", view, page: 1, query: "없음" }));
+    expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: view === "source" ? "workspace" : "list", page: 1, query: "없음" }));
     expect(document.body.textContent).toContain("검색 결과가 없습니다.");
     if (view === "source") expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "stages", query: "없음" });
     await click("검색 초기화");
@@ -63,7 +120,7 @@ describe("store settings and common product editor", () => {
     expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("업로드 준비 (1)");
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(el => el.textContent === "업로드 준비 (1)")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
     await settle();
-    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "list", view: "source", page: 1, stage: "ready" });
+    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "workspace", page: 1, stage: "ready" });
   });
   it("starts selected-store import and refreshes cards on verified completion", async () => {
     const original = mock.request.getMockImplementation(); let imported = false;
@@ -123,6 +180,7 @@ describe("store settings and common product editor", () => {
   });
   it("provides the same editable fields from a sourcing item", async () => {
     product.listings = []; await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')!.click()); await settle();
+    await click("HTML 편집");
     for (const label of ["상품명", "대표 이미지 URL", "카테고리 코드", "상세 설명", "옵션 1 상품명", "옵션 1-1 이름", "옵션 1-1 값"]) expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     expect(document.body.textContent).toContain("쇼핑몰 선택");
   });

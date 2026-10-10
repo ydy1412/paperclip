@@ -24,6 +24,11 @@ describe("catalog real worker/host/HTTP/SQLite and credential vault", () => {
     expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body.businesses).toEqual([]);
     expect(isSecretSensitiveHttpRequest("POST", url)).toBe(true);
+    const workspace = await request(app).post(url).send({ operation: "workspace", stage: "unprocessed" });
+    expect(workspace.status).toBe(200); expect(workspace.body).toHaveLength(1);
+    expect(workspace.body[0]).toMatchObject({ kind: "source", stage: "unprocessed", source: { sourceProductId: f.productId } });
+    const candidates = await request(app).post(url).send({ operation: "candidate-import" });
+    expect(candidates.status).toBe(200); expect(candidates.body).toEqual({ imported: 0 });
   });
   it("registers multiple businesses/stores, scopes existing accounts and never returns connection secrets", async () => {
     const scope = { companyId: f.companyId, projectId: f.projectId }; const context = { invocationScope: { companyId: f.companyId } };
@@ -60,5 +65,46 @@ describe("catalog real worker/host/HTTP/SQLite and credential vault", () => {
     await expect(f.tool("save-managed-product", { productId: created.id, credentials: { secretKey: "forged" } })).rejects.toThrow();
     const readOnly = createHostClientHandlers({ pluginId: f.plugin.id, capabilities: ["auto-sourcing.products.read"], services: { autoSourcing: f.service } });
     await expect(readOnly["autoSourcing.catalogWrite"]({ ...scope, operation: "source", sourceProvider: "taobao", sourceProductId: f.productId }, context)).rejects.toBeInstanceOf(CapabilityDeniedError);
+    const prices = { productId: saved.id, expectedRevision: saved.revision, title: saved.title, mainImage: saved.mainImage, description: "<p>상세 설명</p>", categoryCode: saved.categoryCode, skus: saved.skus.map(s => ({ ...s, salePrice: 12000 })) };
+    await expect(f.tool("save-managed-product", prices)).rejects.toThrow("price_confirmation_required");
+    const confirmed = managedProductSchema.parse((await f.tool("save-managed-product", { ...prices, confirmPriceChanges: true })).data);
+    expect(confirmed.skus.every(s => s.salePrice === 12000)).toBe(true); expect(confirmed.description).toBe("<p>상세 설명</p>");
+    expect(await f.service.catalogRead({ ...scope, operation: "workspace" }, context)).toMatchObject([{ kind: "product", product: { id: saved.id, revision: 3 } }]);
+    await expect(f.service.catalogWrite({ ...scope, operation: "candidate-import" }, agent)).rejects.toThrow("운영 화면");
   });
+});
+
+describe("catalog price confirmation across the real HTTP and provider boundaries", () => {
+  let f: Awaited<ReturnType<typeof startProcessingFixture>>;
+  beforeAll(async () => { f = await startProcessingFixture("catalog-browser"); }, 90000);
+  afterAll(async () => { await f?.close(); });
+  it("accepts the backend confirmation hash and confirms the changed option price", async () => {
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { req.actor = { type: "board", userId: "fixture-operator", source: "board_key", companyIds: [f.companyId] }; next(); });
+    app.use("/api", boardMutationGuard()); app.use("/api", sourcingCatalogRoutes(f.db, { processingPort: Number(new URL(f.url).port) })); app.use(errorHandler);
+    const url = `/api/companies/${f.companyId}/sourcing/projects/${f.projectId}/catalog`;
+    const products = await request(app).post(url).send({ operation: "list", view: "uploads" });
+    expect(products.status).toBe(200);
+    const product = managedProductSchema.parse(products.body[0]);
+    const saved = await request(app).post(url).send({ operation: "save", productId: product.id, expectedRevision: product.revision,
+      title: product.title, mainImage: product.mainImage, description: product.description, categoryCode: product.categoryCode,
+      skus: product.skus.map(s => ({ ...s, salePrice: 12000 })), confirmPriceChanges: true });
+    expect(saved.status).toBe(200);
+    const storeIds = [product.listings[0].storeId];
+    const preview = await request(app).post(url).send({ operation: "price-preview", productId: product.id, expectedRevision: saved.body.revision, storeIds });
+    expect(preview.status).toBe(200);
+    expect(preview.body.confirmation).toMatch(/^[A-F0-9]{64}$/);
+    expect(preview.body.stores[0].changes[0]).toMatchObject({ before: 10000, after: 12000 });
+    const queued = await request(app).post(url).send({ operation: "queue", productId: product.id, expectedRevision: saved.body.revision,
+      storeIds, requestId: crypto.randomUUID(), priceConfirmation: preview.body.confirmation });
+    expect(queued.status).toBe(200);
+    for (let n = 0; n < 100; n++) {
+      const jobs = await request(app).post(url).send({ operation: "jobs" });
+      const job = jobs.body.find((j: { id: string }) => j.id === queued.body[0].id);
+      if (job.state === "succeeded") return;
+      expect(["queued", "preparing", "sending", "readback_pending"]).toContain(job.state);
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    throw new Error("Price job did not reach verified completion");
+  }, 30000);
 });
