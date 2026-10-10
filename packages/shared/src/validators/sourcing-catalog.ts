@@ -11,10 +11,10 @@ export const publicationJobSchema = sourcingCatalogScopeSchema.extend({ id, prod
 export const catalogStageCountsSchema = z.object({ all: z.number().int().nonnegative(), processing: z.number().int().nonnegative(), ready: z.number().int().nonnegative(), queued: z.number().int().nonnegative(), attention: z.number().int().nonnegative(), uploaded: z.number().int().nonnegative() });
 export type CatalogStageCounts = z.infer<typeof catalogStageCountsSchema>;
 export const catalogRequestSchema = z.discriminatedUnion("operation", [
-  sourcingCatalogScopeSchema.extend({ operation: z.literal("stages") }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("stages"), query: z.string().trim().max(200).optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("sources") }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("settings") }).strict(),
-  sourcingCatalogScopeSchema.extend({ operation: z.literal("list"), view: z.enum(["source", "uploads"]), page: z.number().int().min(1).max(100000).optional(), stage: z.enum(["all", "processing", "ready", "queued", "attention", "uploaded"]).optional() }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("list"), view: z.enum(["source", "uploads"]), query: z.string().trim().max(200).optional(), page: z.number().int().min(1).max(100000).optional(), stage: z.enum(["all", "processing", "ready", "queued", "attention", "uploaded"]).optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("get"), productId: id }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("jobs") }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("import-status"), storeId: id }).strict(),
