@@ -27,6 +27,43 @@ describe("agent profile cards and linked editing", () => {
   async function fill(label: string, value: string) { const field = Array.from(document.querySelectorAll("label")).find(l => l.textContent === label)!.querySelector("input")!; await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value); field.dispatchEvent(new Event("input", { bubbles: true })); }); }
   async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); }
   async function radio(label: string) { const field = Array.from(container.querySelectorAll("label")).find(l => l.textContent === label)!.querySelector<HTMLInputElement>('input[type="radio"]')!; await act(async () => field.click()); await settle(); }
+  async function toggle(label: string) { const field = container.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`); expect(field).not.toBeNull(); await act(async () => field!.click()); await settle(); }
+  it("starts Codex options off and retains selected options through draft restoration and save", async () => {
+    await render(); await click("프로필 추가"); await fill("프로필 이름", "실행 옵션 프로필");
+    expect(container.querySelector('[aria-label="Bypass sandbox"]')?.getAttribute("aria-checked")).toBe("false");
+    expect(container.querySelector('[aria-label="Enable search"]')?.getAttribute("aria-checked")).toBe("false");
+    await toggle("Bypass sandbox"); await toggle("Enable search"); await remount();
+    expect(container.querySelector('[aria-label="Bypass sandbox"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector('[aria-label="Enable search"]')?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.create).toHaveBeenCalledWith("company", expect.objectContaining({ config: expect.objectContaining({ dangerouslyBypassApprovalsAndSandbox: true, search: true }) }));
+  });
+  it("shows saved options and includes them in an opt-in linked edit", async () => {
+    mock.get.mockResolvedValue({ ...profile, config: { ...config, dangerouslyBypassApprovalsAndSandbox: false, search: true }, bindings: profile.bindings.map(b => ({ ...b, overrides: ["dangerouslyBypassApprovalsAndSandbox", "search"] })) });
+    await render(); await click(profile.name);
+    expect(container.textContent).toContain("Bypass sandbox: 꺼짐"); expect(container.textContent).toContain("Enable search: 켜짐");
+    expect(container.textContent).toContain("개별 설정 유지: Bypass sandbox, Enable search");
+    await click("수정"); await toggle("Bypass sandbox"); await toggle("Enable search");
+    const apply = Array.from(container.querySelectorAll("label")).find(l => l.textContent?.includes("연결된 에이전트 1개에도 반영"))!.querySelector("input")!;
+    await act(async () => apply.click());
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.update).toHaveBeenCalledWith("company", "profile", expect.objectContaining({ applyToLinked: true, config: expect.objectContaining({ dangerouslyBypassApprovalsAndSandbox: true, search: false }) }));
+  });
+  it("preserves omitted legacy options and hides Codex switches for other adapters", async () => {
+    await render(); await click(profile.name);
+    expect(container.textContent).toContain("Bypass sandbox: 개별 설정 유지");
+    await click("수정");
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.update.mock.calls[0][2].config).not.toHaveProperty("dangerouslyBypassApprovalsAndSandbox");
+    mock.get.mockResolvedValue({ ...profile, config: { ...config, adapterType: "claude_local" } });
+    await act(async () => cache.invalidateQueries({ queryKey: ["agent-profiles", "company", "profile"] })); await settle();
+    await click("수정");
+    expect(container.querySelector('[aria-label="Bypass sandbox"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Enable search"]')).toBeNull();
+  });
   it("shows short-role cards and selects full instructions/linked versions in the right panel", async () => { await render(); expect(container.textContent).toContain(profile.description); expect(container.textContent).not.toContain(config.instructions); await click(profile.name); const panel = container.querySelector('aside[aria-label="프로필 상세"]')!; expect(panel.textContent).toContain(config.instructions); expect(panel.textContent).toContain("가공 담당 · 적용 버전 1 · 버전 2 반영 대기"); });
   it("saves edits against a version and propagates only when the user selects the checkbox", async () => { await render(); await click(profile.name); await click("수정"); await fill("핵심 역할 설명", "새 역할 설명"); const checkbox = Array.from(container.querySelectorAll("label")).find(l => l.textContent?.includes("연결된 에이전트 1개에도 반영"))!.querySelector("input")!; await act(async () => checkbox.click()); await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); await settle(); expect(mock.update).toHaveBeenCalledWith("company", "profile", expect.objectContaining({ expectedVersion: 2, applyToLinked: true, description: "새 역할 설명" })); });
   it("passes only profile identity and agent identity choices to the existing creation flow", async () => { await render(); await click(profile.name); await click("이 프로필로 에이전트 만들기"); await fill("에이전트 이름", "New processing agent"); await act(async () => document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); const url = mock.navigate.mock.calls[0][0] as string; expect(url).toContain("profileId=profile"); expect(url).toContain("profileVersion=2"); expect(url).not.toContain("instructions"); });

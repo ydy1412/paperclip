@@ -8,13 +8,18 @@ import { agentInstructionRevisionService } from "./agent-instruction-revisions.j
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { withAgentStartLock } from "./agent-start-lock.js";
 import { findActiveServerAdapter, listAdapterModels } from "../adapters/registry.js";
-import { agentProfileConfigSchema, agentProfileEffortKey } from "@paperclipai/shared";
+import { agentProfileConfigSchema, agentProfileEffortKey, agentProfileSupportsCodexOptions } from "@paperclipai/shared";
+import { DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX } from "@paperclipai/adapter-codex-local";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 function readEffort(config: Record<string, unknown>, key: string | null): string {
   const value = key === "modelReasoningEffort" ? config.modelReasoningEffort ?? config.reasoningEffort ?? config.effort : key ? config[key] : undefined;
   return typeof value === "string" ? value : "";
+}
+function readCodexOption(config: Record<string, unknown>, key: "dangerouslyBypassApprovalsAndSandbox" | "search"): boolean | undefined {
+  const value = key === "search" ? config.search : config.dangerouslyBypassApprovalsAndSandbox ?? config.dangerouslyBypassSandbox;
+  return typeof value === "boolean" ? value : undefined;
 }
 function audit(tx: Tx, companyId: string, userId: string, action: string, id: string, details: Record<string, unknown> = {}) {
   return tx.insert(activityLog).values({ companyId, actorType: "user", actorId: userId, responsibleUserId: userId, action, entityType: "agent_profile", entityId: id, details });
@@ -30,6 +35,7 @@ export function agentProfileService(db: Db) {
   async function validateConfig(source: Db | Tx, companyId: string, config: AgentProfileConfig) {
     config = agentProfileConfigSchema.parse(config);
     if (!findActiveServerAdapter(config.adapterType)?.supportsInstructionsBundle) throw badRequest("작업 지침을 지원하는 실행 방식을 선택해 주세요.");
+    if (!agentProfileSupportsCodexOptions(config) && (config.dangerouslyBypassApprovalsAndSandbox !== undefined || config.search !== undefined)) throw badRequest("샌드박스와 검색 옵션은 Codex 로컬 프로필에서 설정해 주세요.");
     const effortKey = agentProfileEffortKey(config);
     if (config.thinkingEffort && !effortKey) throw badRequest("이 실행 방식은 프로필 에포트 설정을 지원하지 않습니다.");
     if (config.thinkingEffort && effortKey === "modelReasoningEffort") {
@@ -121,6 +127,18 @@ export function agentProfileService(db: Db) {
           if (same(agent[key] ?? "", old[key])) patch[key] = next[key]; else overrides.push(key);
         }
         let config = { ...agent.adapterConfig };
+        if (agentProfileSupportsCodexOptions(next)) {
+          for (const key of ["dangerouslyBypassApprovalsAndSandbox", "search"] as const) {
+            if (next[key] === undefined) continue;
+            // ACP has its own execution contract. Never switch an existing engine.
+            if (agent.adapterConfig.engine !== "cli") { overrides.push(key); continue; }
+            const current = readCodexOption(config, key) ?? (key === "search" ? false : DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX);
+            if (current === (old[key] ?? false)) {
+              config[key] = next[key];
+              if (key === "dangerouslyBypassApprovalsAndSandbox") delete config.dangerouslyBypassSandbox;
+            } else overrides.push(key);
+          }
+        }
         if (same(config.model ?? "", old.model)) {
           if (next.model) config.model = next.model; else delete config.model;
         } else overrides.push("model");
@@ -142,6 +160,8 @@ export function agentProfileService(db: Db) {
         // The instruction commit may initialize managed bundle metadata. Preserve it.
         const [fresh] = await tx.select().from(agents).where(eq(agents.id, agentId));
         patch.adapterConfig = { ...fresh.adapterConfig, ...config };
+        // Do not reintroduce an obsolete bypass alias from the fresh row.
+        if (agentProfileSupportsCodexOptions(next) && next.dangerouslyBypassApprovalsAndSandbox !== undefined && !overrides.includes("dangerouslyBypassApprovalsAndSandbox")) delete patch.adapterConfig.dangerouslyBypassSandbox;
         if (same(agent.adapterConfig.model ?? "", old.model) && !next.model) delete patch.adapterConfig.model;
         if (applyEffort) {
           if (!next.thinkingEffort) delete patch.adapterConfig[effortKey];
@@ -172,6 +192,10 @@ export function agentProfileService(db: Db) {
       const config = agentProfileConfigSchema.parse({ capabilities: agent.capabilities ?? "", adapterType: agent.adapterType,
         runnerProvider: agent.adapterConfig.provider === "acpx" ? agent.adapterConfig.acpxAgent ?? "claude" : agent.adapterConfig.provider ?? "codex", model: typeof agent.adapterConfig.model === "string" ? agent.adapterConfig.model : "", skills: readPaperclipSkillSyncPreference(agent.adapterConfig).desiredSkills, instructions: head?.content ?? "" });
       config.thinkingEffort = readEffort(agent.adapterConfig, agentProfileEffortKey(config));
+      if (agentProfileSupportsCodexOptions(config) && agent.adapterConfig.engine === "cli") {
+        config.dangerouslyBypassApprovalsAndSandbox = readCodexOption(agent.adapterConfig, "dangerouslyBypassApprovalsAndSandbox");
+        config.search = readCodexOption(agent.adapterConfig, "search");
+      }
       const profile = await create(companyId, { name: `${agent.name} 프로필`, description: agent.title ?? agent.capabilities?.slice(0, 300) ?? "", config }, actor.userId);
       await bind(companyId, profile.id, profile.version, agent.id, actor.userId);
       return get(companyId, profile.id);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { agentProfileService } from "../services/agent-profiles.js";
-import { agentProfileEffortKey } from "@paperclipai/shared";
+import { agentProfileEffortKey, agentProfileSupportsCodexOptions } from "@paperclipai/shared";
 import { connectionIntentService } from "../services/connection-intents.js";
 import { completeConnectionIntentSchema } from "@paperclipai/shared";
 import { agentFileStore, agentFileTokenFromHash } from "../services/agent-file-store.js";
@@ -4488,9 +4488,18 @@ export function agentRoutes(
     const { profileId: _profileId, profileVersion: _profileVersion, ...input } = req.body;
     const runnerConfig = profile.config.adapterType === "paperclip_runner" ?
       (profile.config.runnerProvider === "claude" || profile.config.runnerProvider === "grok" ? { provider: "acpx", acpxAgent: profile.config.runnerProvider } : { provider: profile.config.runnerProvider }) : {};
+    const codexOptions = agentProfileSupportsCodexOptions(profile.config) ? {
+      ...(profile.config.dangerouslyBypassApprovalsAndSandbox !== undefined || profile.config.search !== undefined ? { engine: "cli" } : {}),
+      ...(profile.config.dangerouslyBypassApprovalsAndSandbox !== undefined ? { dangerouslyBypassApprovalsAndSandbox: profile.config.dangerouslyBypassApprovalsAndSandbox } : {}),
+      ...(profile.config.search !== undefined ? { search: profile.config.search } : {}),
+    } : {};
+    if (codexOptions.engine && input.adapterConfig?.engine && input.adapterConfig.engine !== "cli") throw badRequest("이 프로필의 샌드박스와 검색 옵션은 Codex CLI에서 적용됩니다. CLI 실행 방식을 선택해 주세요.");
+    if (agentProfileSupportsCodexOptions(profile.config) && input.adapterConfig?.dangerouslyBypassApprovalsAndSandbox === undefined && typeof input.adapterConfig?.dangerouslyBypassSandbox === "boolean") {
+      codexOptions.dangerouslyBypassApprovalsAndSandbox = input.adapterConfig.dangerouslyBypassSandbox;
+    }
     req.body = { ...input, role: "general", title: null, capabilities: profile.config.capabilities,
       desiredSkills: profile.config.skills, instructionsBundle: { files: { "AGENTS.md": profile.config.instructions } },
-      adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...(profile.config.thinkingEffort && agentProfileEffortKey(profile.config) ? { [agentProfileEffortKey(profile.config)!]: profile.config.thinkingEffort } : {}), ...input.adapterConfig, ...runnerConfig } };
+      adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...(profile.config.thinkingEffort && agentProfileEffortKey(profile.config) ? { [agentProfileEffortKey(profile.config)!]: profile.config.thinkingEffort } : {}), ...codexOptions, ...input.adapterConfig, ...runnerConfig } };
     res.locals.agentProfileSelection = selection;
     next();
   }, validate(createAgentHireSchema), async (req, res) => {

@@ -60,6 +60,66 @@ No extra product repair is needed for those reproduced environment/version
 issues. Proceed with the feature PR and the authorized dev rollout; keep the
 initial full-run limitations visible in the PR. Master remains unchanged.
 
+## Profile Codex execution options — 2026-10-11
+
+- The profile editor and detail show `Bypass sandbox` and `Enable search` for
+  `codex_local`, matching the existing adapter's
+  `dangerouslyBypassApprovalsAndSandbox` and `search` keys. The editor explains
+  that bypass disables both execution approval and sandbox restrictions.
+- New editor drafts start with both options off. Older snapshots and API clients
+  may omit either option; omission leaves the agent's existing setting in place.
+  Other adapters do not expose or accept these Codex-specific profile options.
+- Profile setup must use the saved options in both the connection test and hire
+  payload, rather than the setup screen's independent Codex defaults. Explicit
+  per-agent hire settings retain precedence over profile defaults.
+- Profiles with explicit CLI options create new Codex agents with `engine=cli`;
+  conflicting explicit engines are rejected before hiring. Existing ACP agents
+  keep their execution contract and report these fields as individual overrides.
+  Imports capture CLI options only from CLI agents.
+- Importing an agent captures its explicit options, including the legacy bypass
+  alias. Opt-in linked changes use the existing idle/start lock and versioned
+  three-way comparison; they preserve individual overrides and other settings.
+  Restoring a version with explicit options applies them through the same path.
+- Verify draft restoration, saved detail, setup test/hire values, real-DB
+  round-trip, linked deferral, overrides, import/restore and legacy omission.
+  No existing profile or agent option is enabled by this feature deployment.
+
+### Execution-option verification and release scope
+
+- Canonical profile/editor/setup checks passed: 16 real-PostgreSQL tests and 65
+  UI tests. They cover explicit true/false hire arguments, CLI selection,
+  conflicting engines, linked deferral, individual overrides, import/restore,
+  omitted legacy fields, unsupported adapters and draft restoration.
+- Workspace typecheck and build passed. Final UI typecheck, build and token
+  gates cover the later display-label correction. The full UI and CLI groups
+  passed 7,567 and 502 tests respectively.
+- The full-repository test attempt is not green. The installed Claude CLI is
+  2.1.81 while the existing MCP-isolation test requires at least 2.1.207. Two
+  unrelated adapter timeouts passed a narrower rerun (218 tests). The sourcing
+  catalog suite passed three tests using the integrated AutoSourcing dev root
+  instead of the older default checkout. Cold route initialization exceeded its
+  hook budget initially; the failed hooks passed a rerun. Remaining broad server
+  and route tests were stopped after the user explicitly chose feature-scoped
+  verification as the basis for PR/dev/service integration. Do not describe
+  these partial broad runs as a complete successful suite.
+- The isolated installed-runtime candidate passed profile save/hire/linked
+  updates and the compatible editor/setup checks (16 editor tests, six profile
+  setup tests). Preserve the older runtime's unrelated setup behavior: apply
+  only this feature's NewAgentSetup patch, not the whole newer source component.
+- Aside account `u1` verified the preview's two switches and restoration of both
+  draft values after reload. The owned draft was cleared and original tabs were
+  preserved. This is preview proof; operating rollout/live proof must be recorded
+  separately after integration.
+- Local diff review covered JSON validation, adapter boundaries, flag precedence,
+  version/start locks and UI setup propagation. No unresolved feature defect was
+  found. No existing team profile, agent option or harness task was changed by
+  this feature's verification.
+
+Evidence is in `tmp/profile-options-*.log` and
+`tmp/profile-options-operating/`. Deployment must link the merged dev SHA,
+selected package hashes and compatible UI to its backup/receipt; master remains
+outside this release scope.
+
 ## Technical plan
 
 - Extend the established DB/shared/server/UI layers with company-scoped `agent_profiles`, immutable `agent_profile_versions`, `agent_profile_bindings`, typed strict schemas, a focused service/router and one page.
