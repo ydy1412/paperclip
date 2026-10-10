@@ -4487,7 +4487,7 @@ export function agentRoutes(
     const { profileId: _profileId, profileVersion: _profileVersion, ...input } = req.body;
     const runnerConfig = profile.config.adapterType === "paperclip_runner" ?
       (profile.config.runnerProvider === "claude" || profile.config.runnerProvider === "grok" ? { provider: "acpx", acpxAgent: profile.config.runnerProvider } : { provider: profile.config.runnerProvider }) : {};
-    req.body = { ...input, role: profile.config.role, title: profile.config.title, capabilities: profile.config.capabilities,
+    req.body = { ...input, role: "general", title: null, capabilities: profile.config.capabilities,
       desiredSkills: profile.config.skills, instructionsBundle: { files: { "AGENTS.md": profile.config.instructions } },
       adapterConfig: { ...(profile.config.model ? { model: profile.config.model } : {}), ...input.adapterConfig, ...runnerConfig } };
     res.locals.agentProfileSelection = selection;

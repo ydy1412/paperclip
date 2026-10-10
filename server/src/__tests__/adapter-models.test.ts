@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { models as claudeFallbackModels } from "@paperclipai/adapter-claude-local";
 import { resetClaudeModelsCacheForTests } from "@paperclipai/adapter-claude-local/server";
-import { models as codexFallbackModels } from "@paperclipai/adapter-codex-local";
 import { models as cursorFallbackModels } from "@paperclipai/adapter-cursor-local";
 import { models as opencodeFallbackModels } from "@paperclipai/adapter-opencode-local";
 import { resetOpenCodeModelsCacheForTests } from "@paperclipai/adapter-opencode-local/server";
 import { listAdapterModels, listServerAdapters, refreshAdapterModels, registerServerAdapter, unregisterServerAdapter } from "../adapters/index.js";
-import { resetCodexModelsCacheForTests } from "../adapters/codex-models.js";
 import { resetCursorModelsCacheForTests, setCursorModelsRunnerForTests } from "../adapters/cursor-models.js";
 
 vi.mock("acpx/runtime", () => ({
@@ -16,8 +17,20 @@ vi.mock("acpx/runtime", () => ({
   isAcpRuntimeError: vi.fn(() => false),
 }));
 
+const codexCatalog = [{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol" }, { id: "gpt-6-sol", label: "GPT-6-Sol" }];
+let codexHome: string;
+async function writeCodexCatalog(models = codexCatalog) {
+  await writeFile(path.join(codexHome, "models_cache.json"), JSON.stringify({ models: [
+    ...models.map(model => ({ slug: model.id, display_name: model.label, visibility: "list" })),
+    { slug: "hidden-model", visibility: "hide" }, { slug: models[0]?.id }, { unexpected: true },
+  ] }));
+}
+
 describe("adapter model listing", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    codexHome = await mkdtemp(path.join(os.tmpdir(), "codex-model-catalog-"));
+    vi.stubEnv("CODEX_HOME", codexHome);
+    await writeCodexCatalog();
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_BASE_URL;
@@ -25,7 +38,6 @@ describe("adapter model listing", () => {
     delete process.env.CLAUDE_CODE_USE_BEDROCK;
     delete process.env.PAPERCLIP_OPENCODE_COMMAND;
     resetClaudeModelsCacheForTests();
-    resetCodexModelsCacheForTests();
     resetCursorModelsCacheForTests();
     setCursorModelsRunnerForTests(null);
     resetOpenCodeModelsCacheForTests();
@@ -43,17 +55,11 @@ describe("adapter model listing", () => {
     expect(adapter?.models).toEqual([]);
   });
 
-  it("returns codex fallback models when no OpenAI key is available", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const models = await listAdapterModels("codex_local");
+  afterEach(async () => { vi.unstubAllEnvs(); await rm(codexHome, { recursive: true, force: true }); });
 
-    expect(models).toEqual(codexFallbackModels);
-    // The bare gpt-5.6 alias is intentionally not advertised (Codex has no metadata for it).
-    expect(models.some((model) => model.id === "gpt-5.6")).toBe(false);
-    expect(models.some((model) => model.id === "gpt-5.6-sol")).toBe(true);
-    expect(models.some((model) => model.id === "gpt-5.6-terra")).toBe(true);
-    expect(models.some((model) => model.id === "gpt-5.6-luna")).toBe(true);
-    expect(models.some((model) => model.id === "gpt-5.3-codex-spark")).toBe(false);
+  it("reads the installed Codex catalog in CLI order without requiring an OpenAI key", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    expect(await listAdapterModels("codex_local")).toEqual(codexCatalog);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -216,23 +222,26 @@ describe("adapter model listing", () => {
     const second = await listAdapterModels("codex_local");
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(first).toEqual(codexFallbackModels);
-    expect(second).toEqual(codexFallbackModels);
+    expect(first).toEqual(codexCatalog);
+    expect(second).toEqual(codexCatalog);
   });
 
-  it("keeps the curated Codex list when refreshing with an OpenAI key", async () => {
+  it("rereads new CLI models on refresh without changing source or calling the general OpenAI API", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const initial = await listAdapterModels("codex_local");
+    const updated = [{ id: "future-codex-model", label: "New CLI model" }, ...codexCatalog];
+    await writeCodexCatalog(updated);
     const refreshed = await refreshAdapterModels("codex_local");
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(initial).toEqual(codexFallbackModels);
-    expect(refreshed).toEqual(codexFallbackModels);
+    expect(initial).toEqual(codexCatalog);
+    expect(refreshed).toEqual(updated);
+    expect(await listAdapterModels("codex_local")).toEqual(updated);
   });
 
-  it("uses static Codex models without calling OpenAI model discovery", async () => {
+  it("returns no fixed Codex model list when the CLI catalog is unavailable", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
@@ -240,9 +249,15 @@ describe("adapter model listing", () => {
       json: async () => ({}),
     } as Response);
 
+    await rm(path.join(codexHome, "models_cache.json"));
     const models = await listAdapterModels("codex_local");
-    expect(models).toEqual(codexFallbackModels);
+    expect(models).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a malformed CLI catalog without falling back to a fixed list", async () => {
+    await writeFile(path.join(codexHome, "models_cache.json"), "{invalid");
+    await expect(listAdapterModels("codex_local")).rejects.toThrow("Codex 모델 목록 형식");
   });
 
   it("uses a custom Codex adapter's model and refresh hooks", async () => {
@@ -379,7 +394,7 @@ describe("adapter model listing", () => {
         opencode_local: [{ id: "model-a" }],
       });
       const models = await listAdapterModels("codex_local");
-      expect(models).toEqual(codexFallbackModels);
+      expect(models).toEqual(codexCatalog);
     });
   });
 });

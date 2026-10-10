@@ -24,6 +24,7 @@ export function agentProfileService(db: Db) {
     return row;
   }
   async function validateConfig(source: Db | Tx, companyId: string, config: AgentProfileConfig) {
+    config = agentProfileConfigSchema.parse(config);
     if (!findActiveServerAdapter(config.adapterType)?.supportsInstructionsBundle) throw badRequest("작업 지침을 지원하는 실행 방식을 선택해 주세요.");
     const keys = [...new Set(config.skills)];
     if (keys.length) {
@@ -40,7 +41,7 @@ export function agentProfileService(db: Db) {
         .from(agentProfileBindings).innerJoin(agents, and(eq(agents.id, agentProfileBindings.agentId), eq(agents.companyId, companyId)))
         .where(and(eq(agentProfileBindings.companyId, companyId), eq(agentProfileBindings.profileId, id))).orderBy(asc(agents.name)),
     ]);
-    return { ...profile, linkedCount: bindings.length, bindings, versions: versions.map(v => ({ version: v.version, name: v.name, description: v.description, config: v.config, createdAt: v.createdAt.toISOString() })) };
+    return { ...profile, config: agentProfileConfigSchema.parse(profile.config), linkedCount: bindings.length, bindings, versions: versions.map(v => ({ version: v.version, name: v.name, description: v.description, config: agentProfileConfigSchema.parse(v.config), createdAt: v.createdAt.toISOString() })) };
   }
   async function create(companyId: string, input: CreateAgentProfile, userId: string) {
     const id = await db.transaction(async tx => {
@@ -77,7 +78,7 @@ export function agentProfileService(db: Db) {
       if (existing) throw conflict("이 에이전트는 이미 다른 프로필에 연결되어 있습니다.");
       if (!snapshot || !agent) throw notFound("프로필 또는 에이전트를 찾을 수 없습니다.");
       if (agent.adapterType !== snapshot.config.adapterType) throw conflict("프로필과 에이전트의 실행 방식이 다릅니다.");
-      await tx.insert(agentProfileBindings).values({ companyId, profileId: profile.id, agentId, appliedVersion: version, baseline: snapshot.config, requestedByUserId: userId });
+      await tx.insert(agentProfileBindings).values({ companyId, profileId: profile.id, agentId, appliedVersion: version, baseline: agentProfileConfigSchema.parse(snapshot.config), requestedByUserId: userId });
       await audit(tx, companyId, userId, "agent.profile_linked", profileId, { agentId, version });
     });
   }
@@ -104,9 +105,9 @@ export function agentProfileService(db: Db) {
         if (next.adapterType !== agent.adapterType) throw conflict("실행 방식이 달라 적용하지 않았습니다. 에이전트의 연결 설정을 확인해 주세요.");
         const runtimeProvider = agent.adapterConfig.provider === "acpx" ? agent.adapterConfig.acpxAgent ?? "claude" : agent.adapterConfig.provider ?? "codex";
         if (agent.adapterType === "paperclip_runner" && runtimeProvider !== next.runnerProvider) throw conflict("프로필의 실행 제공자가 다릅니다. 연결 설정을 확인해 주세요.");
-        const old = binding.baseline, overrides: string[] = [];
+        const old = agentProfileConfigSchema.parse(binding.baseline), overrides: string[] = [];
         const patch: Partial<typeof agents.$inferInsert> = {};
-        for (const key of ["role", "title", "capabilities"] as const) {
+        for (const key of ["capabilities"] as const) {
           if (same(agent[key] ?? "", old[key])) patch[key] = next[key]; else overrides.push(key);
         }
         let config = { ...agent.adapterConfig };
@@ -146,14 +147,15 @@ export function agentProfileService(db: Db) {
       const decision = await authorizationService(db).decide({ actor, action: "agent_config:read", resource: { type: "agent", companyId, agentId } });
       if (!decision.allowed || !actor.userId) throw forbidden("에이전트 설정 조회 권한을 확인해 주세요.");
       const head = await agentInstructionRevisionService(db).readCurrent({ companyId, agentId }, actor);
-      const config = agentProfileConfigSchema.parse({ role: agent.role, title: agent.title ?? "", capabilities: agent.capabilities ?? "", adapterType: agent.adapterType,
+      const config = agentProfileConfigSchema.parse({ capabilities: agent.capabilities ?? "", adapterType: agent.adapterType,
         runnerProvider: agent.adapterConfig.provider === "acpx" ? agent.adapterConfig.acpxAgent ?? "claude" : agent.adapterConfig.provider ?? "codex", model: typeof agent.adapterConfig.model === "string" ? agent.adapterConfig.model : "", skills: readPaperclipSkillSyncPreference(agent.adapterConfig).desiredSkills, instructions: head?.content ?? "" });
       const profile = await create(companyId, { name: `${agent.name} 프로필`, description: agent.title ?? agent.capabilities?.slice(0, 300) ?? "", config }, actor.userId);
       await bind(companyId, profile.id, profile.version, agent.id, actor.userId);
       return get(companyId, profile.id);
     },
-    list: async (companyId: string) => db.select({ id: agentProfiles.id, companyId: agentProfiles.companyId, name: agentProfiles.name, description: agentProfiles.description, version: agentProfiles.version, config: agentProfiles.config,
-      linkedCount: sql<number>`(select count(*)::int from agent_profile_bindings b where b.profile_id = ${agentProfiles.id} and b.company_id = ${agentProfiles.companyId})` }).from(agentProfiles).where(eq(agentProfiles.companyId, companyId)).orderBy(asc(agentProfiles.name)),
+    list: async (companyId: string) => (await db.select({ id: agentProfiles.id, companyId: agentProfiles.companyId, name: agentProfiles.name, description: agentProfiles.description, version: agentProfiles.version, config: agentProfiles.config,
+      linkedCount: sql<number>`(select count(*)::int from agent_profile_bindings b where b.profile_id = ${agentProfiles.id} and b.company_id = ${agentProfiles.companyId})` }).from(agentProfiles).where(eq(agentProfiles.companyId, companyId)).orderBy(asc(agentProfiles.name)))
+      .map(row => ({ ...row, config: agentProfileConfigSchema.parse(row.config) })),
     restore: async (companyId: string, id: string, input: { version: number; expectedVersion: number; applyToLinked: boolean }, userId: string) => {
       const [v] = await db.select().from(agentProfileVersions).where(and(eq(agentProfileVersions.companyId, companyId), eq(agentProfileVersions.profileId, id), eq(agentProfileVersions.version, input.version)));
       if (!v) throw notFound("복원할 버전을 찾을 수 없습니다.");
