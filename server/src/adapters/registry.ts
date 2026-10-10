@@ -1057,7 +1057,7 @@ function declaredModelsForAdapter(type: string): { id: string; label: string }[]
     : null;
 }
 
-export async function listAdapterModels(type: string): Promise<{ id: string; label: string }[]> {
+export async function listAdapterModels(type: string): Promise<{ id: string; label: string; reasoningEfforts?: string[] }[]> {
   const declaredModels = declaredModelsForAdapter(type);
   if (declaredModels) return declaredModels;
   const adapter = findActiveServerAdapter(type);
@@ -1072,7 +1072,7 @@ export async function listAdapterModels(type: string): Promise<{ id: string; lab
   return adapter.models ?? [];
 }
 
-export async function refreshAdapterModels(type: string): Promise<{ id: string; label: string }[]> {
+export async function refreshAdapterModels(type: string): Promise<{ id: string; label: string; reasoningEfforts?: string[] }[]> {
   const declaredModels = declaredModelsForAdapter(type);
   if (declaredModels) return declaredModels;
   if (findActiveServerAdapter(type) === codexLocalAdapter) return refreshCodexModels();

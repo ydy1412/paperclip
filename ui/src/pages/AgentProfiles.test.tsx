@@ -12,13 +12,13 @@ vi.mock("@/lib/router", () => ({ useNavigate: () => mock.navigate }));
 vi.mock("../api/adapters", () => ({ adaptersApi: { list: async () => [{ type: "codex_local", label: "Codex", loaded: true, disabled: false, capabilities: { supportsInstructionsBundle: true } }] } }));
 vi.mock("../api/agents", () => ({ agentsApi: { list: async () => [{ id: "existing-agent", name: "Existing", status: "idle" }], adapterModels: mock.models } }));
 vi.mock("../api/companySkills", () => ({ companySkillsApi: { list: async () => [{ id: "skill", key: "sourcing", name: "상품 가공" }] } }));
-const config = { capabilities: "옵션 검토", instructions: "# 상품 검토 지침", adapterType: "codex_local", runnerProvider: "codex", model: "gpt-6.1-sol", skills: ["sourcing"] };
+const config = { capabilities: "옵션 검토", instructions: "# 상품 검토 지침", adapterType: "codex_local", runnerProvider: "codex", model: "gpt-6.1-sol", thinkingEffort: "", skills: ["sourcing"] };
 const profile = { id: "profile", companyId: "company", name: "상품 가공 프로필", description: "옵션과 이미지를 검토합니다.", config, version: 2, linkedCount: 1,
   versions: [{ name: "Original", description: "", config, version: 1, createdAt: "2026-10-10" }, { name: "Current", description: "", config, version: 2, createdAt: "2026-10-10" }],
   bindings: [{ agentId: "agent", name: "가공 담당", status: "running", appliedVersion: 1, pendingVersion: 2, overrides: [], error: null }] };
 describe("agent profile cards and linked editing", () => {
   let root: Root, cache: QueryClient, container: HTMLDivElement;
-  beforeEach(() => { window.localStorage.clear(); vi.clearAllMocks(); mock.companyId = "company"; mock.models.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol" }, { id: "gpt-6-sol", label: "GPT-6-Sol" }]); mock.list.mockResolvedValue([profile]); mock.get.mockResolvedValue(profile); mock.create.mockResolvedValue({ ...profile, id: "copy" }); mock.update.mockResolvedValue({ ...profile, version: 3 }); mock.restore.mockResolvedValue({ ...profile, version: 3 });
+  beforeEach(() => { window.localStorage.clear(); vi.clearAllMocks(); mock.companyId = "company"; mock.models.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol", reasoningEfforts: ["low", "high", "ultra"] }, { id: "gpt-6-sol", label: "GPT-6-Sol", reasoningEfforts: ["low", "high"] }]); mock.list.mockResolvedValue([profile]); mock.get.mockResolvedValue(profile); mock.create.mockResolvedValue({ ...profile, id: "copy" }); mock.update.mockResolvedValue({ ...profile, version: 3 }); mock.restore.mockResolvedValue({ ...profile, version: 3 });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container); cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); });
   afterEach(() => { act(() => root.unmount()); cache.clear(); container.remove(); });
   async function settle() { for (let i = 0; i < 3; i++) await act(async () => { await new Promise(r => setTimeout(r, 10)); }); }
@@ -99,5 +99,20 @@ describe("agent profile cards and linked editing", () => {
     vi.spyOn(window.localStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
     try { await render(); await click("프로필 추가"); await click("임시 저장"); expect(container.textContent).toContain("임시 저장을 할 수 없습니다"); }
     finally { vi.restoreAllMocks(); }
+  });
+  it("saves the discovered effort and restores it with the unfinished profile", async () => {
+    await render(); await click("프로필 추가"); await fill("프로필 이름", "추론 프로필"); await radio("GPT-6.1-Sol"); await radio("ultra");
+    await remount();
+    expect(container.querySelector<HTMLInputElement>('input[name="profile-effort"][value="ultra"]')?.checked).toBe(true);
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.create).toHaveBeenCalledWith("company", expect.objectContaining({ config: expect.objectContaining({ thinkingEffort: "ultra" }) }));
+  });
+  it("clears an incompatible effort only when selecting another model", async () => {
+    await render(); await click("프로필 추가"); await radio("GPT-6.1-Sol"); await radio("ultra"); await radio("GPT-6-Sol");
+    expect(container.querySelector('input[name="profile-effort"][value="ultra"]')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('input[name="profile-effort"][value=""]')?.checked).toBe(true);
+    await radio("high"); mock.models.mockRejectedValue(new Error("unavailable")); await click("모델 새로고침"); await remount();
+    expect(container.querySelector<HTMLInputElement>('input[name="profile-effort"][value="high"]')?.checked).toBe(true);
   });
 });

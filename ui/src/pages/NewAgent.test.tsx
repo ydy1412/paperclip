@@ -46,6 +46,7 @@ const managedApi = vi.hoisted(() => ({
 }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: managedApi }));
 vi.mock("@/api/agents", () => ({ agentsApi: api }));
+vi.mock("@/api/agentProfiles", () => ({ agentProfilesApi: { get: async () => ({ id: "effort-profile", version: 1, config: { model: "gpt-6.1-sol", thinkingEffort: "ultra" } }) } }));
 vi.mock("@/api/environments", () => ({ environmentsApi: envApi }));
 vi.mock("@/api/instanceSettings", () => ({ instanceSettingsApi: settings }));
 vi.mock("@/api/secrets", () => ({ secretsApi: secrets }));
@@ -128,11 +129,12 @@ async function fill(label: string, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
-async function render(adapter = "pi_local", runnerProvider = "codex") {
+async function render(adapter = "pi_local", runnerProvider = "codex", profile = false) {
   state.params = new URLSearchParams({
     name: "Atlas",
     adapterType: adapter,
     runnerProvider,
+    ...(profile ? { profileId: "effort-profile", profileVersion: "1" } : {}),
   });
   await act(async () =>
     root.render(
@@ -593,6 +595,24 @@ describe("New agent setup", () => {
     await click("Retry test");
     await click("Finish setup");
     expect(api.hire).toHaveBeenCalledTimes(1);
+  });
+  it.each(["codex_local", "paperclip_runner"])("uses the profile effort for %s connection testing and agent creation", async (adapter) => {
+    api.adapterModels.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol", reasoningEfforts: ["low", "ultra"] }]);
+    await render(adapter, "codex", true); await settle(); await connect("OpenAI");
+    expect(api.testEnvironment).toHaveBeenCalledWith("company-1", adapter, expect.objectContaining({ adapterConfig: expect.objectContaining({ model: "gpt-6.1-sol", modelReasoningEffort: "ultra" }) }));
+    await click("Finish setup");
+    expect(api.hire.mock.calls[0][1]).toMatchObject({ profileId: "effort-profile", profileVersion: 1, adapterConfig: { model: "gpt-6.1-sol", modelReasoningEffort: "ultra" } });
+  });
+  it.each(["codex_local", "paperclip_runner"])("allows the profile effort to be reset to automatic for %s", async (adapter) => {
+    api.adapterModels.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol", reasoningEfforts: ["low", "ultra"] }]);
+    await render(adapter, "codex", true); await settle(); await connect("OpenAI");
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Thinking effort"]')!;
+    expect(select).toBeTruthy();
+    await act(async () => { select.value = ""; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await click("Run test");
+    expect(api.testEnvironment).toHaveBeenLastCalledWith("company-1", adapter, expect.objectContaining({ adapterConfig: expect.objectContaining({ modelReasoningEffort: "" }) }));
+    await click("Finish setup");
+    expect(api.hire.mock.calls[0][1].adapterConfig.modelReasoningEffort).toBe("");
   });
   it("does not rotate a working provider credential when a new key fails its test", async () => {
     secrets.listMyUserSecrets.mockResolvedValue([{ definition: { id: "existing-definition", key: "OPENROUTER_API_KEY" }, secret: { id: "working-secret" } }]);

@@ -260,6 +260,13 @@ describe("adapter model listing", () => {
     await expect(listAdapterModels("codex_local")).rejects.toThrow("Codex 모델 목록 형식");
   });
 
+  it("reads and refreshes supported reasoning levels from the CLI catalog", async () => {
+    await writeFile(path.join(codexHome, "models_cache.json"), JSON.stringify({ models: [{ slug: "future-model", supported_reasoning_levels: [{ effort: "low" }, { effort: "ultra" }, { effort: "low" }, { effort: "bad value" }, null] }] }));
+    expect(await listAdapterModels("codex_local")).toEqual([{ id: "future-model", label: "future-model", reasoningEfforts: ["low", "ultra"] }]);
+    await writeFile(path.join(codexHome, "models_cache.json"), JSON.stringify({ models: [{ slug: "future-model", supported_reasoning_levels: [] }] }));
+    expect(await refreshAdapterModels("codex_local")).toEqual([{ id: "future-model", label: "future-model", reasoningEfforts: [] }]);
+  });
+
   it("uses a custom Codex adapter's model and refresh hooks", async () => {
     const builtin = listServerAdapters().find((adapter) => adapter.type === "codex_local")!;
     const customModels = [{ id: "plugin-codex", label: "Plugin Codex" }];

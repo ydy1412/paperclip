@@ -22,7 +22,7 @@ import type {
   Agent,
   EnvBinding,
 } from "@paperclipai/shared";
-import { ADAPTER_AUTH_MISSING_CHECK_CODE } from "@paperclipai/shared";
+import { ADAPTER_AUTH_MISSING_CHECK_CODE, agentProfileEffortKey } from "@paperclipai/shared";
 import { useNavigate, useSearchParams } from "@/lib/router";
 import { agentsApi } from "@/api/agents";
 import { adaptersApi } from "@/api/adapters";
@@ -96,6 +96,7 @@ export function NewAgentSetup() {
       profileId={profileId}
       profileVersion={Number(params.get("profileVersion")) || profile.data?.version}
       profileModel={profile.data?.config.model}
+      profileEffort={profile.data?.config.thinkingEffort}
       reportsTo={params.has("reportsTo") ? params.get("reportsTo") : undefined}
     />
   );
@@ -107,14 +108,14 @@ function Setup({
   adapterType,
   runnerProvider,
   createdAgentId,
-  profileId, profileVersion, profileModel, reportsTo,
+  profileId, profileVersion, profileModel, profileEffort, reportsTo,
 }: {
   companyId: string;
   name: string;
   adapterType: string;
   runnerProvider: string;
   createdAgentId: string | null;
-  profileId?: string | null; profileVersion?: number; profileModel?: string; reportsTo?: string | null;
+  profileId?: string | null; profileVersion?: number; profileModel?: string; profileEffort?: string; reportsTo?: string | null;
 }) {
   const navigate = useNavigate();
   const cache = useQueryClient();
@@ -149,8 +150,7 @@ function Setup({
     createdAgentId ? "saved" : connectionAdapter ? "connect" : "runtime",
   );
   const [model, setModel] = useState(profileModel ?? "");
-  const efforts = isRunner ? [] : setupEfforts(adapterType, model);
-  const [effort, setEffort] = useState("");
+  const [effort, setEffort] = useState(profileEffort ?? "");
   const [modelOpen, setModelOpen] = useState(false);
   const [environmentOverride, setEnvironmentOverride] = useState("");
   const [provider, setProvider] = useState("openrouter");
@@ -231,6 +231,10 @@ function Setup({
     enabled: Boolean(brandType) && showModel,
     retry: false,
   });
+  const modelEfforts = (id: string) => brandType === "codex_local"
+    ? models.data?.find(m => m.id === id)?.reasoningEfforts ?? setupEfforts(brandType, id)
+    : isRunner ? [] : setupEfforts(adapterType, id);
+  const efforts = modelEfforts(model);
   const companySecrets = useQuery({
     queryKey: queryKeys.secrets.list(companyId),
     queryFn: () => secretsApi.list(companyId),
@@ -360,6 +364,8 @@ function Setup({
         : {}),
     };
     const config = getUIAdapter(adapterType).buildAdapterConfig(values);
+    const effortKey = agentProfileEffortKey({ adapterType, runnerProvider });
+    if (effortKey && (effort || (profileId && profileEffort))) config[effortKey] = effort;
     if (isRunner)
       Object.assign(config, {
         provider: (runnerProvider === "claude" || runnerProvider === "grok") ? "acpx" : runnerProvider,
@@ -872,7 +878,7 @@ function Setup({
                                   setModel(value);
                                   if (
                                     effort &&
-                                    !setupEfforts(adapterType, value).includes(
+                                    !modelEfforts(value).includes(
                                       effort,
                                     )
                                   )
