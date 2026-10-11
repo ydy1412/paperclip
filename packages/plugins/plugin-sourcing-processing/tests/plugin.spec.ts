@@ -5,8 +5,21 @@ import manifest from "../src/manifest.js";
 import plugin from "../src/worker.js";
 
 describe("product-only processing plugin", () => {
+  it("routes actual image inspection and processing through separate native authorities", async () => {
+    const harness = createTestHarness({ manifest });
+    const read = vi.spyOn(harness.ctx.autoSourcing, "catalogRead").mockResolvedValue({ width: 600, height: 500, regions: [] });
+    const write = vi.spyOn(harness.ctx.autoSourcing, "catalogWrite").mockResolvedValue({ productRevision: 2, imageUrl: "/api/image.png" });
+    await plugin.definition.setup(harness.ctx);
+    const input = { projectId: "p", productId: "product", imageUrl: "https://img.alicdn.com/a.jpg" };
+    await harness.executeTool("inspect-product-image", { ...input, companyId: "forged" }, { companyId: "actual" });
+    expect(read).toHaveBeenLastCalledWith({ ...input, companyId: "actual", operation: "image-inspect" });
+    expect(write).not.toHaveBeenCalled();
+    const edit = { ...input, expectedRevision: 1, requestId: "r", removeChinese: true, crop: { x: 0, y: 100, width: 600, height: 400 } };
+    await harness.executeTool("process-product-image", edit, { companyId: "actual" });
+    expect(write).toHaveBeenLastCalledWith({ ...edit, companyId: "actual", operation: "image-process" });
+  });
   it("declares product and immutable source tools with scoped native capabilities", () => {
-    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["get-processing-source", "list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
+    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["get-product-image", "inspect-product-image", "process-product-image", "get-processing-source", "list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
     expect(manifest.capabilities).toEqual(["agent.tools.register", "auto-sourcing.products.read", "auto-sourcing.drafts.write"]);
   });
   it("reads original source options through the authorized processing read bridge", async () => {

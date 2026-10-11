@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
-import { mkdtemp, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { execFile } from "node:child_process";
@@ -17,16 +17,16 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })));
   requests.length = 0;
 });
-async function fixture(executeStatus = 200) {
+async function fixture(executeStatus = 200, image = false) {
   const server = createServer(async (request, response) => {
     let body = ""; for await (const chunk of request) body += chunk;
     requests.push({ path: request.url!, auth: request.headers.authorization, body: body ? JSON.parse(body) : null });
     response.setHeader("Content-Type", "application/json");
     if (request.url === "/api/plugins/tools") {
-      response.end(JSON.stringify([{ name: prefix + "get-processing-source", parametersSchema: { type: "object" } }, { name: "other:publish" }]));
+      response.end(JSON.stringify([{ name: prefix + (image ? "get-product-image" : "get-processing-source"), parametersSchema: { type: "object" } }, { name: "other:publish" }]));
     } else {
       response.statusCode = executeStatus;
-      response.end(JSON.stringify(executeStatus === 200 ? { result: { data: { sourceHash: "original", skus: [{ skuId: "sku", options: [{ value: "勿拍" }] }] } } } : { error: "fixture-token" }));
+      response.end(JSON.stringify(executeStatus === 200 ? { result: { data: image ? { contentType: "image/png", base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1kAAAAASUVORK5CYII=" } : { sourceHash: "original", skus: [{ skuId: "sku", options: [{ value: "勿拍" }] }] } } } : { error: "fixture-token" }));
     }
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve)); servers.push(server);
@@ -38,6 +38,20 @@ async function fixture(executeStatus = 200) {
   return { file, env };
 }
 describe("sourcing skill native tool runner", () => {
+  it("saves an authorized PNG into run scratch without printing media data and recovers identical reads", async () => {
+    const { file, env } = await fixture(200, true);
+    const assetId = "a".repeat(32);
+    await writeFile(file, JSON.stringify({ projectId: "project", productId: "product", assetId }));
+    const configured = { ...env, PAPERCLIP_RUN_SCRATCH_DIR: dirname(file) };
+    const first = JSON.parse((await execute(process.execPath, [script, "call", "get-product-image", file], { env: configured })).stdout);
+    expect(first.filePath).toBe(join(await import("node:fs/promises").then(fs => fs.realpath(dirname(file))), assetId + ".png"));
+    expect((await readFile(first.filePath)).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+    expect(first).not.toHaveProperty("base64");
+    const recovered = JSON.parse((await execute(process.execPath, [script, "call", "get-product-image", file], { env: configured })).stdout);
+    expect(recovered).toEqual(first);
+    await writeFile(first.filePath, "unrelated");
+    await expect(execute(process.execPath, [script, "call", "get-product-image", file], { env: configured })).rejects.toMatchObject({ stderr: expect.stringContaining("existing_image_changed") });
+  });
   it.each(["", "/api", "/api/"])("uses the injected identity and correct API path for base suffix %s", async suffix => {
     const { file, env } = await fixture(); env.PAPERCLIP_API_URL += suffix;
     const output = await execute(process.execPath, [script, "call", "get-processing-source", file], { env });

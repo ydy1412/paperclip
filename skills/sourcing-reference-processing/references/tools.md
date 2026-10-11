@@ -89,7 +89,7 @@ URL·자격증명을 입력하지 않는다. 추천 결과는 `{code,name}`이�
 두 도구는 상품을 저장하지 않는다. 저장은 검토한 결과를 기존 저장 도구에 전달한다.
 다른 회사·프로젝트의 쇼핑몰, 비활성 쇼핑몰, 쿠팡 이외 공급자는 거부된다.
 
-픽셀 크롭 도구는 아직 없다. HTML 편집·크롭 계획 저장을 실제 이미지 생성으로,
+`inspect-product-image`와 `process-product-image`가 실제 이미지 처리 도구다. HTML 편집·크롭 계획 저장을 실제 이미지 생성으로,
 카테고리 추천·메타정보 조회를 상품의 필수 사실 검증이나 업로드 완료로 표현하지 않는다.
 
 ## 실행 폴더에서 첨부
@@ -110,3 +110,15 @@ TMPDIR="$PAPERCLIP_RUN_SCRATCH_DIR" bash "$PAPERCLIP_SKILL_DIR/scripts/paperclip
 중복 확인 절차를 사용한다. 등록된 첨부·결과물 링크와 실제 내용 조회를 확인한 뒤
 `result` 문서에 반영한다. 쓰기 가능한 폴더가 없거나 첨부가 계속 실패하면 실행
 workspace 파일 결과물로 등록하고 실제 실패 단계와 남은 전달 한계를 기록한다.
+
+
+## 실제 이미지 처리
+
+- `inspect-product-image`: `projectId`, 공통 `productId`, 편집 전 원본 `imageUrl`. 실제 upright 픽셀 크기와 중국어 글자 영역을 반환한다.
+- `process-product-image`: 위 식별자와 `expectedRevision`, 새 UUID `requestId`, 선택 `removeChinese`, `crop={x,y,width,height}`, `outputSize={width,height}`. 하나 이상의 작업을 선택한다. API가 원본을 보존하고 실제 PNG 생성 후 해당 원본을 가리키는 대표·SKU·HTML 참조만 갱신한다.
+- 좌표는 원본 이미지의 좌측 상단 기준이다. 제품 일부를 잘라내지 않는다. 중국어 헤더를 제품 손실 없이 크롭할 수 있으면 그 영역을 제외한다. 제품 위의 글자는 로컬 인페인팅을 사용하고 결과를 검토한다. 숫자·단위까지 제거할 영역을 임의로 잡지 않는다.
+- 동일 입력 재시도는 같은 requestId만 사용한다. 응답 유실은 상품을 재조회하고 같은 요청의 결과를 확인한다. 다른 입력에는 새 requestId가 필요하다. 오래된 expectedRevision으로 덮어쓰지 않는다.
+- 결과에 imageUrl, PNG 해시·실제 치수, 원본 해시, productRevision, removedRegions, remainingChinese, reviewRequired가 있다. 미제거 중국어는 그대로 보고한다. 제품 위 배경 복원은 완벽한 재구성을 보장하지 않는다.
+- 파생 imageUrl은 Dovix의 인증된 로컬 미리보기다. 이미지 공개 호스팅 전에는 쇼핑몰 업로드 준비 완료로 보고하지 않는다. 이미지 처리 후 저장할 때 이전 mainImage/SKU image를 다시 보내 덮어쓰지 않는다.
+
+- `get-product-image`: `projectId`, `productId`, `assetId`. 실행 도우미로 `call get-product-image parameters.json`을 호출하면 PNG를 현재 `PAPERCLIP_RUN_SCRATCH_DIR`에 저장하고 filePath/sha256만 출력한다. 반환된 실제 파일을 이미지 보기 도구로 확인하고 기존 첨부 도우미로 전달한다. base64를 직접 출력하거나 결과 문서에 붙이지 않는다.

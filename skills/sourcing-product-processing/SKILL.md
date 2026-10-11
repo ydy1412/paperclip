@@ -27,7 +27,7 @@ The DOB-27 source increment implements source read, scoped draft creation/list/
 read/save and validation. Its exact contracts and deployment boundary are in
 [Development handoff](references/development.md). The operating plugin still
 has the prior order-read tools until that increment is deployed and discovered.
-Category metadata and actual image cropping remain separate missing capabilities.
+The dedicated sourcing-processing plugin now provides Coupang category reads and actual image inspect/process/get tools. The legacy publication-draft cropPlans contract still records pending plans; use the managed-product image tools for real PNG output, and do not mark legacy plans complete. See sourcing-reference-processing/references/tools.md for the actual current tools.
 
 ## Process a selected product
 

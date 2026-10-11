@@ -1513,3 +1513,10 @@ test reproduced it. The route now dispatches both operations through catalogRead
 with the company/project URL remaining authoritative.
 All five catalog integration tests passed after the fix, as did server typecheck
 and compilation. Total unique focused cases for this increment are 30.
+
+
+### Actual image tools · 2026-10-11
+
+User approved actual cropping and Chinese image-text removal. Auto Sourcing owns local OCR/pixel processing, immutable PNG storage and revision-checked matching image reference updates. Dovix adds scoped inspect-product-image/process-product-image tools and authenticated preview delivery; original source, SKU/price/listing and other-product facts remain unchanged. Source URL must belong to the owned Taobao product and approved CDN; host paths are never agent inputs. OCR remaining text and inpainting reviewRequired remain explicit. Local preview images cannot enter marketplace publication until public hosting is available. Verify actual worker/API/SQLite/image bytes and independent agent execution before completion.
+
+Local verification: 22 focused native tests plus 2 actual pixel comparisons; the real image worker/host/HTTP/SQLite route test and all 5 existing catalog integration tests passed. The dedicated plugin/helper has 15 tests and shared validators have 4. Workspace typecheck/build passed. Full Vitest is not repeated because the previously accepted unrelated Claude CLI version mismatch remains outside this feature. No UI change/browser suite was needed. Source graphs were refreshed and checked against current owners. Rollout receipts and real-agent image proof follow dev merge; no merchant write is part of this feature.
