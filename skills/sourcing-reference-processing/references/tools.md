@@ -94,6 +94,12 @@ URL·자격증명을 입력하지 않는다. 추천 결과는 `{code,name}`이�
 
 ## 실행 폴더에서 첨부
 
+배정된 `paperclip` 스킬의 실제 `SKILL.md` 경로를 읽고 그 디렉터리 아래
+`scripts/paperclip-upload-artifact.sh`를 사용한다. `PAPERCLIP_SKILL_DIR`는 자동
+주입된다고 가정하지 않는다. 스킬 디렉터리가 symlink일 수 있으므로 파일 탐색이
+필요하면 `rg --files -L`로 확인한다. 환경변수가 비어 있거나 일반 탐색에서 파일이
+안 보인다는 이유만으로 helper가 없다고 판단하지 않는다.
+
 Paperclip의 `paperclip-upload-artifact.sh`를 사용할 때 샌드박스에서 쓰기 가능한
 `PAPERCLIP_RUN_SCRATCH_DIR`를 해당 호출의 `TMPDIR`로 지정한다. 기본 macOS 임시
 폴더는 실행의 허용 경로에 없을 수 있다. 제공된 폴더가 실제 존재하는지 확인하며
@@ -115,10 +121,15 @@ workspace 파일 결과물로 등록하고 실제 실패 단계와 남은 전달
 ## 실제 이미지 처리
 
 - `inspect-product-image`: `projectId`, 공통 `productId`, 편집 전 원본 `imageUrl`. 실제 upright 픽셀 크기와 중국어 글자 영역을 반환한다.
-- `process-product-image`: 위 식별자와 `expectedRevision`, 새 UUID `requestId`, 선택 `removeChinese`, `crop={x,y,width,height}`, `outputSize={width,height}`. 하나 이상의 작업을 선택한다. API가 원본을 보존하고 실제 PNG 생성 후 해당 원본을 가리키는 대표·SKU·HTML 참조만 갱신한다.
+- `process-product-image`: 위 식별자와 `expectedRevision`, 새 UUID `requestId`, 선택 `removeChinese`, `crop={x,y,width,height}`, `outputSize={width,height}`, `cleanupRegions=[{x,y,width,height}]`. 하나 이상의 작업을 선택한다. API가 원본을 보존하고 실제 PNG 생성 후 해당 원본을 가리키는 대표·SKU·HTML 참조만 갱신한다.
 - 좌표는 원본 이미지의 좌측 상단 기준이다. 제품 일부를 잘라내지 않는다. 중국어 헤더를 제품 손실 없이 크롭할 수 있으면 그 영역을 제외한다. 제품 위의 글자는 로컬 인페인팅을 사용하고 결과를 검토한다. 숫자·단위까지 제거할 영역을 임의로 잡지 않는다.
+- 크롭 경계는 원본의 제품 가장자리와 여백을 직접 비교한다. 헤더 끝과 제품 시작이 겹치면 헤더 아래를 무조건 시작점으로 쓰지 않는다. 손잡이·프레임·치수 일부가 잘렸으면 완료로 판단하지 말고 좌표를 수정한다.
+- 결과를 교정할 때도 최초 원본 imageUrl과 현재 expectedRevision, 새 requestId를 사용한다. API는 같은 원본/sourceHash의 현재 파생 참조를 검증해 새 PNG로 교체하며 이전 PNG는 보존한다. 이미 가공된 URL을 원본 입력으로 사용하거나 이전 편집본을 초기화하지 않는다.
 - 동일 입력 재시도는 같은 requestId만 사용한다. 응답 유실은 상품을 재조회하고 같은 요청의 결과를 확인한다. 다른 입력에는 새 requestId가 필요하다. 오래된 expectedRevision으로 덮어쓰지 않는다.
 - 결과에 imageUrl, PNG 해시·실제 치수, 원본 해시, productRevision, removedRegions, remainingChinese, reviewRequired가 있다. 미제거 중국어는 그대로 보고한다. 제품 위 배경 복원은 완벽한 재구성을 보장하지 않는다.
+- 일반 `call` 응답의 실제 데이터는 `result.data`에 있다. process 응답의 `result.data.assetId`, `productRevision`을 읽어 다음 JSON 입력을 구성한다. 셸 문자열의 공백 분할에 의존해 assetId가 빈 값이 되지 않도록 반복 입력은 JSON 스크립트로 만든다. PNG 조회 도우미는 빈 값·잘못된 assetId를 실행 요청 전에 거부한다.
 - 파생 imageUrl은 Dovix의 인증된 로컬 미리보기다. 이미지 공개 호스팅 전에는 쇼핑몰 업로드 준비 완료로 보고하지 않는다. 이미지 처리 후 저장할 때 이전 mainImage/SKU image를 다시 보내 덮어쓰지 않는다.
 
 - `get-product-image`: `projectId`, `productId`, `assetId`. 실행 도우미로 `call get-product-image parameters.json`을 호출하면 PNG를 현재 `PAPERCLIP_RUN_SCRATCH_DIR`에 저장하고 filePath/sha256만 출력한다. 반환된 실제 파일을 이미지 보기 도구로 확인하고 기존 첨부 도우미로 전달한다. base64를 직접 출력하거나 결과 문서에 붙이지 않는다.
+
+- 글자 제거 후 빈 배지나 경계 잔흔이 남으면 실제 원본/결과를 비교하고, 제품과 치수에서 떨어진 배경만 cleanupRegions로 지정한다. 원본 좌표로 최대 8개이며 모두 유지할 crop 안에 있어야 한다. OCR 영역과 합친 마스크는 30% 이하이고 실제 적용 영역은 결과 cleanupRegions에 남는다. 제품을 침범하거나 결과가 손상됐으면 원본에서 교정하며 reviewRequired는 유지한다. 저신뢰 OCR 한 글자가 남았다는 이유만으로 상품·치수를 무리하게 지우지 않는다.
