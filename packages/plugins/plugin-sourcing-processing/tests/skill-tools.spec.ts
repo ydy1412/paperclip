@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,15 @@ describe("sourcing skill native tool runner", () => {
     const output = await execute(process.execPath, [script, "list"], { env });
     expect(JSON.parse(output.stdout).map((tool: { name: string }) => tool.name)).toEqual([prefix + "get-processing-source"]);
     expect(requests).toHaveLength(1);
+  });
+  it("runs through a linked skill directory used by the agent runtime", async () => {
+    const { env, file } = await fixture();
+    const linkedDirectory = join(dirname(file), "assigned-skill");
+    await symlink(dirname(script), linkedDirectory, "junction");
+    const linkedScript = join(linkedDirectory, basename(script));
+    const output = await execute(process.execPath, [linkedScript, "call", "get-processing-source", file], { env });
+    expect(JSON.parse(output.stdout).result.data.sourceHash).toBe("original");
+    expect(requests.map(r => r.path)).toEqual(["/api/plugins/tools", "/api/plugins/tools/execute"]);
   });
   it("does not invoke an unavailable tool or accept caller-supplied run identity", async () => {
     const { file, env } = await fixture();
