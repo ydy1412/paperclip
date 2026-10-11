@@ -15,7 +15,9 @@ export function productDescriptionDocument(description: string): string {
       if (!allowedTags.has(tag)) return children;
       if (tag === "img") {
         try {
-          const url = new URL(element.getAttribute("src") ?? "");
+          const src = (element.getAttribute("src") ?? "").trim();
+          // Provider detail HTML can use network-path references without a scheme.
+          const url = new URL(/^\/\/[^/\\]/.test(src) ? `https:${src}` : src);
           if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return "";
           if (url.protocol === "http:") url.protocol = "https:";
           return `<img src="${escape(url.href)}" alt="${escape(element.getAttribute("alt") ?? "")}" loading="lazy" referrerpolicy="no-referrer">`;

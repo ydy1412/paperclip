@@ -42,6 +42,12 @@ the lockfile and existing local checks before integration.
 - Keep one purpose per commit. Preserve unrelated work; recovered baselines
   require their own explicit checkpoint and verification record.
 - Complete relevant tests, push the feature, then create a PR targeting `dev`.
+  Before creating the PR, validate changed screens and their API data in a
+  browser using the candidate build and an actual or sanitized reproduction.
+  Check list, selection, detail and affected actions; for images, verify loaded
+  product photos rather than URL presence. Use an isolated data copy for writes.
+  Record screenshots, request/console failures and unverified scope. Missing
+  browser verification blocks submission and deployment of screen changes.
   Review the PR and confirm checks before merging. For this personal service,
   redeploy the verified `dev` commit and confirm actual service/UI behavior.
 - Promotion to `master` follows additional testing and an explicit release
