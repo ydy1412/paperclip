@@ -1,11 +1,11 @@
 # 소싱 상품 가공
 
-This local plugin exposes eight product tools backed by the existing scoped Auto
+This local plugin exposes nine product tools backed by the existing scoped Auto
 Sourcing catalog. Configure a company-scoped `serviceToken` secret reference and
 the project's `sourceProducts` allowlist, or its already bound collected sources.
 Select this plugin in an agent profile; skills alone do not grant its tools.
 
-`list-sourcing-workspace(stage=unprocessed)` → `start-managed-processing` →
+`list-sourcing-workspace(stage=unprocessed)` → `get-processing-source` → `start-managed-processing` →
 `get-managed-product` → uploaded reference search/read → `save-managed-product`
 → reread. Saves require the current revision and preserve SKU identity/prices.
 The host checks the authenticated run, assigned issue/project, plugin company
@@ -14,4 +14,14 @@ import, enqueue or publication capability is declared. Select an enabled registe
 Coupang store with `list-product-stores`, then use `recommend-coupang-category`
 and `get-coupang-category-metadata`. The host resolves credentials and makes the
 existing provider reads. These tools do not save a category or attest required
-product facts. Pixel cropping remains unsupported.
+product facts. `get-processing-source` returns the original source hash, SKU
+options and images even after the common product has been edited. Use a bound
+store's `accountId` and the original source `productId`. It reuses the existing
+authorized processing read bridge. Pixel cropping remains unsupported.
+
+The assigned `sourcing-reference-processing` skill includes
+`scripts/plugin-tools.mjs`. It discovers allowed native tools and invokes them
+with the injected company, agent and run identity. It normalizes the API base
+path and does not retry writes automatically. A saved `ready` stage does not
+prove required product facts or image edits are complete. Preserve original
+purchase exclusions and incompatibility warnings in translations.

@@ -5,9 +5,22 @@ import manifest from "../src/manifest.js";
 import plugin from "../src/worker.js";
 
 describe("product-only processing plugin", () => {
-  it("declares eight product tools and scoped native capabilities", () => {
-    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
+  it("declares product and immutable source tools with scoped native capabilities", () => {
+    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["get-processing-source", "list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
     expect(manifest.capabilities).toEqual(["agent.tools.register", "auto-sourcing.products.read", "auto-sourcing.drafts.write"]);
+  });
+  it("reads original source options through the authorized processing read bridge", async () => {
+    const harness = createTestHarness({ manifest });
+    const source = { sourceHash: "original-hash", skus: [{ skuId: "sku", options: [{ value: "原文禁止" }] }] };
+    const read = vi.spyOn(harness.ctx.autoSourcing, "processingRead").mockResolvedValue(source);
+    const write = vi.spyOn(harness.ctx.autoSourcing, "processingWrite");
+    const catalogWrite = vi.spyOn(harness.ctx.autoSourcing, "catalogWrite");
+    await plugin.definition.setup(harness.ctx);
+    const result = await harness.executeTool("get-processing-source", { companyId: "forged", projectId: "p", accountId: "a", sourceProvider: "taobao", productId: "original" }, { companyId: "actual" });
+    expect(read).toHaveBeenCalledWith({ companyId: "actual", projectId: "p", accountId: "a", sourceProvider: "taobao", productId: "original", operation: "source" });
+    expect(result.data).toEqual(source);
+    expect(write).not.toHaveBeenCalled();
+    expect(catalogWrite).not.toHaveBeenCalled();
   });
   it("routes category operations through the read bridge and run company", async () => {
     const harness = createTestHarness({ manifest });
