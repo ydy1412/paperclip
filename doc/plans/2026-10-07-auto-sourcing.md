@@ -1434,5 +1434,30 @@ passed with the correct checkout. The repository-wide forbidden-token scan still
 rejects pre-existing local user/path references; none were added by this change.
 Graphify code-only update completed (78,384 nodes / 223,138 edges, 233 files with
 no AST nodes); source relationships were cross-checked. No semantic analysis ran.
-Final diff review found no unresolved defects in the changed paths. Operating
-processing remains unverified until the actual agent run and reread below.
+Final diff review found no unresolved defects in the changed paths.
+
+Operating verification: PR #14 was reviewed and merged into `dev` at
+`da82554890ab30839612f679b701c2c2a44b4ea9`. The compatible installed runtime
+received the profile validator/service/routes, corrected Codex MCP header writer
+and profile UI assets. Its deployment receipt records the source commit,
+backup hashes, restart, healthy authenticated reads and anonymous rejection.
+The product-only plugin is ready. The existing product profile applies its six
+exact tool grants through the existing permission tables, while preserving
+independent grants. Its linked agent retains GPT-6 Luna, high effort, search
+enabled and sandbox enabled.
+
+The actual product agent completed the existing raw desk through plugin tools
+and saved the common product as `삼각형 코너 책상 및 의자 옵션`. Its run succeeded.
+Independent authenticated readback confirmed revision 2, Korean SKU options and
+HTML, all three original SKU identifiers and their source image URLs, unset
+sale prices and no marketplace listings. The entire collected source and all
+244 existing uploaded products match the pre-run snapshots. The uploaded desk
+reference was read only. The main image is the desk SKU photo rather than the
+original promotion image. The operating verification receipt is retained
+locally in `tmp/profile-plugins-operating/verification.json`; this directory is
+ignored and does not contain a public deliverable.
+
+Provider category validation and pixel cropping remain unsupported. The category
+is empty pending operator review. No marketplace upload readiness is claimed.
+The runtime feature commit remains the PR #14 merge; this evidence-only follow-up
+does not require a runtime restart.
