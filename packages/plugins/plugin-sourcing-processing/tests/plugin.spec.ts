@@ -5,9 +5,20 @@ import manifest from "../src/manifest.js";
 import plugin from "../src/worker.js";
 
 describe("product-only processing plugin", () => {
-  it("declares only six local product tools and scoped native capabilities", () => {
-    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product"]);
+  it("declares eight product tools and scoped native capabilities", () => {
+    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
     expect(manifest.capabilities).toEqual(["agent.tools.register", "auto-sourcing.products.read", "auto-sourcing.drafts.write"]);
+  });
+  it("routes category operations through the read bridge and run company", async () => {
+    const harness = createTestHarness({ manifest });
+    const read = vi.spyOn(harness.ctx.autoSourcing, "catalogRead").mockResolvedValue({ code: 77968, name: "일반책상" });
+    const write = vi.spyOn(harness.ctx.autoSourcing, "catalogWrite");
+    await plugin.definition.setup(harness.ctx);
+    await harness.executeTool("recommend-coupang-category", { companyId: "forged", projectId: "p", storeId: "s", productName: "책상" }, { companyId: "actual" });
+    expect(read).toHaveBeenLastCalledWith({ companyId: "actual", projectId: "p", operation: "category-recommend", storeId: "s", productName: "책상" });
+    await harness.executeTool("get-coupang-category-metadata", { projectId: "p", storeId: "s", categoryCode: 77968 }, { companyId: "actual" });
+    expect(read).toHaveBeenLastCalledWith({ companyId: "actual", projectId: "p", operation: "category-metadata", storeId: "s", categoryCode: 77968 });
+    expect(write).not.toHaveBeenCalled();
   });
   it("discovers raw sources and propagates full-scope search/page using run company", async () => {
     const harness = createTestHarness({ manifest });

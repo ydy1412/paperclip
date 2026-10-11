@@ -1,5 +1,15 @@
 import { z } from "zod";
 const id = z.string().regex(/^[a-f0-9]{32}$/);
+const categoryCode = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+export const catalogCategoryRecommendationSchema = z.object({ code: categoryCode, name: z.string().max(1000) });
+export const catalogCategoryMetadataSchema = z.object({
+  code: categoryCode, name: z.string().max(1000),
+  attributes: z.array(z.object({ name: z.string().max(1000), dataType: z.string().max(100), required: z.boolean(), group: z.string().max(100), searchFilter: z.boolean(), units: z.array(z.string().max(100)).max(100) })).max(1000),
+  notices: z.array(z.object({ category: z.string().max(1000), name: z.string().max(1000), required: z.boolean() })).max(1000),
+  certifications: z.array(z.object({ type: z.string().max(1000), required: z.boolean(), needsCode: z.boolean() })).max(1000),
+  documents: z.array(z.object({ name: z.string().max(1000), required: z.boolean(), condition: z.string().max(100).nullable().optional() })).max(1000),
+  allowSingleItem: z.boolean(),
+});
 export const sourcingCatalogScopeSchema = z.object({ companyId: z.string().uuid(), projectId: z.string().uuid() });
 export const catalogSkuSchema = z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(150), image: z.string().max(4096), salePrice: z.number().int().positive().max(1000000000).multipleOf(10).nullable().optional(), options: z.array(z.object({ name: z.string().min(1).max(100), value: z.string().max(100) }).strict()).max(20) }).strict();
 // Registered Coupang products can contain exposed attributes with empty values.
@@ -17,6 +27,8 @@ export type CandidateView = z.infer<typeof candidateSchema>;
 export type CatalogPricePreview = z.infer<typeof catalogPricePreviewSchema>;
 export type CatalogStageCounts = z.infer<typeof catalogStageCountsSchema>;
 export const catalogRequestSchema = z.discriminatedUnion("operation", [
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("category-recommend"), storeId: id, productName: z.string().trim().min(1).max(200) }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("category-metadata"), storeId: id, categoryCode }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("stages"), query: z.string().trim().max(200).optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("sources") }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("workspace"), stage: z.enum(["all", "candidate", "unprocessed", "processing", "ready", "queued", "uploaded", "attention"]).default("all"), page: z.number().int().min(1).max(100000).default(1), query: z.string().trim().max(200).optional() }).strict(),

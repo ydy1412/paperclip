@@ -35,6 +35,8 @@ JSON은 스크립트로 구성하거나 파일을 사용하고 토큰은 본문�
 | `list-managed-products` | `projectId`, `view="uploads"` 또는 `"source"`, 선택 `query`, `page` |
 | `get-managed-product` | `projectId`, `productId` |
 | `list-product-stores` | `projectId` |
+| `recommend-coupang-category` | `projectId`, `storeId`, `productName` (1~200자) |
+| `get-coupang-category-metadata` | `projectId`, `storeId`, `categoryCode` (양의 정수) |
 | `save-managed-product` | `projectId`, `productId`, `expectedRevision`, `title`, `mainImage`, `description`, `categoryCode`, `skus`; 필요할 때만 `confirmPriceChanges` |
 
 각 `skus` 원소는 기존 `id`, `name`, `image`, `options`를 포함한다.
@@ -60,6 +62,17 @@ SKU 사진·상품 상세 사진처럼 실제 제품임을 확인한 원본 이�
 `sourcing-product-processing`의 절차와 발견된 schemas를 따른다.
 공통 상품 ID, 타오바오 원본 productId, draftId와 각각의 revision을 혼동하지 않는다.
 
-현재 발견된 도구에는 픽셀 크롭과 카테고리 메타데이터 검증 도구가 없다.
-공통 상품의 상세 HTML 편집과 원본 초안의 크롭 계획 저장을 실제 이미지 생성이나
-카테고리 검증으로 표현하지 않는다.
+## 쿠팡 카테고리
+
+`list-product-stores`의 `stores`에서 `provider="coupang"`, `enabled=true`,
+`hasCredentials=true`인 등록 쇼핑몰의 `id`를 `storeId`로 사용한다. 여러 쇼핑몰이
+있으면 현재 작업의 대상 쇼핑몰을 사용하고 선택 근거를 기록한다. 임의 판매 계정이나
+URL·자격증명을 입력하지 않는다. 추천 결과는 `{code,name}`이다. 추천된 `code`로
+메타정보를 조회하면 `attributes`, `notices`, `certifications`, `documents`,
+`allowSingleItem`을 받는다. `required`와 조건부 서류의 `condition`을 함께 확인한다.
+메타정보 API가 이름을 반환하지 않으면 빈 `name`은 추천 이름과 구분해서 기록한다.
+두 도구는 상품을 저장하지 않는다. 저장은 검토한 결과를 기존 저장 도구에 전달한다.
+다른 회사·프로젝트의 쇼핑몰, 비활성 쇼핑몰, 쿠팡 이외 공급자는 거부된다.
+
+픽셀 크롭 도구는 아직 없다. HTML 편집·크롭 계획 저장을 실제 이미지 생성으로,
+카테고리 추천·메타정보 조회를 상품의 필수 사실 검증이나 업로드 완료로 표현하지 않는다.

@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type Db, agents, heartbeatRuns, issues, projects, pluginConfig } from "@paperclipai/db";
-import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema, workspaceItemSchema, candidateSchema, catalogPricePreviewSchema } from "@paperclipai/shared";
+import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema, workspaceItemSchema, candidateSchema, catalogPricePreviewSchema, catalogCategoryRecommendationSchema, catalogCategoryMetadataSchema } from "@paperclipai/shared";
 import type { HostServices, WorkerHostCallContext } from "@paperclipai/plugin-sdk";
 import { forbidden, HttpError } from "../errors.js";
 import { pluginRegistryService } from "./plugin-registry.js";
@@ -104,10 +104,12 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   }
   async function catalog(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = catalogRequestSchema.parse(value);
-    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview"];
+    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview", "category-recommend", "category-metadata"];
     if (reads.includes(input.operation) === write) throw forbidden("허용되지 않은 상품 작업입니다.");
     if (context?.invocationScope?.agentRun && write && !["save", "source"].includes(input.operation)) throw forbidden("상품 가져오기와 실제 업로드는 운영 화면에서 실행해 주세요.");
     const { config, accounts } = await authorize(input, context, true);
+    if (["category-recommend", "category-metadata"].includes(input.operation) && !Object.hasOwn(config.projects, input.projectId))
+      throw forbidden("프로젝트에 연결된 쿠팡 카테고리 도구가 아닙니다.");
     if (input.operation === "source" && !(config.sourceProducts?.[input.projectId] ?? []).includes(`${input.sourceProvider}:${input.sourceProductId}`)) {
       const access = z.object({ allowed: z.boolean() }).parse(await catalogCall(input.companyId, config.serviceToken, "source-access", input));
       if (!access.allowed) throw forbidden("프로젝트에 허용된 원본 상품이 아닙니다.");
@@ -126,6 +128,8 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
     else if (operation === "candidate-import") result = z.object({ imported: z.number().int().nonnegative() }).parse(raw);
     else if (operation === "candidate-collect") result = candidateSchema.parse(raw);
     else if (operation === "price-preview") result = catalogPricePreviewSchema.parse(raw);
+    else if (operation === "category-recommend") result = catalogCategoryRecommendationSchema.parse(raw);
+    else if (operation === "category-metadata") result = catalogCategoryMetadataSchema.parse(raw);
     else if (operation === "stages") result = catalogStageCountsSchema.parse(raw);
     else if (operation === "sources") result = z.array(z.object({ sourceProvider: z.string(), sourceProductId: z.string(), title: z.string(), mainImage: z.string() })).parse(raw);
     else if (["get", "save", "source"].includes(operation)) result = managedProductSchema.parse(raw);
