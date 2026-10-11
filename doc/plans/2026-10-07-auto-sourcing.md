@@ -1389,3 +1389,50 @@ Shopping ideas evidence and handoff:
 Source and upload lists search titles and product identifiers across the full company/project scope before pagination. Whitespace-separated terms must all match as case-insensitive literal substrings. Search and clear reset pagination and preserve unsaved edits by disabling controls. Source stage counts use the same query. No migration or provider write is required. Verify SQLite scope/paging/stages, both UI views, and authenticated live reads.
 
 Keyword verification: 15 shared-contract, catalog UI and native HTTP/SQLite integration tests pass with the backend feature checkout selected. Recursive workspace typecheck and token gates pass. Both UI views cover page reset, no results, clear and unsaved-edit protection. Full source build and operating deployment evidence are recorded in the task PR. The earlier unchanged-area regression results remain applicable.
+
+## Profile plugins and API-only processing (2026-10-11)
+
+The actual product agent received its three skills but could discover only the
+company's marketing tools. Skills do not grant plugin permissions. Agent profiles
+will select installed plugins by manifest key and apply exact tool-name grants
+through the existing tool profiles, entries and agent bindings. Grants are owned
+by the profile/agent pair; removing a selection removes only those grants.
+Older snapshots without `plugins` preserve existing grants. Changes to linked
+agents use the existing deferred application boundary, so running work is kept.
+Deleting a profile preserves the agent and its last applied tool configuration.
+Plugin selection requires active non-viewer company membership. No new permission
+engine or database migration is needed.
+
+The existing native catalog already supports workspace search/paging, raw source
+import into the common editor (`source`), get and revision-checked save. Current
+raw sources number two; `list(view=source)` counts managed products and cannot
+establish raw-source emptiness. A product-only plugin exposes this existing path,
+without order, shipping, marketplace import, enqueue or publication tools. Search
+is propagated to the existing catalog operation. Source, SKU identifiers and prices
+must remain unchanged. Pixel cropping and provider category validation are not
+provided by these catalog APIs; do not claim them as verified.
+
+Acceptance: profile selection survives draft restoration and creates real agent
+tool grants; removal preserves independently assigned tools; active-run changes
+wait; invalid plugins fail safely. Plugin contracts must use authenticated run
+company and native scoped read/write bridges. Live execution targets the existing
+unprocessed triangular desk (source 709366335630), uses uploaded products only as
+format references, saves and rereads the result. Charity/promotion images must not
+be selected as product images. No marketplace write or unrelated product change.
+The operating Codex MCP writer must use `http_headers` (already corrected in source)
+so protected runs authenticate their tools. Record dev commit, deployment receipt,
+run/result and reread evidence separately from local tests.
+
+Local verification: 61 focused tests passed (profile DB/hire/policy 19, profile
+UI/draft 18, dedicated plugin 3, existing plugin 6, new real worker/HTTP/SQLite
+flow 1, catalog integration 4, native host authority 7, source drafts 2, MCP writer
+1). Server/UI and both plugin typechecks, source and compatible UI builds, design
+token gates and module boundaries passed. The external SQLite fixture must use
+the current Auto Sourcing dev checkout via `AUTO_SOURCING_PROJECT_ROOT`; the older
+default checkout lacks workspace/search routes and produced three failures that
+passed with the correct checkout. The repository-wide forbidden-token scan still
+rejects pre-existing local user/path references; none were added by this change.
+Graphify code-only update completed (78,384 nodes / 223,138 edges, 233 files with
+no AST nodes); source relationships were cross-checked. No semantic analysis ran.
+Final diff review found no unresolved defects in the changed paths. Operating
+processing remains unverified until the actual agent run and reread below.

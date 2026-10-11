@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { AgentProfiles } from "./AgentProfiles";
-const mock = vi.hoisted(() => ({ companyId: "company", models: vi.fn(), list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), restore: vi.fn(), remove: vi.fn(), fromAgent: vi.fn(), navigate: vi.fn(), crumbs: vi.fn() }));
+const mock = vi.hoisted(() => ({ companyId: "company", models: vi.fn(), plugins: vi.fn(), list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), restore: vi.fn(), remove: vi.fn(), fromAgent: vi.fn(), navigate: vi.fn(), crumbs: vi.fn() }));
 vi.mock("../api/agentProfiles", () => ({ agentProfilesApi: mock }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: mock.companyId }) }));
 vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mock.crumbs }) }));
@@ -19,6 +19,7 @@ const profile = { id: "profile", companyId: "company", name: "상품 가공 프�
 describe("agent profile cards and linked editing", () => {
   let root: Root, cache: QueryClient, container: HTMLDivElement;
   beforeEach(() => { window.localStorage.clear(); vi.clearAllMocks(); mock.companyId = "company"; mock.models.mockResolvedValue([{ id: "gpt-6.1-sol", label: "GPT-6.1-Sol", reasoningEfforts: ["low", "high", "ultra"] }, { id: "gpt-6-sol", label: "GPT-6-Sol", reasoningEfforts: ["low", "high"] }]); mock.list.mockResolvedValue([profile]); mock.get.mockResolvedValue(profile); mock.create.mockResolvedValue({ ...profile, id: "copy" }); mock.update.mockResolvedValue({ ...profile, version: 3 }); mock.restore.mockResolvedValue({ ...profile, version: 3 });
+    mock.plugins.mockResolvedValue([{ key: "paperclipai.plugin-sourcing-processing", name: "소싱 상품 가공", description: "원본 가공", available: true, toolCount: 6 }]);
     container = document.createElement("div"); document.body.append(container); root = createRoot(container); cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); });
   afterEach(() => { act(() => root.unmount()); cache.clear(); container.remove(); });
   async function settle() { for (let i = 0; i < 3; i++) await act(async () => { await new Promise(r => setTimeout(r, 10)); }); }
@@ -28,6 +29,25 @@ describe("agent profile cards and linked editing", () => {
   async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); }
   async function radio(label: string) { const field = Array.from(container.querySelectorAll("label")).find(l => l.textContent === label)!.querySelector<HTMLInputElement>('input[type="radio"]')!; await act(async () => field.click()); await settle(); }
   async function toggle(label: string) { const field = container.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`); expect(field).not.toBeNull(); await act(async () => field!.click()); await settle(); }
+  it("restores selected installed plugins and submits their keys", async () => {
+    await render(); await click("프로필 추가"); await fill("프로필 이름", "가공 도구 프로필");
+    await act(async () => container.querySelector<HTMLInputElement>('[aria-label="소싱 상품 가공"]')!.click());
+    await remount();
+    expect(container.querySelector<HTMLInputElement>('[aria-label="소싱 상품 가공"]')!.checked).toBe(true);
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.create).toHaveBeenCalledWith("company", expect.objectContaining({ config: expect.objectContaining({ plugins: ["paperclipai.plugin-sourcing-processing"] }) }));
+  });
+  it("keeps unavailable selections visible and permits their removal", async () => {
+    mock.get.mockResolvedValue({ ...profile, config: { ...config, plugins: ["missing.plugin"] } });
+    await render(); await click("상품 가공 프로필"); await click("수정");
+    const label = Array.from(container.querySelectorAll("label")).find(l => l.textContent?.includes("missing.plugin"))!;
+    expect(label.textContent).toContain("확인되지 않은 플러그인");
+    await act(async () => label.querySelector<HTMLInputElement>("input")!.click());
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(mock.update).toHaveBeenCalledWith("company", "profile", expect.objectContaining({ config: expect.objectContaining({ plugins: [] }) }));
+  });
   it("starts Codex options off and retains selected options through draft restoration and save", async () => {
     await render(); await click("프로필 추가"); await fill("프로필 이름", "실행 옵션 프로필");
     expect(container.querySelector('[aria-label="Bypass sandbox"]')?.getAttribute("aria-checked")).toBe("false");

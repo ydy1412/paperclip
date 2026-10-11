@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { agentProfiles, agentProfileVersions, agentProfileBindings, agents, heartbeatRuns, companySkills, activityLog, type Db } from "@paperclipai/db";
+import { agentProfiles, agentProfileVersions, agentProfileBindings, agents, heartbeatRuns, companySkills, activityLog, plugins, companyMemberships, toolProfiles, toolProfileEntries, toolProfileBindings, type Db } from "@paperclipai/db";
 import type { AgentProfileConfig, AgentProfileDetail, CreateAgentProfile, UpdateAgentProfile } from "@paperclipai/shared";
 import { readPaperclipSkillSyncPreference, writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
 import { badRequest, conflict, forbidden, notFound } from "../errors.js";
@@ -26,6 +26,34 @@ function audit(tx: Tx, companyId: string, userId: string, action: string, id: st
 }
 
 export function agentProfileService(db: Db) {
+  async function pluginTools(source: Db | Tx, keys: string[]) {
+    const unique = [...new Set(keys)];
+    if (!unique.length) return [];
+    const rows = await source.select().from(plugins).where(inArray(plugins.pluginKey, unique));
+    if (rows.length !== unique.length || rows.some(p => p.status !== "ready" || !p.manifestJson.capabilities.includes("agent.tools.register") || !p.manifestJson.tools?.length)) {
+      throw badRequest("사용 가능한 도구 플러그인을 선택해 주세요.");
+    }
+    return rows.flatMap(p => p.manifestJson.tools!.map(t => `${p.pluginKey}:${t.name}`));
+  }
+  async function assertPluginEditor(source: Db | Tx, companyId: string, userId: string) {
+    const [member] = await source.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    if (!member || member.status !== "active" || !member.membershipRole || member.membershipRole === "viewer") throw forbidden("플러그인 연결을 변경할 회사 권한을 확인해 주세요.");
+  }
+  async function applyPlugins(tx: Tx, companyId: string, profileId: string, agentId: string, keys: string[] | undefined, userId: string) {
+    if (keys === undefined) return;
+    await assertPluginEditor(tx, companyId, userId);
+    const names = await pluginTools(tx, keys);
+    const profileKey = `agent-profile:${profileId}:${agentId}`;
+    const metadata = { agentProfileId: profileId, agentId, plugins: keys, managedBy: "agent-profile" };
+    const [existing] = await tx.select().from(toolProfiles).where(and(eq(toolProfiles.companyId, companyId), eq(toolProfiles.profileKey, profileKey)));
+    if (existing && (existing.metadata.managedBy !== "agent-profile" || existing.metadata.agentId !== agentId || existing.metadata.agentProfileId !== profileId)) throw conflict("프로필 플러그인 권한의 소유자를 확인해 주세요.");
+    const [grant] = existing ? await tx.update(toolProfiles).set({ status: "active", defaultAction: "deny", metadata, updatedAt: new Date() }).where(eq(toolProfiles.id, existing.id)).returning()
+      : await tx.insert(toolProfiles).values({ companyId, profileKey, name: `Agent profile tools ${profileId} / ${agentId}`, defaultAction: "deny", metadata }).returning();
+    await tx.delete(toolProfileEntries).where(and(eq(toolProfileEntries.companyId, companyId), eq(toolProfileEntries.profileId, grant.id)));
+    if (names.length) await tx.insert(toolProfileEntries).values(names.map(toolName => ({ companyId, profileId: grant.id, selectorType: "tool_name" as const, effect: "include" as const, toolName })));
+    await tx.insert(toolProfileBindings).values({ companyId, profileId: grant.id, targetType: "agent", targetId: agentId, createdByUserId: userId, metadata }).onConflictDoNothing();
+    await audit(tx, companyId, userId, "agent.profile_plugins_applied", profileId, { agentId, plugins: keys, toolCount: names.length });
+  }
   async function requireProfile(source: Db | Tx, companyId: string, id: string, lock = false) {
     const query = source.select().from(agentProfiles).where(and(eq(agentProfiles.companyId, companyId), eq(agentProfiles.id, id)));
     const [row] = await (lock ? query.for("update") : query);
@@ -47,7 +75,8 @@ export function agentProfileService(db: Db) {
       const rows = await source.select({ key: companySkills.key }).from(companySkills).where(and(eq(companySkills.companyId, companyId), inArray(companySkills.key, keys)));
       if (rows.length !== keys.length) throw badRequest("이 회사에 등록된 스킬을 선택해 주세요.");
     }
-    return { ...config, skills: keys };
+    if (config.plugins !== undefined) await pluginTools(source, config.plugins);
+    return { ...config, skills: keys, ...(config.plugins === undefined ? {} : { plugins: [...new Set(config.plugins)] }) };
   }
   async function get(companyId: string, id: string): Promise<AgentProfileDetail> {
     const profile = await requireProfile(db, companyId, id);
@@ -62,6 +91,7 @@ export function agentProfileService(db: Db) {
   async function create(companyId: string, input: CreateAgentProfile, userId: string) {
     const id = await db.transaction(async tx => {
       const config = await validateConfig(tx, companyId, input.config);
+      if (config.plugins !== undefined) await assertPluginEditor(tx, companyId, userId);
       const [row] = await tx.insert(agentProfiles).values({ companyId, name: input.name, description: input.description, config }).returning();
       await tx.insert(agentProfileVersions).values({ companyId, profileId: row.id, version: 1, name: row.name, description: row.description, config });
       await audit(tx, companyId, userId, "agent.profile_created", row.id, { version: 1 });
@@ -74,6 +104,7 @@ export function agentProfileService(db: Db) {
       const old = await requireProfile(tx, companyId, id, true);
       if (old.version !== input.expectedVersion) throw conflict("프로필이 변경되었습니다. 새로 조회한 뒤 수정해 주세요.");
       const config = await validateConfig(tx, companyId, input.config);
+      if (config.plugins !== undefined) await assertPluginEditor(tx, companyId, userId);
       const version = old.version + 1;
       await tx.update(agentProfiles).set({ name: input.name, description: input.description, config, version, updatedAt: new Date() }).where(eq(agentProfiles.id, id));
       await tx.insert(agentProfileVersions).values({ companyId, profileId: id, version, name: input.name, description: input.description, config });
@@ -94,6 +125,7 @@ export function agentProfileService(db: Db) {
       if (existing) throw conflict("이 에이전트는 이미 다른 프로필에 연결되어 있습니다.");
       if (!snapshot || !agent) throw notFound("프로필 또는 에이전트를 찾을 수 없습니다.");
       if (agent.adapterType !== snapshot.config.adapterType) throw conflict("프로필과 에이전트의 실행 방식이 다릅니다.");
+      await applyPlugins(tx, companyId, profileId, agentId, snapshot.config.plugins, userId);
       await tx.insert(agentProfileBindings).values({ companyId, profileId: profile.id, agentId, appliedVersion: version, baseline: agentProfileConfigSchema.parse(snapshot.config), requestedByUserId: userId });
       await audit(tx, companyId, userId, "agent.profile_linked", profileId, { agentId, version });
     });
@@ -168,19 +200,23 @@ export function agentProfileService(db: Db) {
           if (effortKey === "modelReasoningEffort") { delete patch.adapterConfig.reasoningEffort; delete patch.adapterConfig.effort; }
         }
         await agentService(tx as unknown as Db).update(agentId, patch, { recordRevision: { createdByUserId: binding.requestedByUserId, source: "agent_profile" } });
+        await applyPlugins(tx, binding.companyId, binding.profileId, agentId, next.plugins, binding.requestedByUserId);
         await tx.update(agentProfileBindings).set({ appliedVersion: version.version, pendingVersion: null, baseline: next, overrides, error: null, updatedAt: new Date() }).where(eq(agentProfileBindings.agentId, agentId));
         await audit(tx, binding.companyId, binding.requestedByUserId, "agent.profile_applied", binding.profileId, { agentId, version: version.version, overrides });
         return true;
       });
     } catch (error) {
       // No source/credential/config content enters this public error field.
-      const message = error instanceof Error && /프로필|권한|스킬|실행 방식|모델|에포트/.test(error.message) ? error.message : "프로필 반영에 실패했습니다. 에이전트 설정을 확인한 뒤 다시 반영해 주세요.";
+      const message = error instanceof Error && /프로필|플러그인|권한|스킬|실행 방식|모델|에포트/.test(error.message) ? error.message : "프로필 반영에 실패했습니다. 에이전트 설정을 확인한 뒤 다시 반영해 주세요.";
       await db.update(agentProfileBindings).set({ error: message, updatedAt: new Date() }).where(eq(agentProfileBindings.agentId, agentId));
       return false;
     }
   }
   return {
     get, create, update, bind, applyPending,
+    listPlugins: async () => (await db.select().from(plugins).where(sql`${plugins.status} <> 'uninstalled'`))
+      .filter(p => p.manifestJson.capabilities.includes("agent.tools.register") && p.manifestJson.tools?.length)
+      .map(p => ({ key: p.pluginKey, name: p.manifestJson.displayName, description: p.manifestJson.description, available: p.status === "ready", toolCount: p.manifestJson.tools!.length })),
     fromAgent: async (companyId: string, agentId: string, actor: AuthorizationActor) => {
       const agent = await agentService(db).getById(agentId);
       if (!agent || agent.companyId !== companyId) throw notFound("에이전트를 찾을 수 없습니다.");

@@ -2,6 +2,7 @@ import type { AgentProfile, AgentProfileDetail, CreateAgentProfile, UpdateAgentP
 import { api, requestResponse } from "./client";
 const path = (companyId: string) => `/companies/${encodeURIComponent(companyId)}/agent-profiles`;
 export const agentProfilesApi = {
+  plugins: (companyId: string) => api.get<Array<{ key: string; name: string; description: string; available: boolean; toolCount: number }>>(`${path(companyId)}/plugins`),
   list: (companyId: string) => api.get<AgentProfile[]>(path(companyId)),
   get: (companyId: string, id: string) => api.get<AgentProfileDetail>(`${path(companyId)}/${encodeURIComponent(id)}`),
   create: (companyId: string, input: CreateAgentProfile) => api.post<AgentProfileDetail>(path(companyId), input),

@@ -6,7 +6,7 @@ import plugin from "../src/worker.js";
 
 describe("Auto Sourcing native plugin", () => {
   it("declares stored-read tools, not marketplace actions or unrestricted network", () => {
-    expect(pluginManifestV1Schema.parse(manifest).tools?.map(tool => tool.name)).toEqual(["get-processing-source", "list-processing-drafts", "get-processing-draft", "validate-processing-draft", "create-processing-draft", "save-processing-draft", "list-order-accounts", "list-orders", "get-order"]);
+    expect(pluginManifestV1Schema.parse(manifest).tools?.map(tool => tool.name)).toEqual(["list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "get-processing-source", "list-processing-drafts", "get-processing-draft", "validate-processing-draft", "create-processing-draft", "save-processing-draft", "list-order-accounts", "list-orders", "get-order"]);
     expect(manifest.capabilities).not.toContain("http.outbound");
     expect(manifest.capabilities).not.toContain("secrets.read-ref");
   });

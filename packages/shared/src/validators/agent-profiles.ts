@@ -8,6 +8,8 @@ export const agentProfileConfigSchema = z.object({
   // Omitted in older snapshots: keep existing agent execution settings.
   dangerouslyBypassApprovalsAndSandbox: z.boolean().optional(), search: z.boolean().optional(),
   skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
+  // Absence in an old version preserves existing agent tool permissions.
+  plugins: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
 }).strict().transform(({ role: _role, title: _title, ...config }) => config);
 export const createAgentProfileSchema = z.object({ name: z.string().trim().min(1).max(100), description: z.string().trim().max(300).default(""), config: agentProfileConfigSchema }).strict();
 export const updateAgentProfileSchema = createAgentProfileSchema.extend({ expectedVersion: z.number().int().positive(), applyToLinked: z.boolean().default(false) }).strict();

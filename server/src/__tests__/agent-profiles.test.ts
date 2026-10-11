@@ -6,7 +6,9 @@ import path from "node:path";
 import express from "express";
 import request from "supertest";
 import { eq } from "drizzle-orm";
-import { createDb, companies, agents, authUsers, companyMemberships, principalPermissionGrants, heartbeatRuns, agentProfiles, agentProfileVersions, agentProfileBindings, activityLog } from "@paperclipai/db";
+import { createDb, companies, agents, authUsers, companyMemberships, principalPermissionGrants, heartbeatRuns, agentProfiles, agentProfileVersions, agentProfileBindings, activityLog, plugins, toolProfiles, toolProfileEntries, toolProfileBindings } from "@paperclipai/db";
+import { toolAccessPolicyService } from "../services/tool-access-policy.js";
+import processingManifest from "../../../packages/plugins/plugin-sourcing-processing/src/manifest.js";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { agentProfileService } from "../services/agent-profiles.js";
 import { agentInstructionsService } from "../services/agent-instructions.js";
@@ -48,9 +50,52 @@ beforeAll(async () => {
   await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "operator" });
   await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "agents:configure" });
   await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "agents:create" });
+  await db.insert(plugins).values({ pluginKey: processingManifest.id, packageName: "@paperclipai/plugin-sourcing-processing", version: "0.1.0", status: "ready", manifestJson: processingManifest });
 }, 90000);
 afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 describe("versioned agent profiles", () => {
+  it("grants real plugin access, defers removal during runs, and preserves independent grants", async () => {
+    const { service, profile, agent } = await linked({ ...input.config, plugins: [processingManifest.id] });
+    const policy = toolAccessPolicyService(db);
+    const decision = (toolName: string) => policy.decide({ companyId, actor: { actorType: "agent", actorId: agent.id, agentId: agent.id }, request: { toolName, providerType: "plugin", riskLevel: "read" }, writeAuditEvent: false });
+    const name = `${processingManifest.id}:list-sourcing-workspace`;
+    expect((await decision(name)).allowed).toBe(true);
+    const [manual] = await db.insert(toolProfiles).values({ companyId, profileKey: randomUUID(), name: randomUUID(), defaultAction: "deny" }).returning();
+    await db.insert(toolProfileEntries).values({ companyId, profileId: manual.id, selectorType: "tool_name", effect: "include", toolName: "manual:reference" });
+    await db.insert(toolProfileBindings).values({ companyId, profileId: manual.id, targetType: "agent", targetId: agent.id });
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent.id, status: "running", invocationSource: "on_demand" }).returning();
+    const pending = await service.update(companyId, profile.id, { ...input, config: { ...input.config, plugins: [] }, expectedVersion: 1, applyToLinked: true }, userId);
+    expect(pending.bindings[0].pendingVersion).toBe(2);
+    expect((await decision(name)).allowed).toBe(true);
+    await db.update(heartbeatRuns).set({ status: "succeeded" }).where(eq(heartbeatRuns.id, run.id));
+    expect(await service.applyPending(agent.id)).toBe(true);
+    expect((await decision(name)).allowed).toBe(false);
+    expect((await decision("manual:reference")).allowed).toBe(true);
+  });
+  it("preserves tool access for old snapshots and profile deletion, and rejects unavailable plugins/viewers", async () => {
+    const { service, profile, agent } = await linked({ ...input.config, plugins: [processingManifest.id] });
+    const owned = (await db.select().from(toolProfiles)).find(p => p.metadata.agentId === agent.id)!;
+    await service.update(companyId, profile.id, { ...input, expectedVersion: 1, applyToLinked: true }, userId);
+    expect((await db.select().from(toolProfileEntries).where(eq(toolProfileEntries.profileId, owned.id))).length).toBe(6);
+    await service.remove(companyId, profile.id, 2, userId);
+    expect((await db.select().from(toolProfileBindings).where(eq(toolProfileBindings.profileId, owned.id))).length).toBe(1);
+    await expect(service.create(companyId, { ...input, config: { ...input.config, plugins: ["missing.plugin"] } }, userId)).rejects.toThrow("플러그인");
+    const viewer = randomUUID();
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: viewer, membershipRole: "viewer" });
+    await expect(service.create(companyId, { ...input, config: { ...input.config, plugins: [processingManifest.id] } }, viewer)).rejects.toThrow("권한");
+    const response = await request(app()).get(`${base}/plugins`);
+    expect(response.status).toBe(200);
+    expect(response.body).toContainEqual(expect.objectContaining({ key: processingManifest.id, toolCount: 6, available: true }));
+  });
+  it("binds selected plugins during a real profile hire", async () => {
+    const profile = await agentProfileService(db).create(companyId, { ...input, config: { ...input.config, plugins: [processingManifest.id] } }, userId);
+    const result = await request(app()).post(`/api/companies/${companyId}/agent-hires`).send({ name: `Plugin hire ${randomUUID()}`, adapterType: "codex_local", adapterConfig: { cwd: home }, runtimeConfig: { heartbeat: { enabled: false } }, profileId: profile.id, profileVersion: 1 });
+    expect(result.status, JSON.stringify(result.body)).toBe(201);
+    const id = result.body.agent.id;
+    const grant = (await db.select().from(toolProfiles)).find(p => p.metadata.agentId === id)!;
+    expect((await db.select().from(toolProfileEntries).where(eq(toolProfileEntries.profileId, grant.id))).map(e => e.toolName)).toContain(`${processingManifest.id}:save-managed-product`);
+    expect((await db.select().from(toolProfileBindings).where(eq(toolProfileBindings.profileId, grant.id)))[0]).toMatchObject({ targetType: "agent", targetId: id });
+  });
   it("uses profile execution options for hires and lets explicit false settings override them", async () => {
     const service = agentProfileService(db);
     const profile = await service.create(companyId, { ...input, config: { ...input.config, dangerouslyBypassApprovalsAndSandbox: true, search: true } }, userId);

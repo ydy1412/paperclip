@@ -11,9 +11,12 @@ import { startEmbeddedPostgresTestDatabase } from "./embedded-postgres.js";
 import { autoSourcingPluginService } from "../../services/auto-sourcing-plugin.js";
 import { createPluginWorkerHandle } from "../../services/plugin-worker-manager.js";
 import { secretService } from "../../services/secrets.js";
-import manifest from "../../../../packages/plugins/plugin-auto-sourcing/src/manifest.js";
+import baseManifest from "../../../../packages/plugins/plugin-auto-sourcing/src/manifest.js";
+import productManifest from "../../../../packages/plugins/plugin-sourcing-processing/src/manifest.js";
 
-export async function startProcessingFixture(mode = "synthetic") {
+export async function startProcessingFixture(mode = "synthetic", productOnly = false) {
+  const manifest = productOnly ? productManifest : baseManifest;
+  const packageName = productOnly ? "plugin-sourcing-processing" : "plugin-auto-sourcing";
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
   const scratch = mkdtempSync(path.join(process.env.PAPERCLIP_RUN_SCRATCH_DIR ?? tmpdir(), "processing-host-"));
   const previousKey = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
@@ -45,7 +48,7 @@ export async function startProcessingFixture(mode = "synthetic") {
     const [agent] = await db.insert(agents).values({ companyId, name: "Processing fixture", role: "general", adapterType: "codex_local" }).returning();
     const [issue] = await db.insert(issues).values({ companyId, projectId, title: "Synthetic processing", status: "in_progress", assigneeAgentId: agent.id }).returning();
     const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent.id, status: "running", contextSnapshot: { issueId: issue.id } }).returning();
-    const [plugin] = await db.insert(plugins).values({ pluginKey: manifest.id, packageName: "@paperclipai/plugin-auto-sourcing", version: manifest.version, manifestJson: manifest, status: "ready" }).returning();
+    const [plugin] = await db.insert(plugins).values({ pluginKey: manifest.id, packageName: `@paperclipai/${packageName}`, version: manifest.version, manifestJson: manifest, status: "ready" }).returning();
     const vault = secretService(db);
     const secret = await vault.create(companyId, { name: `fixture-${randomUUID()}`, provider: "local_encrypted", value: "s".repeat(40) });
     await vault.syncSecretRefsForTarget(companyId, { targetType: "plugin", targetId: plugin.id }, [{ secretId: secret.id, configPath: "serviceToken" }], { replaceAll: true });
@@ -53,11 +56,11 @@ export async function startProcessingFixture(mode = "synthetic") {
     await db.insert(pluginConfig).values({ pluginId: plugin.id, companyId, configJson: config });
     const service = autoSourcingPluginService(db, plugin.id, { processingPort: Number(new URL(info.url).port) });
     const handlers = createHostClientHandlers({ pluginId: plugin.id, capabilities: manifest.capabilities, services: { autoSourcing: service } as HostServices });
-    worker = createPluginWorkerHandle(plugin.id, { entrypointPath: path.join(root, "packages/plugins/plugin-auto-sourcing/dist/worker.js"), manifest, config,
+    worker = createPluginWorkerHandle(plugin.id, { entrypointPath: path.join(root, `packages/plugins/${packageName}/dist/worker.js`), manifest, config,
       instanceInfo: { instanceId: "isolated-processing", hostVersion: "1.0.0" }, apiVersion: 1, hostHandlers: handlers });
     await worker.start();
     const runContext = { companyId, projectId, agentId: agent.id, runId: run.id };
-    const tool = (toolName: string, input: Record<string, unknown> = {}) => worker!.call("executeTool", { toolName, parameters: { projectId, ...(toolName.includes("processing") ? { accountId } : {}), ...input }, runContext });
+    const tool = (toolName: string, input: Record<string, unknown> = {}) => worker!.call("executeTool", { toolName, parameters: { projectId, ...(!productOnly && toolName.includes("processing") ? { accountId } : {}), ...input }, runContext });
     const action = (input: Record<string, unknown>) => worker!.call("performAction", { key: "processing-draft", params: { projectId, accountId, ...input },
       actorContext: { type: "user", userId: "fixture-operator", agentId: null, runId: null, companyId }, renderEnvironment: null });
     const data = (input: Record<string, unknown>, key = "processing") => worker!.call("getData", { key, params: { projectId, accountId, ...input }, companyId });

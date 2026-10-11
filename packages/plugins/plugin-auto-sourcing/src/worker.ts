@@ -3,16 +3,11 @@ import { processingTools } from "./processing-tools.js";
 import type { AutoSourcingProcessingRequest } from "@paperclipai/plugin-sdk";
 import manifest from "./manifest.js";
 import { catalogTools } from "./catalog-tools.js";
+import { registerCatalogTools } from "./register-catalog-tools.js";
 
 const plugin = definePlugin({
   async setup(ctx) {
-    for (const [name, operation] of catalogTools)
-      ctx.tools.register(name, manifest.tools!.find(tool => tool.name === name)!, async (params, run) => {
-        const fields = params as Record<string, unknown>;
-        const input = { ...fields, companyId: run.companyId, projectId: String(fields.projectId ?? ""), operation };
-        const data = operation === "save" ? await ctx.autoSourcing.catalogWrite(input) : await ctx.autoSourcing.catalogRead(input);
-        return { content: JSON.stringify(data), data: data as Record<string, unknown> };
-      });
+    registerCatalogTools(ctx, manifest, catalogTools);
     const processing = (params: Record<string, unknown>, companyId: string, operation: string) => {
       const { renderEnvironment: _renderEnvironment, ...fields } = params;
       const input = { ...fields, companyId, operation } as AutoSourcingProcessingRequest;

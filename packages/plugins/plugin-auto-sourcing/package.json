@@ -5,6 +5,7 @@
   "private": true,
   "description": "Auto Sourcing order reads, manual sync and operator-confirmed dispatch.",
   "files": ["dist", "README.md"],
+  "exports": { "./catalog-tools": "./src/catalog-tools.ts", "./register-catalog-tools": "./src/register-catalog-tools.ts" },
   "paperclipPlugin": { "manifest": "./dist/manifest.js", "worker": "./dist/worker.js" },
   "scripts": { "build": "node esbuild.config.mjs", "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": { "@paperclipai/plugin-sdk": "workspace:*" },

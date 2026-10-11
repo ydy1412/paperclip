@@ -11,6 +11,7 @@ description: "기존 업로드 상품을 참고해 선택한 소싱 상품의 �
 - 상품 수집, 쇼핑몰 등록·동기화, 판매가격 변경, 주문·배송 작업으로 확대하지 않는다.
 
 ## 2. GROUND
+- 가공 전 상품은 `list-sourcing-workspace(stage=unprocessed)`로 확인한다. 공통 편집본 목록이 비어 있다는 이유로 원본이 없다고 결론 내리지 않는다. 선택한 원본에 `start-managed-processing`을 호출하고 반환된 공통 상품 ID로 편집한다. 도구가 없으면 스킬 배정과 플러그인 연결·도구 권한을 구분해 원인을 보고한다.
 - 할당된 작업에서 회사·프로젝트·대상 상품 ID와 가공 범위를 확인한다. 기존 `sourcing-product-processing` 스킬의 원본·SKU 보존 절차를 함께 따른다.
 - 먼저 운영 플러그인의 실제 도구를 조회한다. [도구 호출](references/tools.md)에 조회·저장 경로와 입력 기준이 있다. 호출 이름과 스키마는 조회 결과를 따른다.
 - `list-managed-products`의 `view="uploads"`로 등록 상품을 읽고, 유사한 상품은 `get-managed-product`로 상세 설명과 SKU를 확인한다. 반환된 한 페이지를 전체 카탈로그라고 말하지 않는다.

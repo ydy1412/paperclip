@@ -17,6 +17,7 @@ export function agentProfileRoutes(db: Db) {
   });
   router.param("profileId", (_req, _res, next, id) => { if (!z.string().uuid().safeParse(id).success) throw badRequest("프로필 ID를 확인해 주세요."); next(); });
   router.get(base, async (req, res) => res.json(await service.list(req.params.companyId as string)));
+  router.get(`${base}/plugins`, async (_req, res) => res.json(await service.listPlugins()));
   router.get(`${base}/:profileId`, async (req, res) => res.json(await service.get(req.params.companyId as string, req.params.profileId as string)));
   router.post(base, validate(createAgentProfileSchema), async (req, res) => res.status(201).json(await service.create(req.params.companyId as string, req.body, req.actor.userId!)));
   router.post(`${base}/from-agent`, validate(z.object({ agentId: z.string().uuid() }).strict()), async (req, res) => res.status(201).json(await service.fromAgent(req.params.companyId as string, req.body.agentId, req.actor)));
