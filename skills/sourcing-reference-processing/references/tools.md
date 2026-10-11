@@ -91,3 +91,22 @@ URL·자격증명을 입력하지 않는다. 추천 결과는 `{code,name}`이�
 
 픽셀 크롭 도구는 아직 없다. HTML 편집·크롭 계획 저장을 실제 이미지 생성으로,
 카테고리 추천·메타정보 조회를 상품의 필수 사실 검증이나 업로드 완료로 표현하지 않는다.
+
+## 실행 폴더에서 첨부
+
+Paperclip의 `paperclip-upload-artifact.sh`를 사용할 때 샌드박스에서 쓰기 가능한
+`PAPERCLIP_RUN_SCRATCH_DIR`를 해당 호출의 `TMPDIR`로 지정한다. 기본 macOS 임시
+폴더는 실행의 허용 경로에 없을 수 있다. 제공된 폴더가 실제 존재하는지 확인하며
+권한·샌드박스 설정을 변경하지 않는다. 읽은 Paperclip 스킬의 helper와 실제 결과
+파일 경로를 사용한다.
+
+```sh
+test -n "$PAPERCLIP_RUN_SCRATCH_DIR" && test -d "$PAPERCLIP_RUN_SCRATCH_DIR" || exit 1
+TMPDIR="$PAPERCLIP_RUN_SCRATCH_DIR" bash "$PAPERCLIP_SKILL_DIR/scripts/paperclip-upload-artifact.sh" ./results/result.md --output json
+```
+
+`mkstemp` 실패로 첨부 요청 전에 중단됐으면 임시 경로를 확인한 뒤 한 번 다시
+시도한다. 업로드 응답이 불명확하면 첨부 목록·해시부터 확인하고 helper의 기존
+중복 확인 절차를 사용한다. 등록된 첨부·결과물 링크와 실제 내용 조회를 확인한 뒤
+`result` 문서에 반영한다. 쓰기 가능한 폴더가 없거나 첨부가 계속 실패하면 실행
+workspace 파일 결과물로 등록하고 실제 실패 단계와 남은 전달 한계를 기록한다.
