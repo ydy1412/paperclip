@@ -1461,3 +1461,29 @@ Provider category validation and pixel cropping remain unsupported. The category
 is empty pending operator review. No marketplace upload readiness is claimed.
 The runtime feature commit remains the PR #14 merge; this evidence-only follow-up
 does not require a runtime restart.
+
+## Existing Coupang category tools (2026-10-11)
+
+Connect the existing category recommendation and category metadata adapter reads
+to the product-processing plugin. The agent selects a registered Coupang store
+from its scoped store list; Auto Sourcing resolves its credentials internally.
+Foreign, disabled and unsupported stores must be rejected before provider access.
+Expose recommendation and required attributes, notices, certifications and
+documents as read-only tools. Recommendations do not attest product facts or
+make a product ready for publication. Existing draft saves remain separate.
+
+Validate the native worker/host/HTTP/SQLite path against a local HTTPS provider
+fixture, then verify an actual operating agent read and unchanged products.
+Submit reviewed feature PRs to dev and record compatible deployment commits.
+No schema migration, full category-tree import or pixel crop implementation is
+part of this increment.
+
+Implementation: plugin 0.2.0 provides `recommend-coupang-category` and
+`get-coupang-category-metadata` through native catalog reads. The company/project
+plugin binding and registered store scope are checked before credential access.
+The assigned skill documents store selection and the difference between required
+metadata and verified product facts. Local verification passed 29 focused tests:
+12 .NET catalog/category/publication gates, 4 plugin tests and 13 native authority,
+catalog and worker/HTTP/SQLite integration tests. Shared/plugin/server builds and
+typechecks, module boundaries and token gates passed. The full repository suite
+and real seller reads are not acceptance evidence yet. No UI test was required.

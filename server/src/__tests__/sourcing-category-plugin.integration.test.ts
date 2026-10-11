@@ -1,0 +1,30 @@
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { issues, pluginConfig } from "@paperclipai/db";
+import { catalogCategoryMetadataSchema, catalogCategoryRecommendationSchema, managedProductSchema, storeSettingsSchema } from "@paperclipai/shared";
+import { startProcessingFixture } from "./helpers/sourcing-processing-fixture.js";
+
+let f: Awaited<ReturnType<typeof startProcessingFixture>>;
+beforeAll(async () => { f = await startProcessingFixture("catalog-browser", true); }, 90000);
+afterAll(async () => { await f?.close(); });
+it("reads categories through the real worker, scoped host, HTTP, SQLite and signed HTTPS provider", async () => {
+  const settings = storeSettingsSchema.parse((await f.tool("list-product-stores")).data);
+  const storeId = settings.stores[0].id;
+  const before = (await f.tool("list-managed-products", { view: "uploads" })).data;
+  const recommendation = catalogCategoryRecommendationSchema.parse((await f.tool("recommend-coupang-category", { storeId, productName: "삼각형 책상" })).data);
+  expect(recommendation).toEqual({ code: 77968, name: "일반책상" });
+  const metadata = catalogCategoryMetadataSchema.parse((await f.tool("get-coupang-category-metadata", { storeId, categoryCode: recommendation.code })).data);
+  expect(metadata.attributes).toMatchObject([{ name: "색상", required: true }]);
+  expect(metadata.notices).toMatchObject([{ name: "품명", required: true }]);
+  expect(metadata.documents).toMatchObject([{ condition: "battery_un_test" }]);
+  expect((await f.tool("list-managed-products", { view: "uploads" })).data).toEqual(before);
+  expect(managedProductSchema.array().parse(before)).toHaveLength(1);
+  await expect(f.tool("recommend-coupang-category", { storeId: "f".repeat(32), productName: "책상" })).rejects.toThrow("processing_scope_mismatch");
+  await expect(f.tool("recommend-coupang-category", { storeId, productName: " " })).rejects.toThrow();
+  await expect(f.tool("get-coupang-category-metadata", { storeId, categoryCode: 0 })).rejects.toThrow();
+  await f.db.update(pluginConfig).set({ configJson: { ...f.config, projects: {} } }).where(eq(pluginConfig.pluginId, f.plugin.id));
+  await expect(f.tool("get-coupang-category-metadata", { storeId, categoryCode: 77968 })).rejects.toThrow("프로젝트에 연결된");
+  await f.db.update(pluginConfig).set({ configJson: f.config }).where(eq(pluginConfig.pluginId, f.plugin.id));
+  await f.db.update(issues).set({ projectId: null }).where(eq(issues.id, f.issue.id));
+  await expect(f.tool("get-coupang-category-metadata", { storeId, categoryCode: 77968 })).rejects.toThrow("에이전트 작업");
+});
