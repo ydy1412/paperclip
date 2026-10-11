@@ -41,6 +41,41 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 
 describe("candidate collection selection", () => {
+  it("shows a compact candidate table with site, product ID and URL while preserving full keywords in details", async () => {
+    rows = [candidate("732092188696")];
+    rows[0].candidate!.mainKeyword = "장스탠드, 마카롱 램프, 스탠드 조명";
+    rows[0].candidate!.subKeyword = "긴 서브 키워드와 검색용 문구";
+    rows[0].title = `${rows[0].candidate!.mainKeyword} · ${rows[0].candidate!.subKeyword}`;
+    await render();
+    const table = host.querySelector('table')!;
+    expect(table.querySelector('caption')?.textContent).toBe("소싱 후보 목록");
+    expect([...table.querySelectorAll('thead th')].map(th => th.textContent)).toEqual(["선택", "대표 키워드", "사이트", "상품 ID", "URL", "수집 상태"]);
+    expect(table.textContent).toContain("장스탠드"); expect(table.textContent).toContain("타오바오");
+    expect(table.textContent).not.toContain("마카롱 램프"); expect(table.textContent).not.toContain("긴 서브 키워드");
+    const link = table.querySelector<HTMLAnchorElement>('a')!;
+    expect(link.href).toBe(rows[0].candidate!.url); expect(link.target).toBe("_blank");
+    expect(requests()).toHaveLength(0);
+    await click(button("장스탠드"));
+    const detail = host.querySelector('[aria-label="소싱 후보 정보"]')!;
+    expect(detail.textContent).toContain(rows[0].candidate!.mainKeyword); expect(detail.textContent).toContain(rows[0].candidate!.subKeyword);
+    await click(checkbox("소싱 후보 선택: 장스탠드"));
+    expect(button("장스탠드").getAttribute("aria-pressed")).toBe("true"); expect(requests()).toHaveLength(0);
+  });
+
+  it("derives the site from the real URL host and never links invalid or executable URLs", async () => {
+    rows = [candidate("1"), candidate("2"), candidate("3"), candidate("4")];
+    rows[1].candidate!.url = "https://example.com/item/2";
+    rows[2].candidate!.url = "https://taobao.com.example.com/item/3";
+    rows[3].candidate!.url = "javascript:alert(1)";
+    await render();
+    const tableRows = [...host.querySelectorAll('tbody tr')];
+    expect(tableRows[0].textContent).toContain("타오바오");
+    expect(tableRows[1].querySelectorAll('td')[1].textContent).toBe("example.com");
+    expect(tableRows[2].querySelectorAll('td')[1].textContent).toBe("taobao.com.example.com");
+    expect(tableRows[3].querySelector('a')).toBeNull(); expect(tableRows[3].textContent).toContain("URL 확인 필요");
+    expect(requests()).toHaveLength(0);
+  });
+
   it("selects only eligible candidates and queues each once without opening the detail panel", async () => {
     await render(); expect(queue().disabled).toBe(true);
     await click(checkbox("소싱 후보 선택: 후보 1"));
