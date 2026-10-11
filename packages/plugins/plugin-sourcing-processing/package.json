@@ -1,0 +1,14 @@
+{
+  "name": "@paperclipai/plugin-sourcing-processing",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "API-only sourcing product processing, with local revision-checked saves.",
+  "files": ["dist", "README.md"],
+  "paperclipPlugin": { "manifest": "./dist/manifest.js", "worker": "./dist/worker.js" },
+  "scripts": { "build": "node esbuild.config.mjs", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@paperclipai/plugin-sdk": "workspace:*", "@paperclipai/plugin-auto-sourcing": "workspace:*" },
+  "devDependencies": { "@paperclipai/shared": "workspace:*", "@types/node": "^24.0.0", "esbuild": "^0.28.2", "typescript": "^7.0.2", "vitest": "^4.1.11" },
+  "engines": { "node": ">=24.11.0" },
+  "license": "MIT"
+}
