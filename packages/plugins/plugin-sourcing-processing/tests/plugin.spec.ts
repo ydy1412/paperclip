@@ -14,7 +14,7 @@ describe("product-only processing plugin", () => {
     await harness.executeTool("inspect-product-image", { ...input, companyId: "forged" }, { companyId: "actual" });
     expect(read).toHaveBeenLastCalledWith({ ...input, companyId: "actual", operation: "image-inspect" });
     expect(write).not.toHaveBeenCalled();
-    const edit = { ...input, expectedRevision: 1, requestId: "r", removeChinese: true, crop: { x: 0, y: 100, width: 600, height: 400 } };
+    const edit = { ...input, expectedRevision: 1, requestId: "r", removeChinese: true, cleanupRegions: [{ x: 20, y: 150, width: 200, height: 60 }], crop: { x: 0, y: 100, width: 600, height: 400 } };
     await harness.executeTool("process-product-image", edit, { companyId: "actual" });
     expect(write).toHaveBeenLastCalledWith({ ...edit, companyId: "actual", operation: "image-process" });
   });

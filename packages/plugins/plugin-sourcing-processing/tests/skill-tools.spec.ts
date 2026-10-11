@@ -38,6 +38,14 @@ async function fixture(executeStatus = 200, image = false) {
   return { file, env };
 }
 describe("sourcing skill native tool runner", () => {
+  it.each(["", "../asset", null])("rejects malformed asset id %s before tool execution", async assetId => {
+    const { file, env } = await fixture(200, true);
+    await writeFile(file, JSON.stringify({ projectId: "project", productId: "product", assetId }));
+    await expect(execute(process.execPath, [script, "call", "get-product-image", file], {
+      env: { ...env, PAPERCLIP_RUN_SCRATCH_DIR: dirname(file) },
+    })).rejects.toMatchObject({ stderr: expect.stringContaining("image_parameters_require_assetId") });
+    expect(requests.map(request => request.path)).toEqual(["/api/plugins/tools"]);
+  });
   it("saves an authorized PNG into run scratch without printing media data and recovers identical reads", async () => {
     const { file, env } = await fixture(200, true);
     const assetId = "a".repeat(32);

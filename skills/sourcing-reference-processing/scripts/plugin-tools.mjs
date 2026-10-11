@@ -35,6 +35,10 @@ export async function main(args, env = process.env) {
     throw new Error('parameters_require_projectId');
   }
   if (['companyId', 'agentId', 'runId', 'runContext'].some(key => Object.hasOwn(parameters, key))) throw new Error('identity_must_come_from_injected_run');
+  if (tool === prefix + 'get-product-image') {
+    if (typeof parameters.assetId !== 'string' || !/^[a-f0-9]{32}$/.test(parameters.assetId)) throw new Error('image_parameters_require_assetId');
+    if (!env.PAPERCLIP_RUN_SCRATCH_DIR) throw new Error('image_scratch_context_missing');
+  }
   const response = await request('/plugins/tools/execute', {
     tool, parameters, runContext: {
       companyId: env.PAPERCLIP_COMPANY_ID, agentId: env.PAPERCLIP_AGENT_ID,
@@ -42,7 +46,6 @@ export async function main(args, env = process.env) {
     },
   });
   if (tool === prefix + 'get-product-image') {
-    if (!env.PAPERCLIP_RUN_SCRATCH_DIR || !/^[a-f0-9]{32}$/.test(parameters.assetId)) throw new Error('image_scratch_context_missing');
     const data = response.result?.data;
     if (data?.contentType !== 'image/png' || typeof data.base64 !== 'string' || data.base64.length > 8 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data.base64)) throw new Error('invalid_image_response');
     const bytes = Buffer.from(data.base64, 'base64');
