@@ -1,5 +1,7 @@
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile, realpath, writeFile, lstat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const prefix = 'paperclipai.plugin-sourcing-processing:';
 
@@ -39,6 +41,18 @@ export async function main(args, env = process.env) {
       runId: env.PAPERCLIP_RUN_ID, projectId: parameters.projectId,
     },
   });
+  if (tool === prefix + 'get-product-image') {
+    if (!env.PAPERCLIP_RUN_SCRATCH_DIR || !/^[a-f0-9]{32}$/.test(parameters.assetId)) throw new Error('image_scratch_context_missing');
+    const data = response.result?.data;
+    if (data?.contentType !== 'image/png' || typeof data.base64 !== 'string' || data.base64.length > 8 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data.base64)) throw new Error('invalid_image_response');
+    const bytes = Buffer.from(data.base64, 'base64');
+    if (!bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error('invalid_png_signature');
+    const directory = await realpath(env.PAPERCLIP_RUN_SCRATCH_DIR);
+    const filePath = join(directory, parameters.assetId + '.png');
+    try { await writeFile(filePath, bytes, { flag: 'wx', mode: 0o600 }); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; if ((await lstat(filePath)).isSymbolicLink()) throw new Error('image_path_is_symlink'); if (!(await readFile(filePath)).equals(bytes)) throw new Error('existing_image_changed'); }
+    return { filePath, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
+  }
   return response;
 }
 
