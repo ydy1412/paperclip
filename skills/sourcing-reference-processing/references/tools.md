@@ -12,13 +12,23 @@ Paperclip 로컬 실행은 `PAPERCLIP_API_URL`, `PAPERCLIP_API_KEY`,
 현재 작업의 프로젝트를 사용한다. 키를 출력하거나 보드의 인증 파일을 읽지 않는다.
 API 변수나 작업 범위가 없으면 설정 문제로 기록한다.
 
+기본 실행 도우미는 이 스킬의 `scripts/plugin-tools.mjs`다. `list`는 실제 허용된
+가공 플러그인 도구와 스키마만 반환한다. `call`은 입력 파일의 `projectId`와
+주입된 실제 run 인증으로 호출한다. API 주소의 `/api` 유무는 도우미가 처리한다.
+쓰기 실패나 응답 유실을 자동 재시도하지 않는다.
+
+읽은 스킬 디렉터리를 `SOURCING_PROCESSING_SKILL_DIR`로 지정하고 다음과 같이 실행한다.
+
 ```sh
-PAPERCLIP_API_BASE="${PAPERCLIP_API_URL%/}"
-PAPERCLIP_API_BASE="${PAPERCLIP_API_BASE%/api}"
-curl --fail-with-body -sS \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
-  "$PAPERCLIP_API_BASE/api/plugins/tools"
+node "$SOURCING_PROCESSING_SKILL_DIR/scripts/plugin-tools.mjs" list
+node "$SOURCING_PROCESSING_SKILL_DIR/scripts/plugin-tools.mjs" call get-processing-source ./parameters.json
 ```
+
+입력 JSON은 스크립트/파일로 구성한다. 인증 파일을 읽거나 키를 본문에 넣지 않는다.
+MCP 검색이 `requires approval`/`approval policy never`로 거부되더라도 native API는
+회사·실제 run·할당 작업·프로필 도구 권한을 별도로 검증한다. 도우미로 실제 도구를
+확인하며 승인·샌드박스 설정을 바꾸지 않는다. native API도 거부되면 중단해 원인을
+보고한다. 다른 계정이나 보드 인증으로 재시도하지 않는다.
 
 반환된 fully qualified `name`과 `parametersSchema`를 사용한다.
 `POST /api/plugins/tools/execute`에는 `tool`, `parameters`, `runContext`를 전달한다.
@@ -31,6 +41,7 @@ JSON은 스크립트로 구성하거나 파일을 사용하고 토큰은 본문�
 | 발견된 이름의 접미사 | parameters |
 | --- | --- |
 | `list-sourcing-workspace` | `projectId`, `stage="unprocessed"`, 선택 `query`, `page` |
+| `get-processing-source` | `projectId`, 같은 프로젝트 쇼핑몰의 `accountId`, `sourceProvider="taobao"`, 원본 `productId` |
 | `start-managed-processing` | `projectId`, `sourceProvider="taobao"`, `sourceProductId` |
 | `list-managed-products` | `projectId`, `view="uploads"` 또는 `"source"`, 선택 `query`, `page` |
 | `get-managed-product` | `projectId`, `productId` |
@@ -61,6 +72,10 @@ SKU 사진·상품 상세 사진처럼 실제 제품임을 확인한 원본 이�
 프로젝트·판매 계정 바인딩과 원본 상품 allowlist를 요구한다.
 `sourcing-product-processing`의 절차와 발견된 schemas를 따른다.
 공통 상품 ID, 타오바오 원본 productId, draftId와 각각의 revision을 혼동하지 않는다.
+전용 가공 플러그인에서도 `get-processing-source`를 제공한다. `list-product-stores`의
+실제 `accountId`를 사용하며 sourceHash와 원문 옵션을 읽는다. `start-managed-processing`
+은 기존 편집본을 반환할 수 있으므로 원본 재조회 도구를 대신하지 않는다. 나머지
+초안 도구는 별도로 발견되고 허용된 경우에만 사용한다.
 
 ## 쿠팡 카테고리
 
