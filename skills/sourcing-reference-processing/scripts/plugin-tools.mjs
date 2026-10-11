@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 const prefix = 'paperclipai.plugin-sourcing-processing:';
@@ -42,7 +42,7 @@ export async function main(args, env = process.env) {
   return response;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1])).href) {
   try {
     const result = await main(process.argv.slice(2));
     process.stdout.write(JSON.stringify(result, null, 2).replaceAll(process.env.PAPERCLIP_API_KEY, '[redacted]') + '\n');
