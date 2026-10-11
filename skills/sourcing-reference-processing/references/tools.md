@@ -17,7 +17,7 @@ API 변수나 작업 범위가 없으면 설정 문제로 기록한다.
 주입된 실제 run 인증으로 호출한다. API 주소의 `/api` 유무는 도우미가 처리한다.
 쓰기 실패나 응답 유실을 자동 재시도하지 않는다.
 
-읽은 스킬 디렉터리를 `SOURCING_PROCESSING_SKILL_DIR`로 지정하고 다음과 같이 실행한다.
+읽은 스킬 디렉터리를 별도의 `export SOURCING_PROCESSING_SKILL_DIR="<실제 스킬 경로>"` 명령으로 먼저 지정하고 다음 명령에서 사용한다. 경로 변수를 같은 명령의 접두에 설정하면 경로 확장 시 아직 비어 있을 수 있다.
 
 ```sh
 node "$SOURCING_PROCESSING_SKILL_DIR/scripts/plugin-tools.mjs" list
