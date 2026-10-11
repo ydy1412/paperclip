@@ -81,14 +81,29 @@ describe("store settings and common product editor", () => {
     });
     await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await click("기존 소싱 후보 불러오기");
     expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("소싱 후보 (1)");
-    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')[0].click()); await settle();
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')[0].click()); await settle();
     expect(document.querySelector('[aria-label="소싱 후보 정보"]')?.textContent).toContain("키워드");
     expect(mock.request.mock.calls.some(c => c[2].operation === "candidate-collect")).toBe(false);
-    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')[1].click()); await settle();
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')[1].click()); await settle();
     expect(document.querySelector('[aria-label="가공 전 상품 정보"] iframe')).not.toBeNull();
     expect(mock.request.mock.calls.some(c => c[2].operation === "source")).toBe(false);
     await click("가공 시작"); expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "source", sourceProvider: "taobao", sourceProductId: "456" });
     expect(document.querySelector('[aria-label="상품 편집"]')).not.toBeNull();
+  });
+  it("blocks candidate selection and collection while a product has unsaved edits", async () => {
+    const original = mock.request.getMockImplementation();
+    const candidate = { id: "candidate", kind: "candidate", title: "선택 후보", mainImage: "", stage: "candidate", product: null, source: null, candidate: { id: "candidate", sourceProductId: "123", url: "https://item.taobao.com/item.htm?id=123", mainKeyword: "", subKeyword: "", collectionState: "idle", errorCode: "" } };
+    mock.request.mockImplementation(async (...args) => args[2].operation === "workspace" ? [candidate, ...(await original?.(...args))] : original?.(...args));
+    await render(<SourcingProducts companyId="company" projectId="project" view="source" />);
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 후보 선택: 선택 후보"]')!.click()); await settle();
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')[1].click()); await settle();
+    await input("상품명", "수정 중 상품");
+    expect(document.querySelector<HTMLButtonElement>('[aria-label="소싱 후보 선택: 선택 후보"]')!.disabled).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('[aria-label="현재 페이지 수집 가능한 후보 전체 선택"]')!.disabled).toBe(true);
+    const queue = [...document.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "선택한 후보 수집 큐에 추가")!;
+    expect(queue.disabled).toBe(true); await act(async () => queue.click());
+    expect(mock.request.mock.calls.some(c => c[2].operation === "candidate-collect")).toBe(false);
+    expect(document.querySelector<HTMLInputElement>('[aria-label="상품명"]')!.value).toBe("수정 중 상품");
   });
   it.each(["source", "uploads"] as const)("searches and clears %s across server pages without losing unsaved edits", async view => {
     const original = mock.request.getMockImplementation();
@@ -179,7 +194,7 @@ describe("store settings and common product editor", () => {
     expect(document.body.textContent).toContain("저장하지 않은 변경 있음");
   });
   it("provides the same editable fields from a sourcing item", async () => {
-    product.listings = []; await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button')!.click()); await settle();
+    product.listings = []; await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')!.click()); await settle();
     await click("HTML 편집");
     for (const label of ["상품명", "대표 이미지 URL", "카테고리 코드", "상세 설명", "옵션 1 상품명", "옵션 1-1 이름", "옵션 1-1 값"]) expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     expect(document.body.textContent).toContain("쇼핑몰 선택");
