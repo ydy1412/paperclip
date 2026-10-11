@@ -82,6 +82,7 @@ export function SourcingWorkspace({ companyId, projectId }: { companyId: string;
   const picked = eligible.filter(item => selection.scope === selectionScope && selection.ids.includes(item.candidate!.id));
   const selectionDisabled = dirty || busy || list.isFetching || !!list.error;
   const result = collectionResult?.scope === selectionScope ? collectionResult : null;
+  const tableLayout = !!list.data?.some(item => item.candidate) && !selected?.product;
   if (!enabled) return <p className="text-sm text-muted-foreground">상품을 관리할 프로젝트를 선택해 주세요.</p>;
   const failure = error || (list.error || counts.error || settings.error || jobs.error ? catalogErrorMessage(list.error ?? counts.error ?? settings.error ?? jobs.error) : "");
   const candidate = selected?.candidate; const source = selected?.source;
@@ -95,7 +96,7 @@ export function SourcingWorkspace({ companyId, projectId }: { companyId: string;
       <p className="text-xs text-muted-foreground">큐에 넣은 순서대로 한 상품씩 수집합니다.</p>
       {result && <><p role="status" className="text-sm">수집 요청 {result.accepted}개 접수{result.failures.length > 0 && ` · ${result.failures.length}개 확인 필요`}</p>{result.failures.length > 0 && <ul className="space-y-1 text-sm text-destructive">{result.failures.map(item => <li key={item.id}>{item.title}: {item.message}</li>)}</ul>}</>}
     </div>}
-    <div className="grid min-w-0 gap-4 xl:grid-cols-2"><section aria-label="소싱 상품 목록" className="min-w-0 space-y-2">
+    <div className={`grid min-w-0 gap-4 ${tableLayout ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}><section aria-label="소싱 상품 목록" className={`min-w-0 space-y-2 ${tableLayout ? "xl:col-span-2" : ""}`}>
       {list.isLoading && <p className="text-sm text-muted-foreground">상품 조회 중</p>}
       {list.data?.length === 0 && <p className="rounded-lg border border-border p-6 text-sm text-muted-foreground">{query ? "검색 결과가 없습니다." : stage === "candidate" || stage === "all" ? "기존 소싱 후보를 불러오거나 다른 단계를 선택해 주세요." : "이 단계의 상품이 없습니다."}</p>}
       {list.data?.some(item => item.candidate) && <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full text-left text-sm">
