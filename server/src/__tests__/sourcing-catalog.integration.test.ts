@@ -78,6 +78,20 @@ describe("catalog price confirmation across the real HTTP and provider boundarie
   let f: Awaited<ReturnType<typeof startProcessingFixture>>;
   beforeAll(async () => { f = await startProcessingFixture("catalog-browser"); }, 90000);
   afterAll(async () => { await f?.close(); });
+  it("dispatches category reads on the board HTTP route without writing products", async () => {
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { req.actor = { type: "board", userId: "fixture-operator", source: "board_key", companyIds: [f.companyId] }; next(); });
+    app.use("/api", boardMutationGuard()); app.use("/api", sourcingCatalogRoutes(f.db, { processingPort: Number(new URL(f.url).port) })); app.use(errorHandler);
+    const url = `/api/companies/${f.companyId}/sourcing/projects/${f.projectId}/catalog`;
+    const settings = await request(app).post(url).send({ operation: "settings" });
+    const storeId = settings.body.stores[0].id;
+    const before = await request(app).post(url).send({ operation: "list", view: "uploads" });
+    const recommendation = await request(app).post(url).send({ operation: "category-recommend", storeId, productName: "책상", companyId: crypto.randomUUID(), projectId: crypto.randomUUID() });
+    expect(recommendation.status).toBe(200); expect(recommendation.body).toEqual({ code: 77968, name: "일반책상" });
+    const metadata = await request(app).post(url).send({ operation: "category-metadata", storeId, categoryCode: recommendation.body.code });
+    expect(metadata.status).toBe(200); expect(metadata.body.attributes[0]).toMatchObject({ name: "색상", required: true });
+    expect((await request(app).post(url).send({ operation: "list", view: "uploads" })).body).toEqual(before.body);
+  });
   it("accepts the backend confirmation hash and confirms the changed option price", async () => {
     const app = express(); app.use(express.json());
     app.use((req, _res, next) => { req.actor = { type: "board", userId: "fixture-operator", source: "board_key", companyIds: [f.companyId] }; next(); });

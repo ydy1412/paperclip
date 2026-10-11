@@ -1487,3 +1487,29 @@ metadata and verified product facts. Local verification passed 29 focused tests:
 catalog and worker/HTTP/SQLite integration tests. Shared/plugin/server builds and
 typechecks, module boundaries and token gates passed. The full repository suite
 and real seller reads are not acceptance evidence yet. No UI test was required.
+
+Operating reconciliation: reviewed PR #16 merged to dev at
+`35509adbce6730d8df355d8ddd2d0460231507ba`; Auto Sourcing PR #10 merged at
+`3aac142cca1420330fcacb19c6f401ce0d1bb5f6`. The compatible runtime received the
+catalog validator and host service, with backup hashes, idle guards, restart,
+health and anonymous rejection recorded. Auto Sourcing runs the merged API
+assembly without a database migration. Plugin 0.2.0 is ready, and profile version
+3 applies eight exact tool grants. Its three skills, Luna/high/search/sandbox
+settings and independent tool permissions are preserved.
+
+The actual agent's read-only category test succeeded. Coupang recommended
+`77968` / `일반책상`; metadata included required `사이즈` and `색상` attributes,
+notice groups, certifications and conditional documents. The target mixes a desk
+SKU with chair SKUs, so this is not evidence of suitability for every option.
+Independent authenticated readback confirmed the target revision 2, the entire
+raw source and all 244 existing uploaded products remain unchanged. The test
+result is saved as a versioned issue document. No product save or marketplace
+write was requested. MCP discovery required approval under the sandbox; the agent
+used the documented authenticated native tool API with its injected run identity.
+
+A later board HTTP read check exposed a route dispatch omission: the two new
+operations were sent to catalogWrite and rejected with 403. A real HTTP regression
+test reproduced it. The route now dispatches both operations through catalogRead,
+with the company/project URL remaining authoritative.
+All five catalog integration tests passed after the fix, as did server typecheck
+and compilation. Total unique focused cases for this increment are 30.
