@@ -1702,3 +1702,68 @@ bridge-browser-requests.jsonl,awaiting-detail.png,invoice-dialog.png,shipping.pn
 Paired dev rollout and rollback receipts are recorded separately in each
 repository's tmp/order-invoice-status/deployment.json; only complete proves
 rollout. The native release precedes compatible UI assets; host/core stays as is.
+
+### Forwarder account verification through Aside (2026-10-13)
+
+The user now explicitly chooses a fresh Aside session for every account-open
+action, superseding the earlier Chrome-only milestone. Use the selected encrypted
+account and snapshotted provider URL; submit normal login and verify authenticated
+access to that exact account before showing a green confirmation dot on the right.
+The dot means the latest credential check succeeded, not that all saved accounts
+are simultaneously signed in. Editing credentials/provider/site clears it.
+
+Extend the existing company/project-scoped registration with the latest check
+state, attempt/session handles, timestamps and safe failure code. Claim a check
+atomically; pin credential version/URL and ignore a stale completion after edits
+or deletion. Persist checking state so refresh/navigation cannot lose progress.
+Reconcile a saved native session and receipt instead of duplicating a login after
+an uncertain CLI interruption. Do not infer login from submission or exit zero.
+
+Reuse the existing native Aside session preparation/state/resume mechanics as a
+shared utility, keeping marketing exports compatible. Send credentials in an
+owner-only transient file in the fresh session's own directory, never prompt,
+command arguments, API response or logs. A trusted login helper loads them without
+printing, checks the exact HTTPS origin before each fill/submit, uses normal site
+controls and produces only a bounded receipt. Independently recheck the resulting
+tab and selected-account identity through native Aside before accepting success.
+Clean transient credentials after completion. Keep existing tabs and the result
+tab; do not change Aside profiles/security/settings or submit a shipping form.
+Actual human/security/access blockers are reported, not bypassed.
+
+Use existing UI tokens and accessible status text for unverified/checking/success/
+failure states. Poll only checking registrations. Verify encrypted PostgreSQL
+CRUD/isolation, concurrent/stale completion, redaction, native receipt/session
+handling and actual UI flows before PR. Separately test the real saved Next1688
+account, excluding all personal information in the supplied shipping-form image.
+Deploy only the reviewed compatible DB/schema/forwarder modules and UI with an
+additive migration and app/config backup. Preserve unrelated tables and newer
+data; do not replace the modern full core or restore an old DB as rollback.
+
+Verification (2026-10-13): the corrected saved Next1688 account passed one normal
+login in a fresh native Aside session. The trusted helper and an independent
+native tab check both confirmed logout controls, the actual member page and the
+selected ID hash. No account/profile values were printed, no shipping form was
+submitted, and transient credential/helper files were removed. Earlier rejected
+credentials were reported as login_failed and were not retried until the user
+saved a correction. Native selectors use standard CSS plus visibility checks;
+Aside rejects Playwright-only :visible syntax.
+
+Browser proof used an isolated PostgreSQL database and synthetic login transport:
+registration, checking/disabled actions, green confirmation, reload, a second
+account, failed login, blank saved credential fields, replacement invalidation
+and a new session per check all passed. This fixture is separate from the real
+Next1688 proof. The real member page was not captured as a screenshot. Relevant
+native transport/CRUD/UI/marketing/order tests passed; a separate persisted-session
+recovery regression also passed. Server and UI type checks, source UI build and
+token gates passed. The repository-wide suite was not run for this focused change;
+the previously reported CLI environment mismatch is not claimed resolved.
+
+The installed 2026.1001.0 migration chain was tested in a fresh PostgreSQL cluster
+with only the six additive forwarder columns. Compatible compiled modules passed
+create/read/open/update verification with encrypted synthetic credentials. Source
+migration 0303 maps to installed migration 0290, preserving all 288 existing
+installed journal entries. This is a selected compatibility rollout; it does not
+upgrade the entire server or change the Auto Sourcing worker. Evidence and exact
+runtime/rollback receipts: tmp/forwarder-aside-verification/{live-login-result.json,
+preview-workflow.log,compatible-result.json,runtime-stage.json,deployment.json}.
+Only a complete deployment receipt proves the operating rollout.
