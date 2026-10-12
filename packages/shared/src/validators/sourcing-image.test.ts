@@ -21,3 +21,13 @@ it("allows the scoped cloud edit contract and keeps a pending result distinct fr
   expect(catalogImageProcessResultSchema.safeParse({ ...pending, status: "completed" }).success).toBe(false);
   expect(catalogImageProcessResultSchema.safeParse({ ...pending, reviewRequired: false }).success).toBe(false);
 });
+
+it("validates bounded server job settings and exact legacy request adoption", () => {
+  const scope = { companyId: crypto.randomUUID(), projectId: crypto.randomUUID() };
+  expect(catalogRequestSchema.safeParse({ ...scope, operation: "image-job-configure", enabled: true, scanIntervalSeconds: 60 }).success).toBe(true);
+  for (const seconds of [0, 4, 3601, 60.5]) expect(catalogRequestSchema.safeParse({ ...scope, operation: "image-job-configure", enabled: true, scanIntervalSeconds: seconds }).success).toBe(false);
+  const input = { ...scope, operation: "image-job-adopt", productId: "a".repeat(32), imageUrl: "https://img.alicdn.com/a.jpg", expectedRevision: 3, requestId: crypto.randomUUID(), provider: "higgsfield", removeAllText: true };
+  expect(catalogRequestSchema.safeParse(input).success).toBe(true);
+  expect(catalogRequestSchema.safeParse({ ...input, provider: "local" }).success).toBe(false);
+  expect(catalogRequestSchema.safeParse({ ...input, removeAllText: false }).success).toBe(false);
+});

@@ -60,3 +60,14 @@ it("resumes the same cloud image request through the actual native plugin and ow
     await expect(cloud.service.catalogRead({ ...scope, projectId: crypto.randomUUID(), operation: "image-provider-status" }, context)).rejects.toThrow();
   } finally { await cloud.close(); }
 }, 120000);
+
+it("exposes scoped server image jobs to agents but keeps automatic settings board owned", async () => {
+  const context = { invocationScope: { companyId: f.companyId } };
+  const scope = { companyId: f.companyId, projectId: f.projectId };
+  expect((await f.tool("get-image-processing-jobs", {})).data).toEqual([]);
+  const configured = await f.service.catalogWrite({ ...scope, operation: "image-job-configure", enabled: true, scanIntervalSeconds: 120 }, context);
+  expect(configured).toMatchObject({ ...scope, enabled: true, scanIntervalSeconds: 120, workerEnabled: false });
+  expect(await f.service.catalogRead({ ...scope, operation: "image-job-settings" }, context)).toEqual(configured);
+  await expect(f.service.catalogRead({ ...scope, projectId: crypto.randomUUID(), operation: "image-jobs" }, context)).rejects.toThrow();
+  await expect(f.service.catalogWrite({ ...scope, operation: "image-job-configure", enabled: false, scanIntervalSeconds: 60 }, { invocationScope: { companyId: f.companyId, agentRun: { agentId: f.agent.id, runId: f.run.id, projectId: f.projectId } } })).rejects.toThrow();
+}, 30000);

@@ -3,7 +3,7 @@ import { catalogToolDeclarations } from "@paperclipai/plugin-auto-sourcing/catal
 import { processingToolDeclarations } from "@paperclipai/plugin-auto-sourcing/processing-tools";
 
 const manifest: PaperclipPluginManifestV1 = {
-  id: "paperclipai.plugin-sourcing-processing", apiVersion: 1, version: "0.5.0",
+  id: "paperclipai.plugin-sourcing-processing", apiVersion: 1, version: "0.6.0",
   displayName: "소싱 상품 가공", description: "가공 전 상품 조회, 업로드 상품 참고, 상품명·옵션·이미지·상세 설명의 로컬 가공 저장.",
   author: "Dovix", categories: ["connector"], entrypoints: { worker: "./dist/worker.js" },
   capabilities: ["agent.tools.register", "auto-sourcing.products.read", "auto-sourcing.drafts.write"],
@@ -13,6 +13,7 @@ const manifest: PaperclipPluginManifestV1 = {
     projects: { type: "object", title: "Project account bindings", additionalProperties: { type: "array", items: { type: "string" } } },
   }, required: ["serviceToken", "projects"], additionalProperties: false },
   tools: [
+    { name: "get-image-processing-jobs", displayName: "서버 이미지 가공 잡 조회", description: "Read persisted image job states and owned asset IDs for the current project. The server discovers and processes images serially without an agent. Do not submit generations or poll provider jobs yourself; use this snapshot to report pending images and inspect stored results. No configuration, retry, charge or product change.", parametersSchema: { type: "object", properties: { projectId: { type: "string", format: "uuid" } }, required: ["projectId"], additionalProperties: false } },
     { name: "get-image-provider-status", displayName: "힉스필드 연결 상태", description: "Read Auto Sourcing internal MCP configuration and verify actual account/model access. configured is local availability; connected is a successful read-only account/model check. No credentials, credit spend, generation or product change.", parametersSchema: { type: "object", properties: { projectId: { type: "string", format: "uuid" } }, required: ["projectId"], additionalProperties: false } },
     { name: "get-product-image", displayName: "가공 PNG 조회", description: "Read an existing PNG derivative of the owned product. Use the assigned skill helper to save it into the current run scratch directory for pixel inspection and attachment. No product change or arbitrary path access.", parametersSchema: { type: "object", properties: { projectId: { type: "string", format: "uuid" }, productId: { type: "string", pattern: "^[a-f0-9]{32}$" }, assetId: { type: "string", pattern: "^[a-f0-9]{32}$" } }, required: ["projectId", "productId", "assetId"], additionalProperties: false } },
     { name: "inspect-product-image", displayName: "원본 이미지 크기·중국어 조회", description: "Decode an original image of an owned sourcing product and return upright dimensions and Chinese text rectangles. No product change. Inspect before choosing a crop; do not infer sizes from the URL.", parametersSchema: { type: "object", properties: { projectId: { type: "string", format: "uuid" }, productId: { type: "string", pattern: "^[a-f0-9]{32}$" }, imageUrl: { type: "string", maxLength: 4096 } }, required: ["projectId", "productId", "imageUrl"], additionalProperties: false } },

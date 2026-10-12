@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { ProductDescription } from "./ProductDescription";
 import { SourcingProductEditor } from "./SourcingProductEditor";
 import { SourcingProcessing } from "./SourcingProcessing";
+import { SourcingImageJobs } from "./SourcingImageJobs";
 
 const stages = [["all", "전체"], ["candidate", "소싱 후보"], ["unprocessed", "가공 전"], ["processing", "가공 중"], ["ready", "업로드 준비"], ["queued", "업로드 대기"], ["uploaded", "업로드 완료"], ["attention", "확인 필요"]] as const;
 const collectionStates: Record<string, string> = { idle: "수집 전", queued: "수집 대기", collecting: "Aside 수집 중", importing: "원본 저장 중", succeeded: "수집 완료", failed: "수집 실패", reconciliation_required: "수집 결과 확인 필요" };
@@ -48,7 +49,7 @@ export function SourcingWorkspace({ companyId, projectId }: { companyId: string;
   useEffect(() => {
     void cache.invalidateQueries({ queryKey: [...key, "stages"] });
     if (!selected || dirty) return;
-    const current = list.data?.find(item => item.id === selected.id);
+    const current = list.data?.find(item => item.id === selected.id || selected.source && item.source?.sourceProvider === selected.source.sourceProvider && item.source.sourceProductId === selected.source.sourceProductId);
     if (current) setSelected(current);
   }, [list.data]);
   const changedJobs = jobs.data?.map(j => `${j.id}:${j.state}`).sort().join(",");
@@ -130,6 +131,7 @@ export function SourcingWorkspace({ companyId, projectId }: { companyId: string;
         </aside> : <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">상품을 선택하면 해당 단계의 정보와 작업이 표시됩니다.</div>}
     </div>
     {(page > 1 || list.data?.length === 20) && <nav aria-label="상품 페이지" className="flex items-center gap-3"><Button variant="outline" disabled={page === 1 || dirty || busy || list.isFetching} onClick={() => setPage(page - 1)}>이전</Button><span className="text-sm text-muted-foreground">{page} 페이지</span><Button variant="outline" disabled={list.data?.length !== 20 || dirty || busy || list.isFetching} onClick={() => setPage(page + 1)}>다음</Button></nav>}
+    <SourcingImageJobs companyId={companyId} projectId={projectId} onChanged={() => void refresh().catch(e => setError(catalogErrorMessage(e)))} />
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer text-sm font-medium">원본 근거·크롭 계획 가공</summary><div className="pt-4"><SourcingProcessing companyId={companyId} projectId={projectId} /></div></details>
   </div>;
 }
