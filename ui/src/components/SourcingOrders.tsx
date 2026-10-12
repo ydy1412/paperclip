@@ -11,8 +11,8 @@ import { SourcingDispatch, canDispatch, canPrepare, dispatchLabels } from "./Sou
 
 import { SourcingForwarders } from "./SourcingForwarders";
 
-export const orderStates: Record<string, string> = { Unknown: "확인 필요", Paid: "신규 주문", Preparing: "상품준비중", Shipped: "배송 중 · 출고", InTransit: "배송 중 · 운송", Delivered: "배송 완료", Untracked: "추적 불가" };
-const orderTabs = [["Paid", "신규 주문"], ["Preparing", "상품준비중"], ["Shipping", "배송 중"], ["Delivered", "배송 완료"], ["Unknown", "확인 필요"], ["Untracked", "추적 불가"], ["all", "전체 주문"]] as const;
+export const orderStates: Record<string, string> = { Unknown: "확인 필요", Paid: "신규 주문", Preparing: "상품준비중", Shipped: "발송 대기", InTransit: "배송 중", Delivered: "배송 완료", Untracked: "추적 불가" };
+const orderTabs = [["Paid", "신규 주문"], ["Preparing", "상품준비중"], ["Shipped", "발송 대기"], ["Shipping", "배송 중"], ["Delivered", "배송 완료"], ["Unknown", "확인 필요"], ["Untracked", "추적 불가"], ["all", "전체 주문"]] as const;
 function recentOrderDays(days: number) {
   const to = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const start = new Date(`${to}T00:00:00Z`);
@@ -43,7 +43,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
   const accountId = accounts.data?.find(account => account.id === params.get("account"))?.id ?? accounts.data?.[0]?.id ?? "";
   const account = accounts.data?.find(value => value.id === accountId);
   const rawState = params.get("state") ?? "";
-  const state = ["Shipped", "InTransit"].includes(rawState) ? "Shipping" : rawState;
+  const state = rawState === "InTransit" ? "Shipping" : rawState;
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const page = Math.max(1, Math.min(100000, Math.floor(Number(params.get("page"))) || 1));
@@ -112,7 +112,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
           ["배송 중", `${orders.data.summary.shippingOrders.toLocaleString("ko-KR")}건`]].map(([label, value]) =>
           <dl key={label} className="rounded-lg border border-border bg-card p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-2 break-words text-lg font-semibold tabular-nums">{value}</dd></dl>)}
       </div>
-      <p className="text-xs text-muted-foreground">선택 계정 · 조회 기간·검색 전체 기준 · 신규 {orders.data.summary.newOrders}건 · 상품준비중 {orders.data.summary.preparingOrders}건 · 주문 수량 {orders.data.summary.totalQuantity}개{orders.data.summary.unknownAmountOrders > 0 && ` · 금액 미확인 ${orders.data.summary.unknownAmountOrders}건 제외`}</p>
+      <p className="text-xs text-muted-foreground">선택 계정 · 조회 기간·검색 전체 기준 · 신규 {orders.data.summary.newOrders}건 · 상품준비중 {orders.data.summary.preparingOrders}건{orders.data.summary.awaitingShipmentOrders !== undefined && ` · 발송 대기 ${orders.data.summary.awaitingShipmentOrders}건`} · 주문 수량 {orders.data.summary.totalQuantity}개{orders.data.summary.unknownAmountOrders > 0 && ` · 금액 미확인 ${orders.data.summary.unknownAmountOrders}건 제외`}</p>
     </section>}
     <Tabs value={state || "all"} onValueChange={value => change({ state: value === "all" ? null : value, page: null })} className="min-w-0">
     <div className="min-w-0 overflow-x-auto border-b border-border pb-2">
