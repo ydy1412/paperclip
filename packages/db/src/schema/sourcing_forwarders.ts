@@ -15,6 +15,12 @@ export const sourcingForwarders = pgTable("sourcing_forwarders", {
   credentialSecretId: uuid("credential_secret_id").notNull().references(() => companySecrets.id),
   credentialVersion: integer("credential_version").notNull().default(1),
   enabled: boolean("enabled").notNull().default(true),
+  verificationStatus: text("verification_status").notNull().default("unverified"),
+  verificationAttemptId: uuid("verification_attempt_id"),
+  verificationSessionId: text("verification_session_id"),
+  verificationCheckedAt: timestamp("verification_checked_at", { withTimezone: true }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  verificationErrorCode: text("verification_error_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => ({ projectIdx: index("sourcing_forwarders_company_project_idx").on(table.companyId, table.projectId) }));

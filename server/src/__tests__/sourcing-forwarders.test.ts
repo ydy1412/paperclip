@@ -14,6 +14,7 @@ import { secretService } from "../services/secrets.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { isSecretSensitiveHttpRequest } from "../middleware/http-log-policy.js";
 import { boardMutationGuard } from "../middleware/board-mutation-guard.js";
+import type { ForwarderBrowserInput } from "../services/sourcing-forwarder-browser.js";
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
@@ -21,7 +22,7 @@ let home: string;
 const companyId = randomUUID(), otherCompanyId = randomUUID(), projectId = randomUUID(), otherProjectId = randomUUID();
 const nextProviderId = "bdc81085-726e-451b-a4ef-57b12b4deced", customProviderId = randomUUID();
 const input = { providerId: nextProviderId, loginId: "synthetic-forwarder-user", password: "synthetic-forwarder-password", enabled: true };
-const open = vi.fn().mockResolvedValue({ status: "login_submitted", browser: "chrome" });
+const open = vi.fn().mockResolvedValue({ status: "verified", browser: "aside", sessionId: "syntheticAsideSession", errorCode: null });
 const base = `/api/companies/${companyId}/sourcing/projects/${projectId}/forwarders`;
 function app() {
   const app = express(); app.use(express.json());
@@ -70,7 +71,7 @@ describe("shipping forwarder credentials and authorization", () => {
     await service.remove(companyId, projectId, first.id);
     const remaining = await service.list(companyId, projectId);
     expect(remaining).not.toContainEqual(first);
-    expect(remaining).toContainEqual(second);
+    expect(remaining).toContainEqual(expect.objectContaining({ id: second.id, verificationStatus: "verified" }));
     await service.open(companyId, projectId, second.id);
     expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ id: second.id, credentials: secondAccount }));
   });
@@ -85,8 +86,8 @@ describe("shipping forwarder credentials and authorization", () => {
     expect(JSON.stringify(versions)).not.toContain(input.password); expect(JSON.stringify(versions)).not.toContain(input.loginId);
     const reloaded = await request(app()).get(base); expect(reloaded.body).toContainEqual(res.body);
     const launched = await request(app()).post(`${base}/${res.body.id}/open`).send({});
-    expect(launched.status).toBe(200); expect(launched.body).toEqual({ status: "login_submitted", browser: "chrome" });
-    expect(open).toHaveBeenLastCalledWith({ id: res.body.id, companyId, loginUrl: "https://www.next1688.com/Front/Join/Login.asp?gMnu1=207&gMnu2=20702", credentials: { loginId: input.loginId, password: input.password } });
+    expect(launched.status).toBe(200); expect(launched.body).toEqual({ status: "verified", browser: "aside", sessionId: "syntheticAsideSession", errorCode: null });
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ id: res.body.id, companyId, loginUrl: "https://www.next1688.com/Front/Join/Login.asp?gMnu1=207&gMnu2=20702", credentials: { loginId: input.loginId, password: input.password } }));
     const audits = await db.select().from(activityLog).where(eq(activityLog.entityId, res.body.id));
     expect(audits.map(row => row.action)).toContain("sourcing.forwarder_opened");
     expect(JSON.stringify(audits)).not.toContain(input.password); expect(JSON.stringify(audits)).not.toContain(input.loginId);
@@ -156,5 +157,61 @@ describe("shipping forwarder credentials and authorization", () => {
     await service.update(companyId, projectId, row.id, { ...metadata, loginId: "updated-user", password: "updated-password" });
     await service.open(companyId, projectId, row.id);
     expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ credentials: { loginId: "updated-user", password: "updated-password" } }));
+  });
+
+  it("persists verification after reload and clears it on credential replacement", async () => {
+    const service = sourcingForwarderService(db, open);
+    const row = await service.create(companyId, projectId, input);
+    expect(row.verificationStatus).toBe("unverified");
+    await service.open(companyId, projectId, row.id);
+    const reloaded = (await sourcingForwarderService(db, open).list(companyId, projectId)).find(r => r.id === row.id)!;
+    expect(reloaded).toMatchObject({ verificationStatus: "verified", verificationSessionId: "syntheticAsideSession" });
+    expect(reloaded.verifiedAt).toBeTruthy();
+    const updated = await service.update(companyId, projectId, row.id, { ...input, password: "new-synthetic-password" });
+    expect(updated).toMatchObject({ verificationStatus: "unverified", verifiedAt: null, verificationSessionId: null });
+  });
+
+  it("rejects duplicate checks and does not apply an old success to replacement credentials", async () => {
+    let finish!: (result: { status: "verified"; browser: "aside"; sessionId: string }) => void;
+    let launched!: () => void;
+    const started = new Promise<void>(resolve => { launched = resolve; });
+    const deferred = vi.fn(async () => { launched(); return new Promise<{ status: "verified"; browser: "aside"; sessionId: string }>(resolve => { finish = resolve; }); });
+    const service = sourcingForwarderService(db, deferred), row = await service.create(companyId, projectId, input);
+    const pending = service.open(companyId, projectId, row.id); await started;
+    expect((await service.list(companyId, projectId)).find(r => r.id === row.id)?.verificationStatus).toBe("verifying");
+    await expect(service.open(companyId, projectId, row.id)).rejects.toThrow("진행 중");
+    await service.update(companyId, projectId, row.id, { ...input, password: "concurrent-replacement" });
+    finish({ status: "verified", browser: "aside", sessionId: "oldSyntheticSession" });
+    expect(await pending).toMatchObject({ status: "blocked", errorCode: "account_changed" });
+    expect((await service.list(companyId, projectId)).find(r => r.id === row.id)).toMatchObject({ verificationStatus: "unverified", verifiedAt: null });
+  });
+
+  it("preserves failure state and removes untrusted error text from API and persistence", async () => {
+    const transport = vi.fn().mockResolvedValue({ status: "failed", browser: "aside", sessionId: "failedSyntheticSession", errorCode: input.password });
+    const service = sourcingForwarderService(db, transport), row = await service.create(companyId, projectId, input);
+    expect(await service.open(companyId, projectId, row.id)).toMatchObject({ status: "failed", errorCode: "verification_unconfirmed" });
+    const reloaded = (await service.list(companyId, projectId)).find(r => r.id === row.id)!;
+    expect(reloaded).toMatchObject({ verificationStatus: "failed", verifiedAt: null, verificationErrorCode: "verification_unconfirmed" });
+    expect(JSON.stringify(reloaded)).not.toContain(input.password);
+  });
+
+  it("reconciles persisted checks after restart without another login and releases an unavailable secret after native completion", async () => {
+    const transport = Object.assign(vi.fn(async (input: ForwarderBrowserInput) => {
+      await input.onSession("restartSyntheticSession");
+      return { status: "verifying" as const, browser: "aside" as const, sessionId: "restartSyntheticSession" };
+    }), { reconcile: vi.fn().mockResolvedValue({ status: "verified", browser: "aside", sessionId: "restartSyntheticSession" }) });
+    const service = sourcingForwarderService(db, transport), row = await service.create(companyId, projectId, input);
+    await service.open(companyId, projectId, row.id);
+    expect((await sourcingForwarderService(db, transport).list(companyId, projectId)).find(r => r.id === row.id))
+      .toMatchObject({ verificationStatus: "verified" });
+    expect(transport).toHaveBeenCalledTimes(1);
+    const next = await service.create(companyId, projectId, input);
+    await service.open(companyId, projectId, next.id);
+    const [stored] = await db.select().from(sourcingForwarders).where(eq(sourcingForwarders.id, next.id));
+    await db.update(companySecrets).set({ status: "disabled" }).where(eq(companySecrets.id, stored.credentialSecretId));
+    await sourcingForwarderService(db, transport).list(companyId, projectId);
+    const [finished] = await db.select().from(sourcingForwarders).where(eq(sourcingForwarders.id, next.id));
+    expect(finished).toMatchObject({ verificationStatus: "blocked", verifiedAt: null, verificationErrorCode: "credentials_unavailable" });
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 });

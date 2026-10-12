@@ -2108,6 +2108,13 @@
       "when": 1791572934378,
       "tag": "0302_thankful_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 303,
+      "version": "7",
+      "when": 1791838663109,
+      "tag": "0303_forwarder_aside_verification",
+      "breakpoints": true
     }
   ]
 }
