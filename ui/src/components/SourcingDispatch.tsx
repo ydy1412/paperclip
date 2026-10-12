@@ -144,7 +144,7 @@ export function SourcingDispatch({ pluginId, companyId, projectId, accountId, or
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" disabled={busy} className="h-9 rounded-md border border-input px-3 text-sm disabled:opacity-40" onClick={() => { if (!submitting.current) onClose(); }}>닫기</button>
         {prepare && stage === "result" && onPrepared && rows.some(row => row.result?.ticket?.state === "Verified") && <button type="button" disabled={busy}
-          className="h-9 rounded-md border border-input px-3 text-sm disabled:opacity-40" onClick={onPrepared}>상품준비중 목록 보기</button>}
+          className="h-9 rounded-md border border-input px-3 text-sm disabled:opacity-40" onClick={onPrepared}>발송 대기 목록 보기</button>}
         {stage === "review" && <button type="button" disabled={busy} className="h-9 rounded-md border border-input px-3 text-sm disabled:opacity-40" onClick={() => { if (submitting.current) return; setStage("input"); setRows(previous => previous.map(row => ({ ...row, result: undefined }))); }}>내용 수정</button>}
         {stage === "result" ? <button type="button" disabled={busy} className="h-9 rounded-md border border-input px-3 text-sm disabled:opacity-40" onClick={() => void checkResults()}>처리 기록 확인</button> :
           <button type="button" disabled={busy || !prepare && (!catalogReady || !carrier) || stage === "review" && ready.length === 0} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40" onClick={() => void run(stage === "input" ? "preview" : "dispatch")}>
