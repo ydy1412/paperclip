@@ -11,8 +11,8 @@ import { SourcingDispatch, canDispatch, canPrepare, dispatchLabels } from "./Sou
 
 import { SourcingForwarders } from "./SourcingForwarders";
 
-export const orderStates: Record<string, string> = { Unknown: "확인 필요", Paid: "신규 주문", Preparing: "상품준비중", Shipped: "발송 대기", InTransit: "배송 중", Delivered: "배송 완료", Untracked: "추적 불가" };
-const orderTabs = [["Paid", "신규 주문"], ["Preparing", "상품준비중"], ["Shipped", "발송 대기"], ["Shipping", "배송 중"], ["Delivered", "배송 완료"], ["Unknown", "확인 필요"], ["Untracked", "추적 불가"], ["all", "전체 주문"]] as const;
+export const orderStates: Record<string, string> = { Unknown: "확인 필요", Paid: "신규 주문", Preparing: "발송 대기", Shipped: "배송 중", InTransit: "배송 중", Delivered: "배송 완료", Untracked: "추적 불가" };
+const orderTabs = [["Paid", "신규 주문"], ["Preparing", "발송 대기"], ["Shipping", "배송 중"], ["Delivered", "배송 완료"], ["Unknown", "확인 필요"], ["Untracked", "추적 불가"], ["all", "전체 주문"]] as const;
 function recentOrderDays(days: number) {
   const to = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const start = new Date(`${to}T00:00:00Z`);
@@ -43,7 +43,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
   const accountId = accounts.data?.find(account => account.id === params.get("account"))?.id ?? accounts.data?.[0]?.id ?? "";
   const account = accounts.data?.find(value => value.id === accountId);
   const rawState = params.get("state") ?? "";
-  const state = rawState === "InTransit" ? "Shipping" : rawState;
+  const state = ["Shipped", "InTransit"].includes(rawState) ? "Shipping" : rawState;
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const page = Math.max(1, Math.min(100000, Math.floor(Number(params.get("page"))) || 1));
@@ -74,7 +74,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
   const prepare = state === "Paid";
   const canSelect = prepare ? canPrepare : canDispatch;
   const selectionName = prepare ? "상품준비중" : "발송";
-  const selectAllLabel = prepare ? "현재 페이지 신규 주문 전체 선택" : "현재 페이지 상품준비중 주문 전체 선택";
+  const selectAllLabel = prepare ? "현재 페이지 신규 주문 전체 선택" : "현재 페이지 발송 대기 주문 전체 선택";
   const actionLabel = prepare ? "선택 주문 상품준비중 처리" : "운송장 등록·발송";
   const eligible = (orders.data?.orders ?? []).filter(canSelect);
   const selectedOrders = eligible.filter(order => selected.includes(order.shipmentId));
@@ -112,12 +112,12 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
           ["배송 중", `${orders.data.summary.shippingOrders.toLocaleString("ko-KR")}건`]].map(([label, value]) =>
           <dl key={label} className="rounded-lg border border-border bg-card p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-2 break-words text-lg font-semibold tabular-nums">{value}</dd></dl>)}
       </div>
-      <p className="text-xs text-muted-foreground">선택 계정 · 조회 기간·검색 전체 기준 · 신규 {orders.data.summary.newOrders}건 · 상품준비중 {orders.data.summary.preparingOrders}건{orders.data.summary.awaitingShipmentOrders !== undefined && ` · 발송 대기 ${orders.data.summary.awaitingShipmentOrders}건`} · 주문 수량 {orders.data.summary.totalQuantity}개{orders.data.summary.unknownAmountOrders > 0 && ` · 금액 미확인 ${orders.data.summary.unknownAmountOrders}건 제외`}</p>
+      <p className="text-xs text-muted-foreground">선택 계정 · 조회 기간·검색 전체 기준 · 신규 {orders.data.summary.newOrders}건 · 발송 대기 {orders.data.summary.awaitingShipmentOrders ?? orders.data.summary.preparingOrders}건 · 주문 수량 {orders.data.summary.totalQuantity}개{orders.data.summary.unknownAmountOrders > 0 && ` · 금액 미확인 ${orders.data.summary.unknownAmountOrders}건 제외`}</p>
     </section>}
     <Tabs value={state || "all"} onValueChange={value => change({ state: value === "all" ? null : value, page: null })} className="min-w-0">
     <div className="min-w-0 overflow-x-auto border-b border-border pb-2">
       <TabsList variant="line" aria-label="주문 상태">
-        {orderTabs.map(([value, label]) => <TabsTrigger key={value} value={value} title={value === "Preparing" ? "쿠팡 상품 준비 상태" : label} className="px-3">{label}</TabsTrigger>)}
+        {orderTabs.map(([value, label]) => <TabsTrigger key={value} value={value} title={value === "Preparing" ? "운송장 등록 전 · 쿠팡 상품준비중" : label} className="px-3">{label}</TabsTrigger>)}
       </TabsList>
     </div>
     <TabsContent value={state || "all"} className="space-y-4 pt-2">
@@ -163,7 +163,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground" role="status"><span>{syncLabels[status.data?.state ?? ""] ?? "동기화 상태 확인 중"}</span>{status.data?.finishedAt && <span>{date(status.data.finishedAt)}</span>}{orders.data && <span>{orders.data.total.toLocaleString("ko-KR")}건</span>}{from && to && <span>주문일 기준 · 한국 시간</span>}</div>
     {(orders.error || sync.error || status.error || status.data?.state === "failed") && <p role="alert" className="text-sm text-destructive">주문 조회에 문제가 있습니다. 기존 저장 주문을 표시합니다.{status.data?.errorCode ? ` (${status.data.errorCode})` : ""}</p>}
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-      <p className="text-xs text-muted-foreground">{selectedOrders.length ? `${selectedOrders.length}건 선택` : prepare ? "신규 주문을 선택해 상품준비중으로 변경하십시오." : "상품준비중 주문을 선택해 운송장 번호를 등록하십시오."} · 현재 페이지 최대 20건</p>
+      <p className="text-xs text-muted-foreground">{selectedOrders.length ? `${selectedOrders.length}건 선택` : prepare ? "신규 주문을 선택해 상품준비중으로 변경하십시오." : "발송 대기 주문을 선택해 운송장 번호를 등록하십시오."} · 현재 페이지 최대 20건</p>
       <button type="button" className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40" disabled={!selectedOrders.length || !account?.enabled || busy || orders.isFetching || !!orders.error}
         onClick={() => setDispatchBatch({ pluginId: pluginId!, companyId, projectId, accountId, orders: selectedOrders, prepare })}>{actionLabel}{selectedOrders.length > 0 ? ` (${selectedOrders.length})` : ""}</button>
     </div>
@@ -174,7 +174,7 @@ export function SourcingOrders({ companyId, projectId }: { companyId: string; pr
             checked={selectedOrders.length > 0 && selectedOrders.length === eligible.length ? true : selectedOrders.length > 0 ? "indeterminate" : false}
             onCheckedChange={checked => setSelection({ scope: selectionScope, ids: checked ? eligible.map(order => order.shipmentId) : [] })} /></th>{["주문번호", "주문자 / 수령자", "상품명", "상태", "수량", "금액", "주문일", ...(state === "Preparing" ? ["배송대행지"] : [])].map(label => <th key={label} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">{label}</th>)}</tr></thead>
           <tbody>{orders.data?.orders.map(order => <tr key={order.shipmentId} className={`cursor-pointer border-b border-border ${shipmentId === order.shipmentId ? "bg-accent" : "hover:bg-accent/50"}`} onClick={() => change({ item: order.shipmentId }, false)}>
-            <td className="px-3 py-3" onClick={event => event.stopPropagation()}><Checkbox aria-label={`${order.orderId} ${selectionName} 선택`} title={canSelect(order) ? "처리할 주문 선택" : prepare ? "취소 대기가 없는 신규 주문만 변경할 수 있습니다." : "취소 대기가 없는 상품준비중 주문만 발송할 수 있습니다."}
+            <td className="px-3 py-3" onClick={event => event.stopPropagation()}><Checkbox aria-label={`${order.orderId} ${selectionName} 선택`} title={canSelect(order) ? "처리할 주문 선택" : prepare ? "취소 대기가 없는 신규 주문만 변경할 수 있습니다." : "취소 대기가 없는 발송 대기 주문만 발송할 수 있습니다."}
               disabled={!canSelect(order) || busy || orders.isFetching || !!orders.error || !account?.enabled} checked={selected.includes(order.shipmentId) && canSelect(order)}
               onCheckedChange={checked => setSelection({ scope: selectionScope, ids: checked ? [...selected, order.shipmentId] : selected.filter(id => id !== order.shipmentId) })} /></td>
             <td className="px-3 py-3"><button type="button" className="break-all text-left font-medium text-foreground underline-offset-4 hover:underline">{order.orderId}</button><div className="mt-1 text-xs text-muted-foreground">{order.shipmentId}</div></td>

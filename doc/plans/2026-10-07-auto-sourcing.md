@@ -1666,3 +1666,39 @@ tmp/order-awaiting-shipment/{bridge-tests-final.log,bridge-red-native.log,
 bridge-browser-proof-final.log,bridge-browser-requests.jsonl}. The selected
 host/UI installer backs up and restores both files if its real bridge checks
 fail; deployment.json records the eventual operating commit and exact hashes.
+
+### Operator invoice display rule (2026-10-13, supersedes awaiting mapping above)
+
+The user chose 운송장 등록 전 = 발송 대기; 등록 후 = 배송 중. A fresh
+authorized Coupang read confirmed INSTRUCT three orders have no invoice and
+DEPARTURE twenty orders all have invoice numbers/upload dates. Therefore show
+Preparing as 발송 대기 and group Shipped/InTransit under 배송 중. Keep Paid
+as 신규 주문. Remove the separate Shipped awaiting tab; legacy Shipped and
+InTransit links both open Shipping. Native summary.awaitingShipmentOrders is
+Preparing; shippingOrders counts Shipped/InTransit. Keep existing enum values,
+authority, selection scope and preparation/dispatch actions. No new persistence
+or provider write. Validate list, details, counts, filters and invoice dialog
+through the actual host parser using a redacted copy of the fresh stored data.
+
+Invoice-rule verification: native full suite 219 passed / 13 gated live skipped;
+UI orders/dispatch 31 passed; host authority/real native bridge 10 passed.
+UI type check, source UI build, compatible browser build, token gates and final
+diff review passed. Graphify code graphs were refreshed and checked against
+the changed source; document semantics were not re-extracted. Whole modern
+Dovix tests are not repeated or claimed passed; the prior whole-server run
+stopped while unrelated suites were still running.
+
+Aside u1 verified the changed UI through the actual host parser and temporary
+Postgres authority/vault using a redacted copy of the recently synchronized
+SQLite data: waiting 3 / shipping 20; list/detail labels; bulk selection; three
+empty invoice inputs and eight DB-driven courier choices; registered orders
+cannot be selected for another invoice. Shipped/InTransit links map Shipping,
+and date/search scope persists. Console/request errors 0; native calls GET-only.
+Earlier browser harness attempts failed on snapshot spacing and named-role
+lookup; final verification uses observed snapshot refs and actual DOM checks.
+No order confirmation, provider write or collection was performed. Evidence:
+tmp/order-invoice-status/{browser-proof-final.log,browser-verification.json,
+bridge-browser-requests.jsonl,awaiting-detail.png,invoice-dialog.png,shipping.png}.
+Paired dev rollout and rollback receipts are recorded separately in each
+repository's tmp/order-invoice-status/deployment.json; only complete proves
+rollout. The native release precedes compatible UI assets; host/core stays as is.
