@@ -30,6 +30,12 @@ describe("registered catalog product readback", () => {
 });
 
 describe("catalog keyword request contract", () => {
+  it("defaults to 20 workspace rows and accepts only the offered page sizes", () => {
+    const input = { operation: "workspace", companyId: "10000000-0000-4000-8000-000000000001", projectId: "10000000-0000-4000-8000-000000000002" };
+    expect(catalogRequestSchema.parse(input)).toHaveProperty("pageSize", 20);
+    for (const pageSize of [20, 50, 100]) expect(catalogRequestSchema.parse({ ...input, pageSize })).toHaveProperty("pageSize", pageSize);
+    for (const pageSize of [0, 21, 101, "50"]) expect(catalogRequestSchema.safeParse({ ...input, pageSize }).success).toBe(false);
+  });
   it("trims bounded keywords for list and stage queries and retains empty-query compatibility", () => {
     const scope = { companyId: "10000000-0000-4000-8000-000000000001", projectId: "10000000-0000-4000-8000-000000000002" };
     for (const input of [{ ...scope, operation: "list", view: "uploads" }, { ...scope, operation: "list", view: "source", stage: "ready" }, { ...scope, operation: "stages" }]) {

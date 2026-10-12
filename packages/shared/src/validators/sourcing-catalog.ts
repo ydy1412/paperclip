@@ -52,7 +52,7 @@ export const catalogRequestSchema = z.discriminatedUnion("operation", [
   sourcingCatalogScopeSchema.extend({ operation: z.literal("category-metadata"), storeId: id, categoryCode }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("stages"), query: z.string().trim().max(200).optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("sources") }).strict(),
-  sourcingCatalogScopeSchema.extend({ operation: z.literal("workspace"), stage: z.enum(["all", "candidate", "unprocessed", "processing", "ready", "queued", "uploaded", "attention"]).default("all"), page: z.number().int().min(1).max(100000).default(1), query: z.string().trim().max(200).optional() }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("workspace"), stage: z.enum(["all", "candidate", "unprocessed", "processing", "ready", "queued", "uploaded", "attention"]).default("all"), page: z.number().int().min(1).max(100000).default(1), pageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).default(20), query: z.string().trim().max(200).optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("candidate-import") }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("candidate-collect"), candidateId: id }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("price-preview"), productId: id, expectedRevision: z.number().int().positive(), storeIds: z.array(id).min(1).max(20) }).strict(),

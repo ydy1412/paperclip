@@ -42,6 +42,24 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 
 describe("candidate collection selection", () => {
+  it("queries 20, 50 and 100 rows, resets the page and clears selections when the size changes", async () => {
+    rows = Array.from({ length: 125 }, (_, i) => candidate(String(i + 1)));
+    mock.request.mockImplementation(async (_company, _project, input) => {
+      if (input.operation === "workspace") return structuredClone(rows.slice((input.page - 1) * input.pageSize, input.page * input.pageSize));
+      if (input.operation === "settings") return { businesses: [], stores: [], providers: [], legacyAccounts: [] };
+      if (input.operation === "stages") return { all: 125, candidate: 125 };
+      if (input.operation === "image-job-settings") return { enabled: false, scanIntervalSeconds: 60, workerEnabled: true, errorCode: "" };
+      return [];
+    });
+    await render(); expect(host.querySelectorAll('tbody tr')).toHaveLength(20);
+    await click(button("다음")); expect(host.querySelector('nav')?.textContent).toContain("2 페이지");
+    await click(all()); expect(host.textContent).toContain("20개 선택");
+    await click(button("50개 조회")); expect(host.querySelectorAll('tbody tr')).toHaveLength(50);
+    expect(host.querySelector('nav')?.textContent).toContain("1 페이지"); expect(host.textContent).toContain("0개 선택");
+    await click(button("100개 조회")); expect(host.querySelectorAll('tbody tr')).toHaveLength(100);
+    await click(button("다음")); expect(host.querySelectorAll('tbody tr')).toHaveLength(25); expect(button("다음").disabled).toBe(true);
+    expect(requests()).toHaveLength(0);
+  });
   it("shows a compact candidate table with site, product ID and URL while preserving full keywords in details", async () => {
     rows = [candidate("732092188696")];
     rows[0].candidate!.mainKeyword = "장스탠드, 마카롱 램프, 스탠드 조명";

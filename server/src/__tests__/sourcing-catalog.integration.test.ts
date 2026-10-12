@@ -27,6 +27,11 @@ describe("catalog real worker/host/HTTP/SQLite and credential vault", () => {
     const workspace = await request(app).post(url).send({ operation: "workspace", stage: "unprocessed" });
     expect(workspace.status).toBe(200); expect(workspace.body).toHaveLength(1);
     expect(workspace.body[0]).toMatchObject({ kind: "source", stage: "unprocessed", source: { sourceProductId: f.productId } });
+    const sized = await request(app).post(url).send({ operation: "workspace", stage: "unprocessed", pageSize: 100 });
+    expect(sized.status).toBe(200); expect(sized.body).toEqual(workspace.body);
+    const secondPage = await request(app).post(url).send({ operation: "workspace", stage: "unprocessed", pageSize: 50, page: 2 });
+    expect(secondPage.status).toBe(200); expect(secondPage.body).toEqual([]);
+    expect((await request(app).post(url).send({ operation: "workspace", pageSize: 101 })).status).toBe(400);
     const candidates = await request(app).post(url).send({ operation: "candidate-import" });
     expect(candidates.status).toBe(200); expect(candidates.body).toEqual({ imported: 0 });
   });
