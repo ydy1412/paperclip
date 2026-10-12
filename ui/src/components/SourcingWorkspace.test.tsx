@@ -31,7 +31,8 @@ beforeEach(() => {
   mock.request.mockReset(); mock.request.mockImplementation(async (_company, _project, input) => {
     if (input.operation === "workspace") return structuredClone(rows);
     if (input.operation === "settings") return { businesses: [], stores: [], providers: [], legacyAccounts: [] };
-    if (input.operation === "jobs") return [];
+    if (input.operation === "jobs" || input.operation === "image-jobs") return [];
+    if (input.operation === "image-job-settings") return { enabled: false, scanIntervalSeconds: 60, workerEnabled: true, errorCode: "" };
     if (input.operation === "stages") return { all: rows.length, candidate: rows.length, unprocessed: 0, processing: 0, ready: 0, queued: 0, uploaded: 0, attention: 0 };
     if (input.operation === "candidate-collect") {
       const row = rows.find(item => item.candidate?.id === input.candidateId)!; row.candidate!.collectionState = "queued"; return structuredClone(row.candidate);

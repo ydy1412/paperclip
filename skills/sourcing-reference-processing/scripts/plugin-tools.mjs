@@ -5,6 +5,22 @@ import { createHash } from 'node:crypto';
 
 const prefix = 'paperclipai.plugin-sourcing-processing:';
 
+export function assertImageGeometry(input, dimensions) {
+  const within = (r, bounds) => ['x','y','width','height'].every(k => Number.isInteger(r?.[k]))
+    && r.width > 0 && r.height > 0 && r.x >= bounds.x && r.y >= bounds.y
+    && r.x + r.width <= bounds.x + bounds.width && r.y + r.height <= bounds.y + bounds.height;
+  if (!Number.isInteger(dimensions?.width) || !Number.isInteger(dimensions?.height)) throw Error('image_dimensions_not_verified');
+  const original = { x: 0, y: 0, width: dimensions.width, height: dimensions.height };
+  if (input.crop && !within(input.crop, original)) throw Error('image_crop_out_of_bounds: re-read original dimensions and choose a new rectangle');
+  for (const region of input.cleanupRegions ?? [])
+    if (!within(region, input.crop ?? original)) throw Error('image_cleanup_out_of_bounds: use original coordinates inside the retained crop');
+}
+
+const bodyData = response => {
+  const value = response.result?.data ?? JSON.parse(response.result?.content ?? '{}');
+  return value.data ?? value;
+};
+
 export async function main(args, env = process.env) {
   const required = ['PAPERCLIP_API_URL', 'PAPERCLIP_API_KEY', 'PAPERCLIP_AGENT_ID', 'PAPERCLIP_COMPANY_ID', 'PAPERCLIP_RUN_ID'];
   if (required.some(key => !env[key])) throw new Error('injected_run_context_missing');
@@ -39,12 +55,32 @@ export async function main(args, env = process.env) {
     if (typeof parameters.assetId !== 'string' || !/^[a-f0-9]{32}$/.test(parameters.assetId)) throw new Error('image_parameters_require_assetId');
     if (!env.PAPERCLIP_RUN_SCRATCH_DIR) throw new Error('image_scratch_context_missing');
   }
-  const response = await request('/plugins/tools/execute', {
-    tool, parameters, runContext: {
+  const execute = (selectedTool, selectedParameters) => request('/plugins/tools/execute', {
+    tool: selectedTool, parameters: selectedParameters, runContext: {
       companyId: env.PAPERCLIP_COMPANY_ID, agentId: env.PAPERCLIP_AGENT_ID,
-      runId: env.PAPERCLIP_RUN_ID, projectId: parameters.projectId,
+      runId: env.PAPERCLIP_RUN_ID, projectId: selectedParameters.projectId,
     },
   });
+  if (tool === prefix + 'process-product-image') {
+    for (const required of ['get-managed-product', 'inspect-product-image'])
+      if (!tools.some(item => item.name === prefix + required)) throw Error('image_preflight_tools_missing');
+    const product = bodyData(await execute(prefix + 'get-managed-product', {
+      projectId: parameters.projectId, productId: parameters.productId,
+    }));
+    // The server checks revision after its idempotent receipt lookup. A retry
+    // of a successful request intentionally carries the original revision.
+    const refs = [product.mainImage, ...product.skus.map(s => s.image)];
+    const ownedImagePrefix = `/api/companies/${env.PAPERCLIP_COMPANY_ID}/sourcing/projects/${parameters.projectId}/images/${parameters.productId}/`;
+    if (!refs.includes(parameters.imageUrl) && !String(product.description).includes(parameters.imageUrl)
+        && !refs.some(u => typeof u === 'string' && u.startsWith(ownedImagePrefix))
+        && !String(product.description).includes(ownedImagePrefix))
+      throw Error('image_not_linked_to_current_product: save the selected original URL in main/SKU/HTML, then re-read revision');
+    const dimensions = bodyData(await execute(prefix + 'inspect-product-image', {
+      projectId: parameters.projectId, productId: parameters.productId, imageUrl: parameters.imageUrl,
+    }));
+    assertImageGeometry(parameters, dimensions);
+  }
+  const response = await execute(tool, parameters);
   if (tool === prefix + 'get-product-image') {
     const data = response.result?.data;
     if (data?.contentType !== 'image/png' || typeof data.base64 !== 'string' || data.base64.length > 8 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data.base64)) throw new Error('invalid_image_response');

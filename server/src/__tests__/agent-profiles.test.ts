@@ -75,8 +75,9 @@ describe("versioned agent profiles", () => {
   it("preserves tool access for old snapshots and profile deletion, and rejects unavailable plugins/viewers", async () => {
     const { service, profile, agent } = await linked({ ...input.config, plugins: [processingManifest.id] });
     const owned = (await db.select().from(toolProfiles)).find(p => p.metadata.agentId === agent.id)!;
+    const originalTools = (await db.select().from(toolProfileEntries).where(eq(toolProfileEntries.profileId, owned.id))).map(e => e.toolName).sort();
     await service.update(companyId, profile.id, { ...input, expectedVersion: 1, applyToLinked: true }, userId);
-    expect((await db.select().from(toolProfileEntries).where(eq(toolProfileEntries.profileId, owned.id))).length).toBe(6);
+    expect((await db.select().from(toolProfileEntries).where(eq(toolProfileEntries.profileId, owned.id))).map(e => e.toolName).sort()).toEqual(originalTools);
     await service.remove(companyId, profile.id, 2, userId);
     expect((await db.select().from(toolProfileBindings).where(eq(toolProfileBindings.profileId, owned.id))).length).toBe(1);
     await expect(service.create(companyId, { ...input, config: { ...input.config, plugins: ["missing.plugin"] } }, userId)).rejects.toThrow("플러그인");
@@ -85,7 +86,7 @@ describe("versioned agent profiles", () => {
     await expect(service.create(companyId, { ...input, config: { ...input.config, plugins: [processingManifest.id] } }, viewer)).rejects.toThrow("권한");
     const response = await request(app()).get(`${base}/plugins`);
     expect(response.status).toBe(200);
-    expect(response.body).toContainEqual(expect.objectContaining({ key: processingManifest.id, toolCount: 6, available: true }));
+    expect(response.body).toContainEqual(expect.objectContaining({ key: processingManifest.id, toolCount: originalTools.length, available: true }));
   });
   it("binds selected plugins during a real profile hire", async () => {
     const profile = await agentProfileService(db).create(companyId, { ...input, config: { ...input.config, plugins: [processingManifest.id] } }, userId);

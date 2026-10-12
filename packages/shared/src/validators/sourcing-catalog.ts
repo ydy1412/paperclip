@@ -19,6 +19,10 @@ export const catalogImageAssetSchema = catalogImageAnalysisSchema.extend({ asset
 export const catalogImagePendingSchema = z.object({ status: z.literal("pending"), requestId: z.string().uuid(), productId: id, expectedRevision: z.number().int().positive(), providerRequestId: z.string().uuid(), provider: z.literal("higgsfield"), nextCheckSeconds: z.number().int().min(2).max(60), reviewRequired: z.literal(true) });
 export const catalogImageProcessResultSchema = z.union([catalogImagePendingSchema, catalogImageAssetSchema]);
 export const catalogImageProviderStatusSchema = z.object({ provider: z.literal("higgsfield"), configured: z.boolean(), connected: z.boolean(), transport: z.literal("mcp"), model: z.string().max(200), quality: z.string().max(30), resolution: z.string().max(20) });
+export const imageProcessingJobSchema = sourcingCatalogScopeSchema.extend({ id, productId: id, sourceHash: z.string().regex(/^[a-f0-9]{64}$/), imageUrl: z.string().max(4096), requestId: z.string().uuid(), state: z.enum(["queued", "processing", "succeeded", "failed", "attention"]), errorCode: z.string().max(200), assetId: z.string().regex(/^(?:[a-f0-9]{32})?$/), providerRequestId: z.string().max(100), attempts: z.number().int().nonnegative(), reviewRequired: z.boolean(), remainingTextCount: z.number().int().nonnegative().nullable(), createdAtUtcTicks: z.number(), updatedAtUtcTicks: z.number(), nextAttemptAtUtcTicks: z.number() });
+export const imageProcessingSettingsSchema = sourcingCatalogScopeSchema.extend({ enabled: z.boolean(), scanIntervalSeconds: z.number().int().min(5).max(3600), nextScanAtUtcTicks: z.number(), errorCode: z.string().max(200), workerEnabled: z.boolean() });
+export type ImageProcessingJob = z.infer<typeof imageProcessingJobSchema>;
+export type ImageProcessingSettings = z.infer<typeof imageProcessingSettingsSchema>;
 export const catalogSkuSchema = z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(150), image: z.string().max(4096), salePrice: z.number().int().positive().max(1000000000).multipleOf(10).nullable().optional(), options: z.array(z.object({ name: z.string().min(1).max(100), value: z.string().max(100) }).strict()).max(20) }).strict();
 // Registered Coupang products can contain exposed attributes with empty values.
 // Preserve those values on reads; save requests still use catalogSkuSchema.
@@ -35,6 +39,11 @@ export type CandidateView = z.infer<typeof candidateSchema>;
 export type CatalogPricePreview = z.infer<typeof catalogPricePreviewSchema>;
 export type CatalogStageCounts = z.infer<typeof catalogStageCountsSchema>;
 export const catalogRequestSchema = z.discriminatedUnion("operation", [
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("image-jobs") }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("image-job-settings") }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("image-job-configure"), enabled: z.boolean(), scanIntervalSeconds: z.number().int().min(5).max(3600) }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("image-job-retry"), jobId: id }).strict(),
+  sourcingCatalogScopeSchema.extend({ operation: z.literal("image-job-adopt"), productId: id, imageUrl: z.string().url().max(4096), expectedRevision: z.number().int().positive(), requestId: z.string().uuid(), provider: z.literal("higgsfield"), removeAllText: z.literal(true), removeChinese: z.literal(false).optional(), outputSize: z.object({ width: imageDimension.max(4000), height: imageDimension.max(4000) }).strict().optional() }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("image-inspect"), productId: id, imageUrl: z.string().url().max(4096) }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("image-provider-status") }).strict(),
   sourcingCatalogScopeSchema.extend({ operation: z.literal("image-content"), productId: id, assetId: id }).strict(),

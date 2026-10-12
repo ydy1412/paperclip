@@ -19,8 +19,15 @@ describe("product-only processing plugin", () => {
     expect(write).toHaveBeenLastCalledWith({ ...edit, companyId: "actual", operation: "image-process" });
   });
   it("declares product and immutable source tools with scoped native capabilities", () => {
-    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["get-product-image", "inspect-product-image", "process-product-image", "get-processing-source", "list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
+    expect(pluginManifestV1Schema.parse(manifest).tools?.map(t => t.name)).toEqual(["get-image-processing-jobs", "get-image-provider-status", "get-product-image", "inspect-product-image", "process-product-image", "get-processing-source", "list-sourcing-workspace", "start-managed-processing", "list-managed-products", "get-managed-product", "list-product-stores", "save-managed-product", "recommend-coupang-category", "get-coupang-category-metadata"]);
     expect(manifest.capabilities).toEqual(["agent.tools.register", "auto-sourcing.products.read", "auto-sourcing.drafts.write"]);
+  });
+  it("reads durable image jobs without submitting or configuring them", async () => {
+    const harness = createTestHarness({ manifest });
+    const read = vi.spyOn(harness.ctx.autoSourcing, "catalogRead").mockResolvedValue([{ state: "processing", requestId: "same" }]);
+    const write = vi.spyOn(harness.ctx.autoSourcing, "catalogWrite"); await plugin.definition.setup(harness.ctx);
+    await harness.executeTool("get-image-processing-jobs", { companyId: "forged", projectId: "p" }, { companyId: "actual" });
+    expect(read).toHaveBeenCalledWith({ companyId: "actual", projectId: "p", operation: "image-jobs" }); expect(write).not.toHaveBeenCalled();
   });
   it("reads original source options through the authorized processing read bridge", async () => {
     const harness = createTestHarness({ manifest });
