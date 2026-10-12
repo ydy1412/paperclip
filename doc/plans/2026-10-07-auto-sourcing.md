@@ -1635,3 +1635,34 @@ installed. Rollout uses the reviewed native dev release first, then compatible
 UI assets; no core upgrade. Exact commits, backup paths, asset hashes, operating
 order counts and rollback state are recorded in each repository's ignored
 tmp/order-awaiting-shipment/deployment.json. Only stage complete proves rollout.
+
+Bridge correction discovered during operating verification (2026-10-13): native
+PR #22 and UI PR #31 merged to dev, but the installed host's order summary Zod
+allowlist removed awaitingShipmentOrders. The native rollout completed with
+unchanged schema and all 51 tables; the UI installer failed its real bridge
+check and restored the prior index/service worker. Do not treat PR #31 alone
+as a completed UI rollout. Add the optional nonnegative integer to the existing
+summary allowlist, keeping old native responses compatible. Verify the actual
+worker -> host -> native SQLite path and unchanged UI through the actual host
+parser before a separate feature PR and combined host/UI rollout. The installed
+host byte-for-byte matches the current dev source transformed to JavaScript,
+so the selected update adds this field and reuses the existing validated
+loopback port for order calls. The production default remains 3115. Full modern Dovix tests were
+stopped after 11m32s while unrelated server suites were still running; whole-
+suite success is not claimed. Scoped orders, types and source build had passed.
+
+Bridge follow-up verification: the old allowlist failed the new real worker ->
+host -> native HTTP/SQLite test (awaitingShipmentOrders was undefined, expected
+0). The corrected host authority and processing integration suites pass 10
+tests; order/dispatch UI suites pass 30 again. Server type check and build pass.
+The existing processingPort option now controls order calls as well as catalog
+calls so the real test reaches its isolated native instance; production still
+uses fixed loopback 3115. No arbitrary host or new runtime setting is accepted.
+Aside then exercised unchanged order UI with the actual host parser and temporary
+Postgres authority/vault against the redacted SQLite copy. Awaiting 20, transit
+0, delivered 29, all 49 and combined filters passed; 12 host reads succeeded and
+console errors were 0. No live order mutation. Evidence:
+tmp/order-awaiting-shipment/{bridge-tests-final.log,bridge-red-native.log,
+bridge-browser-proof-final.log,bridge-browser-requests.jsonl}. The selected
+host/UI installer backs up and restores both files if its real bridge checks
+fail; deployment.json records the eventual operating commit and exact hashes.

@@ -9,6 +9,14 @@ describe("real worker -> host authority -> local HTTP -> file/SQLite processing"
   let f: Awaited<ReturnType<typeof startProcessingFixture>>;
   beforeAll(async () => { f = await startProcessingFixture(); }, 90000);
   afterAll(async () => { await f?.close(); });
+  it("preserves the native awaiting-shipment count through the real order worker bridge", async () => {
+    for (const state of ["Shipped", "Shipping"]) {
+      const orders = await f.data({ state, page: 1 }, "orders") as { total: number; summary: { awaitingShipmentOrders?: number; shippingOrders: number } };
+      expect(orders.total).toBe(0);
+      expect(orders.summary.awaitingShipmentOrders).toBe(0);
+      expect(orders.summary.shippingOrders).toBe(0);
+    }
+  });
   it("registers actual tools, persists Korean SKU edits through operator action, reloads and blocks stale/unknown fields", async () => {
     const source = await f.tool("get-processing-source", { sourceProvider: "taobao", productId: f.productId });
     expect((source.data as { skus: unknown[] }).skus).toHaveLength(2);

@@ -185,7 +185,7 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   async function call(companyId: string, tokenRef: z.infer<typeof envBindingSecretRefSchema>, pathname: string, init?: RequestInit, shipping = false) {
     const token = await secrets.resolve({ companyId, secretRef: tokenRef, configPath: "serviceToken" });
     try {
-      const response = await fetch(`http://127.0.0.1:3115${pathname}`, { ...init,
+      const response = await fetch(`http://127.0.0.1:${processingPort}${pathname}`, { ...init,
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         redirect: "error", signal: AbortSignal.timeout(shipping ? 28000 : 15000) });
       if (!response.ok) throw new Error("Auto Sourcing 요청 실패");
@@ -298,7 +298,7 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
       if (input.operation === "detail") return orderSchema.parse(result);
       if (input.operation === "sync-state") return syncStateSchema.parse(result);
       return z.object({ orders: z.array(orderSchema).max(20), total: z.number().int().nonnegative(),
-        page: z.number().int().positive(), pageSize: z.literal(20), summary: z.object({ totalOrders: z.number().int().nonnegative(), totalQuantity: z.number().int().nonnegative(), newOrders: z.number().int().nonnegative(), preparingOrders: z.number().int().nonnegative(), shippingOrders: z.number().int().nonnegative(), deliveredOrders: z.number().int().nonnegative(), unknownAmountOrders: z.number().int().nonnegative(), revenue: z.array(z.object({ currency: z.string().regex(/^[A-Z]{3}$/), amount: z.number() })).max(100) }).nullable().optional() }).parse(result);
+        page: z.number().int().positive(), pageSize: z.literal(20), summary: z.object({ totalOrders: z.number().int().nonnegative(), totalQuantity: z.number().int().nonnegative(), newOrders: z.number().int().nonnegative(), preparingOrders: z.number().int().nonnegative(), awaitingShipmentOrders: z.number().int().nonnegative().optional(), shippingOrders: z.number().int().nonnegative(), deliveredOrders: z.number().int().nonnegative(), unknownAmountOrders: z.number().int().nonnegative(), revenue: z.array(z.object({ currency: z.string().regex(/^[A-Z]{3}$/), amount: z.number() })).max(100) }).nullable().optional() }).parse(result);
     },
     async sync(value, context) {
       const input = syncSchema.parse(value);
