@@ -1595,3 +1595,43 @@ Live persistence proof: the server generated a new owned 3,983,461-byte PNG and 
 The sourcing workspace offers 20, 50 and 100 rows per page. Its scoped workspace request carries pageSize; omission retains the 20-row default. Validate only these offered sizes in both the host contract and native application. Paginate after stage/search filtering and preserve ordering. Changing the size resets to page one and clears page-bound checkbox selection and details; unsaved edits and active submissions block changes. Verify real SQLite boundaries, search/scope, UI selection and browser row counts before PR submission. The existing serial collector and automatic image worker stay responsible for collection and image processing.
 
 Verification (2026-10-12): native SQLite/workspace tests 5 passed; configured native suite 217 passed / 13 gated live tests skipped. Dovix workspace/shared/actual host integration tests 17 passed; shared build, UI/server type checks, UI build and token gates passed. Aside at 1440x900 loaded 50 and 100 rows from an isolated real SQLite snapshot, advanced a 50-row page and reset to page one at 100, and opened the existing candidate detail. Verification issued no source-site collection. Initial native run lacked the image-worker environment; initial host run selected the stale original checkout. Re-running with the existing configured image runtime and this native worktree resolved those failures. Full modern Dovix suite and CI are not claimed passed. Evidence: Dovix tmp/sourcing-page-size/{final-tests.log,browser-verification.json,browser-requests.jsonl,browser-100.png}; native tmp/sourcing-page-size/native-tests-configured.log. Operating rollout is recorded separately.
+
+
+### Awaiting-shipment classification correction (2026-10-13)
+
+The operator reported that orders awaiting dispatch were shown as in transit.
+Coupang DEPARTURE (배송지시), stored using the existing Shipped code, now has
+a separate 발송 대기 tab and label between Preparing and Shipping. Shipping
+selects only InTransit (DELIVERING). Shipped deep links remain in the awaiting
+tab; legacy InTransit deep links continue to open Shipping. No stored order
+state, provider status, invoice, or schema is rewritten.
+
+The native full account/date/search summary separates awaitingShipmentOrders
+from shippingOrders. The UI shows the awaiting count when the native field is
+present; it does not fabricate a count for older responses. Page and detail
+selection clear when changing tabs, while account/project/date/search persist.
+
+Validation must cover actual SQLite and authenticated loopback HTTP, UI
+regressions, and the changed component in a browser against an isolated copy
+of stored orders before PR submission. Runtime deployment and verification
+will be recorded after the reviewed feature PRs merge into dev.
+
+Verification (2026-10-13): orders/dispatch UI tests 30 passed; native companion
+full suite 219 passed / 13 gated live tests skipped. UI and recursive workspace
+type checks, full source build, token gates, compatible UI build and diff review
+passed. The full modern Dovix test command was started separately; its completion
+is not assumed from scoped checks.
+
+Aside u1 ran the changed component against an isolated copy of actual stored
+SQLite orders with customer names removed. It verified awaiting 20 / transit 0 /
+delivered 29 / all 49, list-to-detail status, tab changes clearing the detail, and
+retained period/search/project scope. Console errors were 0 and all native
+proxy requests were successful GET reads; no provider sync or invoice dispatch.
+Screenshots were inspected. Evidence: tmp/order-awaiting-shipment/
+{browser-proof-final.log,browser-requests.jsonl,awaiting-detail.png,shipping.png}.
+The compatible UI snapshot retains the current core API contract. Its copied
+announcement asset dependency is linked from this repository; no packages were
+installed. Rollout uses the reviewed native dev release first, then compatible
+UI assets; no core upgrade. Exact commits, backup paths, asset hashes, operating
+order counts and rollback state are recorded in each repository's ignored
+tmp/order-awaiting-shipment/deployment.json. Only stage complete proves rollout.

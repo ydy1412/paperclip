@@ -34,13 +34,14 @@ describe("Native order workspace", () => {
   it("shows actual response names and full-scope summary rather than page totals", async () => {
     const original = mock.data.getMockImplementation();
     mock.data.mockImplementation(async (...args) => args[3] === "orders" ? { orders: [{ ...row, buyerName: "테스트 주문자", recipientName: "테스트 수령자", items: [{ ...row.items[0], productName: "테스트 상품" }] }], total: 47, page: 1, pageSize: 20,
-      summary: { totalOrders: 47, totalQuantity: 60, newOrders: 3, preparingOrders: 4, shippingOrders: 30, deliveredOrders: 10, unknownAmountOrders: 1, revenue: [{ currency: "KRW", amount: 123000 }] } } : original?.(...args));
+      summary: { totalOrders: 47, totalQuantity: 60, newOrders: 3, preparingOrders: 4, awaitingShipmentOrders: 20, shippingOrders: 10, deliveredOrders: 10, unknownAmountOrders: 1, revenue: [{ currency: "KRW", amount: 123000 }] } } : original?.(...args));
     await render();
     expect(container.querySelector("tbody")?.textContent).toContain("테스트 주문자");
     expect(container.querySelector("tbody")?.textContent).toContain("테스트 수령자");
     expect(container.querySelector("tbody")?.textContent).toContain("테스트 상품");
     const stats = container.querySelector('[aria-label="주문 통계"]')!;
     expect(stats.textContent).toContain("123,000 KRW"); expect(stats.textContent).toContain("47건");
+    expect(stats.textContent).toContain("발송 대기 20건");
     expect(stats.textContent).toContain("금액 미확인 1건 제외");
   });
   it("opens the Preparing order's scoped forwarder chooser without opening order details", async () => {
@@ -59,7 +60,7 @@ describe("Native order workspace", () => {
   it("reads actual scoped plugin data without provider sync on page load", async () => {
     await render();
     expect(container.textContent).toContain(row.orderId);
-    expect(container.textContent).toContain("배송 중 · 출고");
+    expect(container.querySelector("tbody")?.textContent).toContain("발송 대기");
     expect(container.textContent).toContain("47건");
     expect(mock.data).toHaveBeenCalledWith("plugin", "company", "project", "orders", expect.objectContaining({ accountId: "seller", page: 1 }));
     expect(mock.sync).not.toHaveBeenCalled();
@@ -99,10 +100,37 @@ describe("Native order workspace", () => {
     expect(container.querySelector("[data-location]")?.textContent).toContain("project=project");
     expect(container.querySelector("[data-location]")?.textContent).not.toContain("page=2");
   });
+  it("keeps awaiting-shipment deep links separate from transit and preserves the date/search scope", async () => {
+    const original = mock.data.getMockImplementation();
+    mock.data.mockImplementation(async (...args) => args[3] === "orders" ? {
+      orders: [{ ...row, orderId: args[4]?.state === "Shipped" ? "waiting-order" : "moving-order",
+        state: args[4]?.state === "Shipped" ? "Shipped" : "InTransit" }], total: 1, page: 1, pageSize: 20,
+    } : original?.(...args));
+    await render("/DOB/sourcing?view=orders&project=project&state=Shipped&page=2&item=123&from=2026-10-01&to=2026-10-08&q=scope");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("발송 대기");
+    expect(mock.data).toHaveBeenCalledWith("plugin", "company", "project", "orders", expect.objectContaining({ state: "Shipped", page: 2, q: "scope" }));
+    expect(container.querySelector("tbody")?.textContent).toContain("waiting-order");
+    const shipping = Array.from(container.querySelectorAll('[role="tab"]')).find(tab => tab.textContent === "배송 중")!;
+    await act(async () => shipping.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    for (let i = 0; i < 2; i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    const location = new URLSearchParams(container.querySelector("[data-location]")?.textContent ?? "");
+    expect(location.get("state")).toBe("Shipping");
+    expect(location.get("from")).toBe("2026-10-01"); expect(location.get("to")).toBe("2026-10-08");
+    expect(location.get("q")).toBe("scope"); expect(location.has("page")).toBe(false); expect(location.has("item")).toBe(false);
+    expect(container.querySelector("tbody")?.textContent).toContain("moving-order");
+    expect(container.querySelector("tbody")?.textContent).not.toContain("waiting-order");
+    expect(mock.sync).not.toHaveBeenCalled();
+  });
+  it("retains legacy InTransit URLs in the shipping tab", async () => {
+    await render("/DOB/sourcing?view=orders&project=project&state=InTransit");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("배송 중");
+    expect(mock.data).toHaveBeenCalledWith("plugin", "company", "project", "orders", expect.objectContaining({ state: "Shipping" }));
+    expect(mock.sync).not.toHaveBeenCalled();
+  });
   it("presents status tabs in operating order and preserves the selected period/search", async () => {
     await render("/DOB/sourcing?view=orders&project=project&state=Shipping&page=2&item=123&from=2026-10-01&to=2026-10-08&q=2026");
     const tabs = Array.from(container.querySelectorAll('[role="tab"]'));
-    expect(tabs.map(tab => tab.textContent)).toEqual(["신규 주문", "상품준비중", "배송 중", "배송 완료", "확인 필요", "추적 불가", "전체 주문"]);
+    expect(tabs.map(tab => tab.textContent)).toEqual(["신규 주문", "상품준비중", "발송 대기", "배송 중", "배송 완료", "확인 필요", "추적 불가", "전체 주문"]);
     expect(container.querySelector('select[aria-label="주문 상태"]')).toBeNull();
     await act(async () => tabs[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
