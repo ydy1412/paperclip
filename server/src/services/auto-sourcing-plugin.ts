@@ -8,7 +8,7 @@ import { pluginRegistryService } from "./plugin-registry.js";
 import { createPluginSecretsHandler } from "./plugin-secrets-handler.js";
 import { processingReadSchema, processingWriteSchema, processingSourceSchema, processingListSchema, processingViewSchema } from "./auto-sourcing-processing-contract.js";
 import { logActivity } from "./activity-log.js";
-import { catalogImageAnalysisSchema, catalogImageAssetSchema } from "@paperclipai/shared";
+import { catalogImageAnalysisSchema, catalogImageProcessResultSchema, catalogImageProviderStatusSchema } from "@paperclipai/shared";
 
 const identity = z.object({ companyId: z.string().uuid(), projectId: z.string().uuid() });
 const readSchema = identity.extend({ operation: z.enum(["accounts", "orders", "detail", "sync-state", "carriers"]),
@@ -105,12 +105,12 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   }
   async function catalog(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = catalogRequestSchema.parse(value);
-    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview", "category-recommend", "category-metadata", "image-inspect", "image-content"];
+    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview", "category-recommend", "category-metadata", "image-inspect", "image-content", "image-provider-status"];
     if (reads.includes(input.operation) === write) throw forbidden("허용되지 않은 상품 작업입니다.");
     if (context?.invocationScope?.agentRun && write && !["save", "source", "image-process"].includes(input.operation)) throw forbidden("상품 가져오기와 실제 업로드는 운영 화면에서 실행해 주세요.");
     const { config, accounts } = await authorize(input, context, true);
-    if (["category-recommend", "category-metadata", "image-inspect", "image-process", "image-content"].includes(input.operation) && !Object.hasOwn(config.projects, input.projectId))
-      throw forbidden("프로젝트에 연결된 쿠팡 카테고리 도구가 아닙니다.");
+    if (["category-recommend", "category-metadata", "image-inspect", "image-process", "image-content", "image-provider-status"].includes(input.operation) && !Object.hasOwn(config.projects, input.projectId))
+      throw forbidden("프로젝트에 연결된 상품 가공 도구가 아닙니다.");
     if (input.operation === "source" && !(config.sourceProducts?.[input.projectId] ?? []).includes(`${input.sourceProvider}:${input.sourceProductId}`)) {
       const access = z.object({ allowed: z.boolean() }).parse(await catalogCall(input.companyId, config.serviceToken, "source-access", input));
       if (!access.allowed) throw forbidden("프로젝트에 허용된 원본 상품이 아닙니다.");
@@ -132,9 +132,14 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
     else if (operation === "category-recommend") result = catalogCategoryRecommendationSchema.parse(raw);
     else if (operation === "category-metadata") result = catalogCategoryMetadataSchema.parse(raw);
     else if (operation === "image-inspect") result = catalogImageAnalysisSchema.parse(raw);
+    else if (operation === "image-provider-status") result = catalogImageProviderStatusSchema.parse(raw);
     else if (operation === "image-process") {
-      const asset = catalogImageAssetSchema.parse(raw);
-      if (!("productId" in input) || asset.imageUrl !== `/api/companies/${input.companyId}/sourcing/projects/${input.projectId}/images/${input.productId}/${asset.assetId}.png`)
+      const asset = catalogImageProcessResultSchema.parse(raw);
+      if ("status" in asset) {
+        if (input.operation !== "image-process" || input.provider !== "higgsfield" || asset.productId !== input.productId
+          || asset.requestId !== input.requestId || asset.expectedRevision !== input.expectedRevision)
+          throw forbidden("이미지 대기 작업의 소유 범위가 일치하지 않습니다.");
+      } else if (!("productId" in input) || asset.imageUrl !== `/api/companies/${input.companyId}/sourcing/projects/${input.projectId}/images/${input.productId}/${asset.assetId}.png`)
         throw forbidden("이미지 결과의 소유 범위가 일치하지 않습니다.");
       result = asset;
     } else if (operation === "image-content") result = z.object({ base64: z.string().max(8 * 1024 * 1024).regex(/^[A-Za-z0-9+/]+={0,2}$/), contentType: z.literal("image/png") }).parse(raw);
