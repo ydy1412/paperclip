@@ -1,6 +1,6 @@
 # 소싱 상품 가공
 
-This local plugin exposes twelve product tools backed by the existing scoped Auto
+This local plugin exposes thirteen product tools backed by the existing scoped Auto
 Sourcing catalog. Configure a company-scoped `serviceToken` secret reference and
 the project's `sourceProducts` allowlist, or its already bound collected sources.
 Select this plugin in an agent profile; skills alone do not grant its tools.
@@ -27,3 +27,5 @@ prove required product facts or image edits are complete. Preserve original
 purchase exclusions and incompatibility warnings in translations.
 
 `get-product-image` reads a scoped derivative through the same native read capability. The skill helper saves the returned PNG into the current run scratch directory without printing image bytes. Agents can inspect and attach that file with their existing tools. No host path is exposed or accepted.
+
+`get-image-provider-status` reports Auto Sourcing's internal Higgsfield MCP configuration and authenticated account/model check without returning credentials. Agents receive only the native scoped tools, never the remote Higgsfield MCP. Once configured, `process-product-image(provider=higgsfield, removeAllText=true)` submits the exact source PNG for removal of all letters, digits and logo lettering. Preserve those source facts in Korean options/detail. Cloud mode does not accept local crop/cleanup/removeChinese. A pending response requires waiting and repeating the exact same original requestId, revision and parameters; a known job is resumed; an unknown submission is blocked without another generation. Only a finished owned PNG changes matching product references. Always visually compare product geometry and run all-language OCR; `reviewRequired` remains true. MCP billing and server-owned OAuth setup are described in Auto Sourcing's `specs/005-product-publishing/higgsfield-connection.md`.
