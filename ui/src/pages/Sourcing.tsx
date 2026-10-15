@@ -6,7 +6,7 @@ import { useSearchParams } from "@/lib/router";
 import { getSourcingView } from "../lib/sourcing-views";
 import { projectsApi } from "../api/projects";
 import { ApiError } from "../api/client";
-import { SourcingOrders } from "../components/SourcingOrders";
+import { DobiOrders } from "../components/DobiOrders";
 import { SourcingProducts } from "../components/SourcingProducts";
 import { SourcingStoreSettings } from "../components/SourcingStoreSettings";
 import { SourcingForwarders } from "../components/SourcingForwarders";
@@ -59,9 +59,9 @@ export function Sourcing() {
       </header>
       {projects.error && <p role="alert" className="text-sm text-destructive">{accessDenied ? "프로젝트 조회 권한 없음" : "프로젝트 조회 실패"}</p>}
       {view.id === "settings" ? selectedCompanyId && projectId
-        ? <div key={`${selectedCompanyId}:${projectId}`} className="space-y-8"><SourcingStoreSettings companyId={selectedCompanyId} projectId={projectId} /><SourcingForwarders companyId={selectedCompanyId} projectId={projectId} /></div>
+        ? <div key={`${selectedCompanyId}:${projectId}`} className="space-y-8"><SourcingStoreSettings companyId={selectedCompanyId} projectId={projectId} /><SourcingForwarders companyId={selectedCompanyId} projectId={projectId} /><DobiOrders companyId={selectedCompanyId} projectId={projectId} settingsOnly /></div>
         : <p className="text-sm text-muted-foreground">{projects.isLoading ? "프로젝트 조회 중" : "배송대행지를 관리할 프로젝트를 선택해 주세요."}</p>
-        : view.id === "orders" ? <SourcingOrders key={`${selectedCompanyId}:${projectId}`} companyId={selectedCompanyId ?? ""} projectId={projectId} /> :
+        : view.id === "orders" ? <DobiOrders key={`${selectedCompanyId}:${projectId}`} companyId={selectedCompanyId ?? ""} projectId={projectId} /> :
         <SourcingProducts key={`${selectedCompanyId}:${projectId}:${view.id}`} companyId={selectedCompanyId ?? ""} projectId={projectId} view={view.id === "uploads" ? "uploads" : "source"} />}
     </section>
   );

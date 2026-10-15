@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "도비 오더스 브라우저 도우미",
+  "version": "0.2.0",
+  "description": "현재 탭 주문 표와 배송 초안을 확인하고, 별도 동의 후 지마켓·옥션 로그인 세션을 로컬 주문 작업실에 연결합니다.",
+  "minimum_chrome_version": "102",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1:4317/*"],
+  "optional_permissions": ["cookies"],
+  "optional_host_permissions": ["https://*.esmplus.com/*"],
+  "action": {
+    "default_title": "도비 오더스 브라우저 도우미",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}

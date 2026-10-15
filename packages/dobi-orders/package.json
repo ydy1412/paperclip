@@ -1,0 +1,41 @@
+{
+  "name": "@paperclipai/dobi-orders",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.mts",
+      "import": "./server.mjs"
+    },
+    "./frontend": {
+      "types": "./frontend/index.d.mts",
+      "import": "./frontend/index.mjs"
+    },
+    "./styles": "./frontend/styles.css"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "node --check server.mjs",
+    "build": "node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.2",
+    "csv-parse": "7.0.3",
+    "exceljs": "4.4.0",
+    "he": "1.2.0",
+    "jszip": "3.10.1",
+    "lossless-json": "4.3.1"
+  },
+  "files": [
+    "server.mjs",
+    "index.d.mts",
+    "src",
+    "frontend",
+    "browser-helper",
+    "README.md"
+  ]
+}
