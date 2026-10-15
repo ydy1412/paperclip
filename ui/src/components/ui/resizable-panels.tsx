@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
  * Group / Panel / Separator with Paperclip token styling and a comfortable
  * (≥8px) resize hit-slop so a split view can be dropped in anywhere.
  *
- * Sizes accept the library's units: bare numbers/`"37.5%"` are percentages,
- * `"280px"` is a pixel floor (used here for the min-width contract).
+ * Sizes accept the library's units: `"37.5%"` is a percentage; bare numbers and
+ * `"280px"` specify pixels (the latter is used here for the min-width contract).
  */
 
 export function ResizablePanelGroup({ className, ...props }: GroupProps) {

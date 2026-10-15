@@ -116,3 +116,67 @@ The fork currently has no PR workflow run or check result for this head; CI is
 unverified, not passed. The final PR description and the local deployment receipt
 record the review and rollout outcome. The managed-runtime rollout remains a
 compatible feature overlay on core `8f8a0ab7`; it is not a full core upgrade.
+
+## 2026-10-16: Baalda-style file explorer
+
+The approved follow-up replaces the library's classification rail and card list
+with a real folder tree and a tabbed document workspace. Keep Library / Ask /
+Graph navigation. Use existing Baalda IDs and paths; no Dovix folder database.
+Show empty folders, create/upload/rename/move/trash actions, keyboard navigation,
+resizable panes, Markdown source/preview/split modes and generated-source links.
+The default write location is Inbox. Inbox/PreProcessed descendants are writable;
+Processed and system roots remain protected. Generated notes can create an
+editable copy with original ID/revision provenance.
+
+The Gateway adds tree, trash and explicit management tools. Dovix separates read,
+write and multipart upload routes. Every management call requires the caller's
+active company/user grant and an active write/destructive catalog declaration,
+checked again after the provider response. A read key is never upgraded. Existing
+connections need refreshed declarations and an explicitly authorized write key
+or owner OAuth grant before management actions become available.
+
+All deletes move actual resources into reserved Inbox/Trash. The Gateway journal
+keeps original paths and move/recovery receipts; native moves preserve all file
+and folder IDs and binary bytes. Ordinary listing/search/processing excludes
+Trash. Conflicting restore names or missing parents require a new name/location.
+No permanent-delete feature is added. Failed move acknowledgements are reconciled
+on the next management request without repeating an already completed move.
+
+Edits use the current revision. Local drafts are scoped by verified owner,
+company, vault and document. Debounced writes also flush on unmount/page hide;
+empty edits survive. Explicit server save/readback is distinct from a browser
+draft. External revisions preserve local text and require conflict resolution.
+Tabs ask save/discard/cancel before closing a dirty document.
+
+Gateway-first rollout is required. This implementation is submitted as separate
+feature PRs into dev. PR creation is not a deployment receipt. Retain the existing
+managed-runtime compatible deployment and backup boundary described above.
+
+### Explorer verification
+
+- Gateway PR: https://github.com/ydy1412/personal-brain-server/pull/4
+  (head `d8a0d3eb01b01b75bfafe424f3b2f007f07f515e`). Its GitHub test check passed.
+- Gateway: 67 Node cases, three Python compatibility cases and syntax checks pass.
+  Native disposable-folder checks passed for empty folders, revision conflicts,
+  PNG byte/hash readback, subtree moves, and trash/restore with stable IDs. The
+  script cleaned up its created notes, files and subfolders.
+- Dovix: 61 focused cases cover the explorer, existing knowledge UI/API/graph,
+  proxy ownership, read/write separation, revocation, conflict and upload paths.
+  Whole-workspace typecheck and build pass. Final UI build and token gates pass.
+- Aside u1 exercised the actual React components with explicitly labelled,
+  disposable Storybook fixtures: create/edit/preview/button and keyboard save,
+  tabs, generated copy, F2 rename, drag/drop move, Delete/trash and restore.
+  Native storage proof and fixture browser proof remain distinct.
+- Captures exposed a desktop panel-unit error and mobile wrapper sizing overlap.
+  Both were fixed and rechecked: desktop explorer 294/1184px; 390px iframe has
+  no horizontal overflow, all fixture rows fit, and the document reader is
+  reachable by vertical scrolling. The tree's inner rows are 176px high; the
+  outer mobile explorer panel has the viewport-based height. Evidence is in
+  ignored `tmp/knowledge-explorer/`.
+- The broad `pnpm test:run` was started and then interrupted during its unrelated
+  general-server group. The repository timing manifest records 646 suites with
+  53.1 minutes of serial cost for that group alone. This run has no full result
+  and is not a pass. Existing host/baseline limitations above remain separate.
+- Source/diff review and Graphify relation checks were completed. No source
+  originals, running managed server, credentials or connection permissions were
+  replaced. No master promotion or operating deployment is part of these PRs.

@@ -8,7 +8,21 @@ import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
 import { parseRemoteHttpEndpoint } from "./remote-http-endpoint-guard.js";
 import { mcpHttpRequestHeaders, readMcpHttpResponse, getMcpHttpSession } from "./mcp-http.js";
 
-export const BRAIN_READ_TOOLS = new Set(["knowledge_library", "knowledge_document", "knowledge_graph", "knowledge_graph_detail", "knowledge_file", "knowledge_status", "memory_recall", "memory_reflect"]);
+export const BRAIN_READ_TOOLS = new Set(["knowledge_library", "knowledge_document", "knowledge_graph", "knowledge_graph_detail", "knowledge_file", "knowledge_status", "memory_recall", "memory_reflect", "knowledge_tree", "knowledge_trash"]);
+export const BRAIN_WRITE_TOOLS = new Set(["knowledge_create_folder", "knowledge_create_document", "knowledge_save_document", "knowledge_move", "knowledge_trash_item", "knowledge_restore", "knowledge_upload"]);
+export function assertBrainWriteEntry(entry: Pick<CatalogEntry, "status" | "isReadOnly" | "isWrite" | "isDestructive"> | undefined) {
+  if (!entry || entry.status !== "active" || entry.isReadOnly || (!entry.isWrite && !entry.isDestructive)) throw forbidden("쓰기 권한이 있는 Personal Brain 연결이 필요합니다. Apps에서 연결을 확인해 주세요.");
+}
+const brainErrors: Record<string, string> = {
+  source_changed: "다른 곳에서 수정되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.",
+  name_conflict: "같은 이름이 있습니다. 다른 이름이나 위치를 선택해 주세요.",
+  restore_parent_required: "원래 폴더가 없습니다. 복원할 폴더를 선택해 주세요.",
+  write_path_forbidden: "이 위치는 수정할 수 없습니다.",
+  operation_needs_recovery: "이전 작업의 결과를 확인하고 있습니다. 새로고침 후 다시 시도해 주세요.",
+  invalid_explorer_arguments: "입력한 이름·위치·파일을 확인해 주세요.",
+  body_too_large: "문서 내용이 너무 큽니다. 문서를 나눠 저장해 주세요.",
+  unsupported_file_type: "PDF, 이미지 또는 엑셀 파일을 선택해 주세요.",
+};
 type Connection = typeof toolConnections.$inferSelect;
 type Grant = typeof connectionGrants.$inferSelect;
 type CatalogEntry = typeof toolCatalogEntries.$inferSelect;
@@ -47,7 +61,7 @@ export function knowledgeBrainService(db: Db, options: {
     const [connection] = await db.select().from(toolConnections).where(and(eq(toolConnections.companyId, companyId), eq(toolConnections.id, connectionId)));
     const [catalog] = await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, companyId),
       eq(toolCatalogEntries.connectionId, connectionId), eq(toolCatalogEntries.toolName, tool))).limit(1);
-    assertBrainReadEntry(catalog);
+    if (BRAIN_WRITE_TOOLS.has(tool)) assertBrainWriteEntry(catalog); else assertBrainReadEntry(catalog);
     if (connection && !isPersonalBrainConnection(connection)) connection.config = { ...connection.config, knowledgeProvider: "personal-brain" };
     const [grant] = await db.select().from(connectionGrants).where(and(eq(connectionGrants.companyId, companyId),
       eq(connectionGrants.connectionId, connectionId), eq(connectionGrants.kind, "user"), eq(connectionGrants.subjectUserId, userId), eq(connectionGrants.status, "active")));
@@ -74,13 +88,16 @@ export function knowledgeBrainService(db: Db, options: {
       for (const row of rows) {
         try {
           await owned(companyId, row.connection.id, userId);
-          visible.push({ id: row.connection.id, name: row.connection.name, kind: "personal-brain" as const });
+          const actions = await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, companyId), eq(toolCatalogEntries.connectionId, row.connection.id)));
+          visible.push({ id: row.connection.id, name: row.connection.name, kind: "personal-brain" as const,
+            actions: actions.filter(a => BRAIN_WRITE_TOOLS.has(a.toolName) && a.status === "active" && (a.isWrite || a.isDestructive) && !a.isReadOnly).map(a => a.toolName),
+            ownerId: userId });
         } catch (error) { if (!(error instanceof HttpError && error.status === 404)) throw error; }
       }
       return visible;
     },
-    async call(companyId: string, connectionId: string, userId: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal) {
-      if (!BRAIN_READ_TOOLS.has(tool)) throw forbidden("허용되지 않은 지식 조회입니다.");
+    async call(companyId: string, connectionId: string, userId: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal, mutation = false) {
+      if (!(mutation ? BRAIN_WRITE_TOOLS : BRAIN_READ_TOOLS).has(tool)) throw forbidden("허용되지 않은 지식 조회입니다.");
       const { connection, grant } = await owned(companyId, connectionId, userId, tool);
       const config = { ...connection.config, ...connection.transportConfig };
       const url = parseRemoteHttpEndpoint(config.url ?? config.endpoint ?? config.remoteUrl, (message, code) => badRequest(message, { code }));
@@ -94,13 +111,22 @@ export function knowledgeBrainService(db: Db, options: {
         const protocolHeaders = await getMcpHttpSession({ scope: `${connectionId}:${grant.id}`, headers: credentials, requestId,
           send: init => send({ ...init, signal: effectiveSignal }) });
         const response = await send({ method: "POST", redirect: "manual", signal: effectiveSignal,
-          headers: mcpHttpRequestHeaders(protocolHeaders), body: JSON.stringify({ jsonrpc: "2.0", id: requestId,
+          headers: { ...mcpHttpRequestHeaders(protocolHeaders), ...(tool === "knowledge_upload" ? { "X-Knowledge-Upload": "1" } : {}) }, body: JSON.stringify({ jsonrpc: "2.0", id: requestId,
             method: "tools/call", params: { name: tool, arguments: args } }) });
-        if (!response.ok) { await response.body?.cancel(); throw new HttpError([401, 403, 409, 413].includes(response.status) ? response.status : 502,
-          response.status === 401 || response.status === 403 ? "Personal Brain 인증을 확인해 주세요." : "Personal Brain 지식 조회에 실패했습니다."); }
+        if (!response.ok) {
+          const failure = await response.json().catch(() => ({})) as { error?: string };
+          throw new HttpError([400, 401, 403, 404, 409, 413, 415].includes(response.status) ? response.status : 502,
+            brainErrors[failure.error ?? ""] ?? (response.status === 401 || response.status === 403 ? "Personal Brain 인증을 확인해 주세요." : "Personal Brain 요청에 실패했습니다."));
+        }
         const result = await readMcpHttpResponse(response, requestId, { maxBytes: tool === "knowledge_file" ? 72 * 1024 * 1024 : 8 * 1024 * 1024 }) as {
           error?: unknown; result?: { isError?: boolean; structuredContent?: unknown; content?: { text?: string }[] } };
-        if (result.error || !result.result || result.result.isError) throw new HttpError(502, "Personal Brain이 요청을 완료하지 못했습니다.");
+        if (result.error || !result.result) throw new HttpError(502, "Personal Brain이 요청을 완료하지 못했습니다.");
+        if (result.result.isError) {
+          let failure: { error?: string; status?: number } = {};
+          try { failure = JSON.parse(result.result.content?.[0]?.text ?? "{}"); } catch { /* Generic error below. */ }
+          throw new HttpError([400, 401, 403, 404, 409, 413, 415].includes(failure.status ?? 0) ? failure.status! : 502,
+            brainErrors[failure.error ?? ""] ?? "Personal Brain이 요청을 완료하지 못했습니다.");
+        }
         const data = result.result.structuredContent ?? JSON.parse(result.result.content?.[0]?.text ?? "null");
         await owned(companyId, connectionId, userId, tool); // Revocation during a long reflection also revokes its response.
         return data;
