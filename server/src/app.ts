@@ -53,6 +53,7 @@ import { builtInAgentRoutes } from "./routes/built-in-agents.js";
 import { folderRoutes } from "./routes/folders.js";
 import { sourcingForwarderRoutes } from "./routes/sourcing-forwarders.js";
 import { agentProfileRoutes } from "./routes/agent-profiles.js";
+import { dobiOrderRoutes } from "./routes/dobi-orders.js";
 import { sourcingCatalogRoutes } from "./routes/sourcing-catalog.js";
 import { sourcingForwarderBrowser } from "./services/sourcing-forwarder-browser.js";
 import { marketingRoutes } from "./routes/marketing.js";
@@ -543,6 +544,7 @@ export async function createApp(
     createChatWebhookDiagnostics(),
     chatWebhookBodyParser,
   );
+  app.use("/api/companies/:companyId/sourcing/projects/:projectId/order-management", express.json({ limit: "16mb", verify: captureRawBody }));
   app.use(
     express.json({
       limit: DEFAULT_JSON_BODY_LIMIT,
@@ -650,7 +652,10 @@ export async function createApp(
   const api = Router();
   const agentAvatars = agentAvatarRoutes();
   api.use(agentAvatars.router);
+  const dobiOrders = dobiOrderRoutes(db);
+  api.use(dobiOrders.bridge);
   api.use(boardMutationGuard());
+  api.use(dobiOrders.router);
   api.use(
     "/health",
     healthRoutes(db, {

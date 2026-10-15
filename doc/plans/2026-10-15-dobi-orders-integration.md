@@ -1,0 +1,31 @@
+# Dobi Orders domain integration
+
+Approved on 2026-10-15. Source: ydy1412/dobi-orders dev@d8aaccb.
+
+## Contract
+Dobi Orders is the order-management behavior baseline. Do not reuse native Auto Sourcing order, shipment or dispatch logic. Preserve the existing sourcing and publishing features and their data. Replace the shopping Orders view with Dobi Orders; use top-level tabs and a non-modal right order inspector. Connections and workspace settings are available in shopping management settings.
+
+Keep the domain in packages/dobi-orders, retain its SQLite rules and original tests, and host its API in the Dovix process under company/project-scoped order-management routes. The host checks board access and project ownership. Each scope has a separate database below the instance data root. Replace Windows DPAPI with the existing Dovix local-encrypted secret service. Never copy plaintext secrets or live order data into this repository.
+
+Provider catalogs and carriers are seeded into the domain database and read dynamically. Preserve import previews, duplicates, local work fields, optimistic concurrency, forwarding safeguards, ESM grants and browser-helper pairing. A catalog entry is not an implemented provider. No independent HTTP service or iframe is used.
+
+## Delivery gates
+Original domain regression tests; real persistent SQLite scope isolation and restart; scoped authenticated routes and secret adapter tests; production UI build; actual browser list/select/detail/edit/readback, filters, file preview/import, draft retention and settings; console/request checks. Preserve no-result-unknown retries and existing production state. Submit and review a dev PR, merge only after evidence, deploy the verified commit through the compatible runtime procedure with backups and rollback.
+
+## Status
+Implemented the isolated package, scoped host routes, encrypted credentials, database references/businesses, private drafts, and the imported UI in the shopping Orders/settings views. The original order/shipping API and data remain available to existing callers; the new order domain does not depend on them. No automatic import of existing operating orders or credentials occurs.
+
+Verified on 2026-10-15:
+- Domain: 72 tests, 71 passed and one Windows-only DPAPI test skipped.
+- Host: six real PostgreSQL/SQLite integration cases, including paired-user audit attribution. The final host/redaction/shopping navigation and environment regression group passed 110 cases. Earlier existing forwarder coverage passed 20 cases.
+- Workspace build/typecheck and UI token gates passed. The frozen lockfile check passed without changing existing importer versions.
+- The compiled browser fixture passed list → right inspector → edit → separate API readback, immediate-navigation draft recovery, search, selection, sample file mapping/preview/import, claims/forwarding and connection/business settings. Browser evidence has no reported application errors; observed domain requests returned 200. Evidence: `tmp/dobi-orders/browser-proof.json` and numbered PNG files. This uses synthetic data and does not prove real marketplace authentication or shipment submission.
+- Graphify code-only extraction of the new domain reports 287 nodes and 589 edges. Source checks confirm `createApp → createStore/createIntegrations`, with no calls to the old Dovix order/shipping service. Evidence: `tmp/dobi-orders/graph`.
+- A compatible runtime on the installed core passed real scoped create/edit/readback, encrypted credentials and workbook export. It retains the operating migration journal. Evidence: `tmp/dobi-orders/compatible-result.json`.
+
+The full workspace test run was executed and is not green. Four existing `sourcing-catalog.integration.test.ts` failures and five existing `SourcingCatalog.test.tsx` failures also reproduce on unmodified dev `5ae33a04f2edbc8a96f024776efa81fdfb8b98c6` with the same Auto Sourcing fixture. Rebuilding that fixture did not remove them. The new order domain does not import the failing catalog implementation. Additional broad checks and their exact outcomes are retained in the local verification logs; they must not be described as passing without a final result. Remote and deployment states are recorded in the PR and rollout receipt. Do not treat the isolated browser or compatibility result as operating UI/authentication proof.
+
+## Compatible rollout
+The running service is a managed installed runtime, not this source worktree. Its core baseline is `8f8a0ab7effbd6a0584107d8038736c134ee5047`. Do not replace it with the modern workspace server or migration journal. Stage only the scoped routes/service, private domain package, log redaction/policy and minimal app registration. Build the compatible UI with the reviewed dev commit stamp. Keep sourcing, publishing, forwarding registrations and the control-plane runtime intact.
+
+Before restart, verify no active heartbeat/plugin/forwarder verification jobs, back up the affected installed files and UI entry points, and create/read-check a PostgreSQL backup. Record hashes, dev/PR commit, package path, restart and health/API/asset results in `tmp/dobi-orders/deployment.json`. Rollback restores the prior affected files and UI entry points and restarts the managed service. Retain additive domain databases; do not restore or delete operating data as an application rollback.

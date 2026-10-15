@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>도비 오더스 도우미</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><strong>도비 오더스</strong><span>브라우저 도우미</span><button id="refresh" type="button">새로고침</button></header>
+  <p id="message" role="status" aria-live="polite">연결 상태를 확인하고 있습니다.</p>
+  <section id="pairPanel">
+    <h1>내 주문 작업실 연결</h1>
+    <p>도비 오더스의 연결 화면에서 발급한 일회용 코드를 입력해주세요.</p>
+    <form id="pairForm"><label>일회용 코드<input id="pairCode" type="text" autocomplete="off" spellcheck="false" required maxlength="160"></label><button type="submit">연결</button></form>
+    <p class="hint">로컬 프로그램 주소: http://127.0.0.1:4317</p>
+  </section>
+  <main id="connectedPanel" hidden>
+    <div class="session"><span id="tabHost">현재 탭을 확인해주세요.</span><button id="unpair" type="button">연결 해제</button></div>
+    <nav aria-label="작업 선택"><button id="orderMode" type="button" class="active">주문 표 수집</button><button id="draftMode" type="button">배송 초안 입력</button><button id="esmMode" type="button">ESM 세션 연결</button></nav>
+    <section id="esmPanel" hidden>
+      <h1>지마켓·옥션 세션 연결</h1>
+      <p>ESM에서 직접 로그인해주세요. 도비 오더스 앱에서 이 계정의 세션 연결을 승인한 뒤 진행합니다.</p>
+      <label>앱에서 승인한 판매자 계정<select id="esmConnectionSelect"></select></label>
+      <button id="prepareEsm" type="button">현재 ESM 탭과 승인 확인</button>
+      <p id="esmPreparedInfo" class="hint">앱의 승인은 5분 동안 한 번만 사용할 수 있습니다.</p>
+      <label class="check"><input id="confirmEsm" type="checkbox"> 이 ESM 탭의 로그인 쿠키를 선택한 판매자 계정의 로컬 주문 수집에 사용하도록 동의합니다.</label>
+      <button id="connectEsm" type="button" disabled>지마켓·옥션 세션 연결</button>
+      <p class="hint">선택한 탭의 쿠키 저장소에서 ESM 쿠키만 읽어 이 PC의 도비 오더스로 보냅니다. 프로그램은 판매자 계정을 대조하고 Windows 암호화 저장을 사용합니다. 쿠키값은 팝업·로그·확장 저장소에 남기지 않으며, 선택 권한은 작업 후 해제합니다.</p>
+    </section>
+    <section id="ordersPanel">
+      <h1>현재 페이지 주문 표</h1>
+      <p>사이트에서 직접 로그인하고 주문 목록을 열어주세요. 현재 페이지에 표시된 표만 읽습니다.</p>
+      <label>주문 연결<select id="connectionSelect"></select></label>
+      <button id="readOrders" type="button">현재 탭 주문 표 미리보기</button>
+      <div id="orderReview" hidden>
+        <label>읽을 표<select id="tableSelect"></select></label>
+        <p id="orderSummary"></p>
+        <div class="table-scroll"><table><thead><tr><th>주문번호</th><th>상품명</th><th>수량</th><th>금액</th></tr></thead><tbody id="orderRows"></tbody></table></div>
+        <p class="hint">다른 페이지·접힌 목록·숨겨진 값은 수집하지 않습니다. 미리보기는 최대 30개이며 아래 버튼은 선택한 표의 전체 유효 행을 저장합니다.</p>
+        <label class="check"><input id="confirmOrders" type="checkbox"> 연결과 원본 주문·수량·금액을 확인했습니다.</label>
+        <button id="saveOrders" type="button" disabled>미리본 주문을 로컬에 저장</button>
+      </div>
+    </section>
+    <section id="draftsPanel" hidden>
+      <h1>배송 신청 초안</h1>
+      <p>배송대행지에 직접 로그인한 뒤 신청서 화면을 열어주세요. 입력할 값과 현재 요소를 먼저 확인합니다.</p>
+      <label>배송 초안<select id="draftSelect"></select></label>
+      <button id="readDraft" type="button">현재 탭 입력 대상 미리보기</button>
+      <div id="draftReview" hidden>
+        <p id="draftSummary"></p>
+        <div class="table-scroll"><table><thead><tr><th>필드</th><th>현재 값</th><th>초안 값</th></tr></thead><tbody id="draftRows"></tbody></table></div>
+        <details><summary>건너뛰는 항목</summary><ul id="draftSkipped"></ul></details>
+        <label class="check"><input id="confirmDraft" type="checkbox"> 원본 주문과 사이트의 입력 대상을 확인했습니다.</label>
+        <button id="fillDraft" type="button" disabled>확인한 초안 값 채우기</button>
+        <p class="hint">상품 행 수가 다르거나 분할·변환 규칙이 불명확한 필드는 건너뜁니다. 약관·라디오·로그인·제출 버튼은 조작하지 않습니다. 입력 후 사이트에서 직접 검토하고 제출해주세요.</p>
+      </div>
+    </section>
+  </main>
+  <footer>표 수집·배송 초안은 인증정보를 읽지 않습니다. ESM 세션 연결만 별도 동의 후 ESM 쿠키를 이 PC의 도비 오더스로 보냅니다. 배송 신청은 자동 제출하지 않습니다.</footer>
+  <script src="popup.js"></script>
+</body></html>

@@ -16,6 +16,10 @@ vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompa
 vi.mock("../context/SidebarContext", () => ({ useSidebar: () => ({ isMobile: mock.mobile, collapsed: true, peeking: false, setSidebarOpen: mock.closeSidebar }) }));
 vi.mock("../hooks/useStreamlinedUiEnabled", () => ({ useStreamlinedUiEnabled: () => ({ enabled: false }) }));
 vi.mock("../api/projects", () => ({ projectsApi: { list: mock.projects } }));
+vi.mock("../components/DobiOrders", () => ({
+  DobiOrders: ({ companyId, projectId, settingsOnly }: { companyId: string; projectId: string; settingsOnly?: boolean }) =>
+    <section aria-label={settingsOnly ? "주문관리 연결 설정" : "주문 작업실"} data-order-company={companyId} data-order-project={projectId} />,
+}));
 
 function Location() {
   const location = useLocation();
@@ -79,10 +83,12 @@ describe("Shopping mall Settings-style workspace", () => {
     expect(container.textContent).toContain("등록 상품을 공통 상품별로 관리합니다.");
   });
 
-  it("restores the orders view from its URL and shows no fabricated totals or registration controls", async () => {
+  it("restores the orders view and mounts the independent order domain in the selected scope", async () => {
     await render("/DOB/sourcing?project=project&view=orders");
     expect(container.querySelector("h1")?.textContent).toBe("주문");
-    expect(container.textContent).toContain("주문 데이터 미연결");
+    const workspace = container.querySelector('section[aria-label="주문 작업실"]');
+    expect(workspace?.getAttribute("data-order-company")).toBe("company");
+    expect(workspace?.getAttribute("data-order-project")).toBe("project");
     expect(container.textContent).not.toContain("0개");
     expect(container.textContent).not.toContain("등록하기");
     expect(container.querySelector("table")).toBeNull();
@@ -96,6 +102,7 @@ describe("Shopping mall Settings-style workspace", () => {
     await act(async () => { select.value = "second"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     expect(container.querySelector("[data-location]")?.textContent).toContain("project=second");
     expect(container.querySelector("[data-location]")?.textContent).toContain("view=orders");
+    expect(container.querySelector('[data-order-project="second"]')).not.toBeNull();
   });
 
   it("falls back to sourcing for an unknown workflow", async () => {
@@ -144,6 +151,7 @@ describe("Shopping mall Settings-style workspace", () => {
     expect(container.querySelector("[data-location]")?.textContent).toBe("/DOB/sourcing?project=project&view=settings");
     expect(container.querySelector("h1")?.textContent).toBe("쇼핑몰 관리 설정");
     expect(container.querySelector('section[aria-label="배송대행지 관리"]')).not.toBeNull();
+    expect(container.querySelector('section[aria-label="주문관리 연결 설정"]')?.getAttribute("data-order-project")).toBe("project");
     expect(container.textContent).toContain("배송대행지 추가");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(mock.forwarders).toHaveBeenCalledWith("company", "project");
