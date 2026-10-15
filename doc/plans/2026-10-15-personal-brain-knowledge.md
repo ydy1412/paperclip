@@ -85,3 +85,28 @@ Operating browser verification remains separate: Aside observed its password
 manager as locked and did not complete Paperclip sign-in. Do not import a CLI
 session into the browser or bypass that lock. Authenticated operating API reads
 and a working fixture UI do not prove the operating browser login flow.
+
+## Host regression limits
+
+The broad regression run is not green. The complete UI group reported 7,590
+passes and six failures: five `SourcingCatalog` cases also fail on the clean
+base dev commit `6e3c4aab`; one `HoneycombRunLink` case needs isolated follow-up.
+The shared, skill-catalog and database groups passed 845, 20 and 161 cases.
+Adapter checks include a host precondition failure: the installed Claude CLI is
+2.1.81, while an existing isolation test requires at least 2.1.207. Other broad
+checks exceeded cold-import or five-second time budgets under concurrent load.
+Do not update the global CLI or change unrelated test assertions for this UI
+change. New knowledge tests, native reads, compatible import/build checks and
+the checked browser interactions passed; they do not imply a full-suite pass.
+
+An initial attempt could not start the newly installed Postgres dependency. Its
+macOS ICU and other packaged library aliases were missing. Restoring the 17
+existing relative aliases from the working base dependency fixed `initdb`, and
+the three event-sequencing cases then passed. This repair only changed ignored
+`node_modules` files. It did not change the installed service or its database.
+
+PR [#36](https://github.com/ydy1412/paperclip/pull/36) contains this feature.
+The fork currently has no PR workflow run or check result for this head; CI is
+unverified, not passed. The final PR description and the local deployment receipt
+record the review and rollout outcome. The managed-runtime rollout remains a
+compatible feature overlay on core `8f8a0ab7`; it is not a full core upgrade.
