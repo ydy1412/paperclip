@@ -48,7 +48,7 @@ import { UserProfile } from "./pages/UserProfile";
 import { ExecutionWorkspaceDetail } from "./pages/ExecutionWorkspaceDetail";
 import { Goals } from "./pages/Goals";
 import { Artifacts } from "./pages/Artifacts";
-import { Knowledge } from "./pages/Knowledge";
+import { KnowledgeWorkspace } from "./pages/KnowledgeWorkspace";
 import { Marketing } from "./pages/Marketing";
 import { Sourcing } from "./pages/Sourcing";
 import { GoalDetail } from "./pages/GoalDetail";
@@ -401,7 +401,9 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
         </Route>
       </Route>
       <Route path="goals" element={<Goals />} />
-      <Route path="knowledge" element={<Knowledge />} />
+      <Route path="knowledge" element={<KnowledgeWorkspace />} />
+      <Route path="knowledge/ask" element={<KnowledgeWorkspace />} />
+      <Route path="knowledge/graph" element={<KnowledgeWorkspace />} />
       <Route path="marketing" element={<Marketing />} />
       <Route path="sourcing" element={<Sourcing />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />

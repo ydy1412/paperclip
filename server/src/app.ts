@@ -89,6 +89,7 @@ import { boardChatRoutes } from "./routes/board-chat.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { toolAccessRoutes } from "./routes/tool-access.js";
+import { knowledgeBrainRoutes } from "./routes/knowledge-brain.js";
 import {
   chatChannelRoutes,
   chatWebhookRoutes,
@@ -672,6 +673,7 @@ export async function createApp(
   api.use("/companies", companyRoutes(db, opts.storageService));
   api.use(llmRoutes(db));
   api.use(folderRoutes(db));
+  api.use(knowledgeBrainRoutes(db));
   const forwarderBrowser = sourcingForwarderBrowser();
   api.use(sourcingForwarderRoutes(db, forwarderBrowser.open));
   api.use(agentProfileRoutes(db));

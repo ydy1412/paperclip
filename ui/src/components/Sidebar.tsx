@@ -22,7 +22,6 @@ import {
   GanttChartSquare,
   LayoutGrid,
   Users,
-  BookOpen,
   Megaphone,
   ShoppingBag,
 } from "lucide-react";
@@ -52,6 +51,7 @@ import { PluginSlotOutlet } from "@/plugins/slots";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { SidebarCompanyMenu } from "./SidebarCompanyMenu";
 import { primarySidebarStyles } from "./primary-sidebar-styles";
+import { KnowledgeNavigation } from "./KnowledgeNavigation";
 
 export function Sidebar({ children }: { children?: ReactNode }) {
   const { openNewIssue } = useDialogActions();
@@ -252,7 +252,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               aria-hidden="true"
             />
           ) : null}
-          <SidebarNavItem to="/knowledge" label="Knowledge" icon={BookOpen} />
+          <KnowledgeNavigation />
           <SidebarNavItem to="/marketing" label="마케팅" icon={Megaphone} />
           <SidebarNavItem to="/sourcing" label="쇼핑몰 관리" icon={ShoppingBag} />
           {showWorkspacesLink ? (
