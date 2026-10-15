@@ -23,6 +23,10 @@ it("issues project-labelled one-time setup and hides it without leaving credenti
   expect(mock.create).toHaveBeenCalledWith("company", "project", "내 크롬");
   const setup = JSON.parse(host.querySelector<HTMLTextAreaElement>("textarea")!.value);
   expect(setup).toMatchObject({ serverUrl: "https://capture.example", connectionId: row.id, projectName: "Auto Sourcing", token });
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+  await click("연결 정보 복사"); expect(host.querySelector('[role="alert"]')?.textContent).toContain("직접 선택해 복사");
+  if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor); else Reflect.deleteProperty(navigator, "clipboard");
   await click("연결 정보 닫기"); expect(host.querySelector("textarea")).toBeNull(); expect(host.innerHTML).not.toContain(token);
 });
 it("rejects a non-HTTPS remote receiver before creating any credential", async () => {
