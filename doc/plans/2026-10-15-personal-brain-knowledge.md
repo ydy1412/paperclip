@@ -90,7 +90,8 @@ and a working fixture UI do not prove the operating browser login flow.
 
 The broad regression run is not green. The complete UI group reported 7,590
 passes and six failures: five `SourcingCatalog` cases also fail on the clean
-base dev commit `6e3c4aab`; one `HoneycombRunLink` case needs isolated follow-up.
+base dev commit `6e3c4aab`; the `HoneycombRunLink` cases pass in isolation on both
+the base and this feature. Four sourcing server cases also fail on that base.
 The shared, skill-catalog and database groups passed 845, 20 and 161 cases.
 Adapter checks include a host precondition failure: the installed Claude CLI is
 2.1.81, while an existing isolation test requires at least 2.1.207. Other broad
@@ -98,6 +99,11 @@ checks exceeded cold-import or five-second time budgets under concurrent load.
 Do not update the global CLI or change unrelated test assertions for this UI
 change. New knowledge tests, native reads, compatible import/build checks and
 the checked browser interactions passed; they do not imply a full-suite pass.
+The general server groups were bounded after about 20 minutes once these
+independent failures and host limits were established. That run also recorded a
+Slack callback ordering failure; its chat module is unchanged. The remaining
+broad run was interrupted gracefully and is not complete. No global CLI upgrade
+or unrelated feature/test fix is included in this PR.
 
 An initial attempt could not start the newly installed Postgres dependency. Its
 macOS ICU and other packaged library aliases were missing. Restoring the 17
