@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
-import { assertBrainReadEntry, assertPersonalBrainGrant, BRAIN_READ_TOOLS, decodeBrainFile } from "./knowledge-brain.js";
+import { assertBrainReadEntry, assertBrainWriteEntry, BRAIN_WRITE_TOOLS, assertPersonalBrainGrant, BRAIN_READ_TOOLS, decodeBrainFile } from "./knowledge-brain.js";
 const connection = { id: "connection", companyId: "company", enabled: true, status: "active", transport: "mcp_remote", config: { knowledgeProvider: "personal-brain" }, transportConfig: {} };
 const grant = { id: "grant", companyId: "company", connectionId: "connection", kind: "user", subjectUserId: "owner", status: "active" };
 describe("Personal Brain access boundary", () => {
@@ -19,6 +19,13 @@ describe("Personal Brain access boundary", () => {
       { ...entry, isReadOnly: false }, { ...entry, isWrite: true }, { ...entry, isDestructive: true }]) {
       expect(() => assertBrainReadEntry(changed)).toThrow();
     }
+  });
+  it("requires an active write or destructive declaration without upgrading a read-only action", () => {
+    for (const entry of [{ status: "active", isReadOnly: false, isWrite: true, isDestructive: false }, { status: "active", isReadOnly: false, isWrite: false, isDestructive: true }]) expect(() => assertBrainWriteEntry(entry as never)).not.toThrow();
+    for (const entry of [undefined, { status: "active", isReadOnly: true, isWrite: false, isDestructive: false }, { status: "quarantined", isReadOnly: false, isWrite: true }]) expect(() => assertBrainWriteEntry(entry as never)).toThrow();
+    expect(BRAIN_WRITE_TOOLS.has("delete_file")).toBe(false);
+    expect(BRAIN_WRITE_TOOLS.has("knowledge_trash_item")).toBe(true);
+    for (const tool of BRAIN_WRITE_TOOLS) expect(BRAIN_READ_TOOLS.has(tool)).toBe(false);
   });
   it("verifies original bytes and never renders an HTML attachment inline", () => { const bytes = Buffer.from("original"); const file = { filename: "original.html", contentType: "text/html", base64: bytes.toString("base64"), byteSize: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }; expect(decodeBrainFile(file).inline).toBe(false); expect(decodeBrainFile(file).bytes).toEqual(bytes); expect(() => decodeBrainFile({ ...file, sha256: "wrong" })).toThrow(); expect(() => decodeBrainFile({ ...file, byteSize: 100 })).toThrow(); });
 });
