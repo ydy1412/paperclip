@@ -33,7 +33,7 @@ function GenerationHistory({value}:{value:unknown}) {
   })}</div>;
 }
 
-export function Knowledge() {
+export function Knowledge({ viewMode }: { viewMode?: "library" | "graph" } = {}) {
   const { setBreadcrumbs } = useBreadcrumbs();
   const { selectedCompanyId }=useCompany();
   const [params,setParams]=useSearchParams();
@@ -44,7 +44,7 @@ export function Knowledge() {
   const [preview,setPreview]=useState<{count:number;projectId:string}|null>(null);
   const [notice,setNotice]=useState<string|null>(null);
   const tab=params.get("tab")??"body", id=params.get("id")??"";
-  const graphView=params.get("view")==="graph";
+  const graphView=viewMode ? viewMode==="graph" : params.get("view")==="graph";
   const company=selectedCompanyId??"";
   const plugins=useQuery({queryKey:["plugins"],queryFn:()=>pluginsApi.list()});
   const plugin=plugins.data?.find(p=>p.pluginKey==="paperclip-plugin-hindsight");
@@ -104,7 +104,7 @@ export function Knowledge() {
       <span className="text-xs text-muted-foreground">{status.error?"수집 시각 확인 불가":status.isLoading?"수집 상태 확인 중":status.data?.lastCollectedAt?`마지막 수집 ${dateLabel(status.data.lastCollectedAt)}`:"수집 완료 기록 없음"}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-      <div role="tablist" aria-label="지식 보기" className="flex items-center gap-1">
+      <div role="tablist" aria-label="지식 보기" className={cn("flex items-center gap-1",viewMode && "hidden")}>
         <Button variant={graphView?"ghost":"secondary"} size="sm" role="tab" aria-selected={!graphView} onClick={()=>update("view","")}><BookOpen className="size-4"/>문서</Button>
         <Button variant={graphView?"secondary":"ghost"} size="sm" role="tab" aria-selected={graphView} onClick={()=>update("view","graph")}><Network className="size-4"/>그래프</Button>
       </div>

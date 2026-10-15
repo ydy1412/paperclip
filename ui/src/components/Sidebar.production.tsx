@@ -1,3 +1,4 @@
+import { KnowledgeNavigation } from "./KnowledgeNavigation";
 import {
   Inbox,
   ListChecks,
@@ -20,7 +21,6 @@ import {
   MessagesSquare,
   GanttChartSquare,
   LayoutGrid,
-  BookOpen,
   Megaphone,
   ShoppingBag,
 } from "lucide-react";
@@ -201,7 +201,7 @@ export function Sidebar() {
             />
           ) : null}
           <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
-          <SidebarNavItem to="/knowledge" label="Knowledge" icon={BookOpen} />
+          <KnowledgeNavigation />
           <SidebarNavItem to="/marketing" label="마케팅" icon={Megaphone} />
           <SidebarNavItem to="/sourcing" label="쇼핑몰 관리" icon={ShoppingBag} />
           <SidebarNavItem to="/agent-profiles" label="에이전트 프로필" icon={Boxes} />

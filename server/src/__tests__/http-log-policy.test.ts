@@ -60,6 +60,11 @@ describe("isPrivateWebhookHttpRequest", () => {
 });
 
 describe("isSecretSensitiveHttpRequest", () => {
+  it("keeps private knowledge questions out of HTTP error details", () => {
+    expect(isSecretSensitiveHttpRequest("POST", "/api/companies/company/knowledge/brain/read")).toBe(true);
+    expect(isSecretSensitiveHttpRequest("POST", "/api/companies/company/knowledge/brain/read?ignored=1")).toBe(true);
+    expect(isSecretSensitiveHttpRequest("POST", "/api/companies/company/knowledge-extra/read")).toBe(false);
+  });
   it("identifies credential-bearing chat setup mutations", () => {
     expect(
       isSecretSensitiveHttpRequest(

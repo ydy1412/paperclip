@@ -22,6 +22,7 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/router", () => ({
+  useLocation: () => ({pathname:"/dashboard",search:""}),
   NavLink: ({ to, children, className, ...props }: {
     to: string;
     children: ReactNode;
@@ -188,9 +189,9 @@ describe("Sidebar", () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({});
     const root = await renderSidebar(true);
     try {
-      const link = [...container.querySelectorAll("nav a")].find(item => item.textContent === "Knowledge");
+      const link = [...container.querySelectorAll("nav a")].find(item => item.textContent === "자료실");
       expect(link?.getAttribute("href")).toBe("/knowledge");
-      expect(link?.closest('[data-slot="collapsible"]')?.textContent).toContain("Work");
+      expect(container.textContent).toContain("Work");
     } finally {
       flushSync(() => root.unmount());
     }
@@ -562,7 +563,7 @@ describe("Sidebar", () => {
     const labels = (section: Element | undefined) => [...(section?.querySelectorAll("a") ?? [])]
       .map((anchor) => anchor.textContent?.trim());
 
-    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "Knowledge", "마케팅", "쇼핑몰 관리"]);
+    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "자료실", "질문·검색", "지식 그래프", "마케팅", "쇼핑몰 관리"]);
     expect(labels(orgSection)).toEqual(["Agents", "에이전트 프로필", "Skills", "Connectors", "Audit"]);
     expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
     expect(

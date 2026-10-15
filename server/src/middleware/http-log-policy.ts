@@ -38,6 +38,7 @@ function normalizePath(url: string): string {
 }
 
 const SECRET_SENSITIVE_HTTP_PATHS = [
+  /^\/api\/companies\/[^/]+\/knowledge(?:\/|$)/,
   /^\/api\/companies\/[^/]+\/sourcing\/projects\/[^/]+\/order-management(?:\/|$)/,
   /^\/api\/companies\/[^/]+\/sourcing\/projects\/[^/]+\/catalog(?:\/|$)/,
   /^\/api\/companies\/[^/]+\/sourcing\/projects\/[^/]+\/forwarders(?:\/|$)/,
