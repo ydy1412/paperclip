@@ -7,6 +7,7 @@ import { forbidden, HttpError } from "../errors.js";
 import { pluginRegistryService } from "./plugin-registry.js";
 import { createPluginSecretsHandler } from "./plugin-secrets-handler.js";
 import { processingReadSchema, processingWriteSchema, processingSourceSchema, processingListSchema, processingViewSchema } from "./auto-sourcing-processing-contract.js";
+import { captureSnapshotSchema } from "./sourcing-capture-contract.js";
 import { logActivity } from "./activity-log.js";
 import { catalogImageAnalysisSchema, catalogImageProcessResultSchema, catalogImageProviderStatusSchema } from "@paperclipai/shared";
 
@@ -55,7 +56,7 @@ const syncStateSchema = z.object({ state: z.enum(["not_synced", "unknown", "queu
   jobId: z.string().nullable(), startedAt: z.string().nullable(), finishedAt: z.string().nullable(),
   items: z.number().int().nullable(), errorCode: z.string().nullable() });
 
-export function autoSourcingPluginService(db: Db, pluginId: string, options: { processingPort?: number } = {}): NonNullable<HostServices["autoSourcing"]> & { operatorSettings(value: unknown, context: WorkerHostCallContext): Promise<unknown> } {
+export function autoSourcingPluginService(db: Db, pluginId: string, options: { processingPort?: number } = {}): NonNullable<HostServices["autoSourcing"]> & { operatorSettings(value: unknown, context: WorkerHostCallContext): Promise<unknown>; captureProduct(value: unknown, context: WorkerHostCallContext): Promise<unknown> } {
   const processingPort = options.processingPort ?? 3115;
   if (!Number.isInteger(processingPort) || processingPort < 1 || processingPort > 65535) throw new Error("Invalid local processing port");
   const registry = pluginRegistryService(db);
@@ -244,6 +245,13 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   }
 
   return {
+    async captureProduct(value: unknown, context: WorkerHostCallContext) {
+      const input = identity.extend({ requestId: z.string().uuid(), snapshot: captureSnapshotSchema }).strict().parse(value);
+      if (context.invocationScope?.agentRun) throw forbidden("브라우저 수집 연결로 실행해 주세요.");
+      const { config } = await authorize(input, context, true);
+      if (!Object.hasOwn(config.projects, input.projectId)) throw forbidden("프로젝트의 소싱 연결이 필요합니다.");
+      return catalogCall(input.companyId, config.serviceToken, "browser-capture", input);
+    },
     catalogRead: (value: Record<string, unknown> & { companyId: string; projectId: string; operation: string }, context?: WorkerHostCallContext) => catalog(value, context, false),
     catalogWrite: (value: Record<string, unknown> & { companyId: string; projectId: string; operation: string }, context?: WorkerHostCallContext) => catalog(value, context, true),
     operatorSettings,

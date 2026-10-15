@@ -31,7 +31,8 @@ beforeEach(() => {
     if (request.operation === "workspace") return [{ id: product.id, kind: "product", title: product.title, mainImage: product.mainImage, stage: "ready", product: structuredClone(product), candidate: null, source: null }];
     if (request.operation === "price-preview") return { productRevision: product.revision, confirmation: "e".repeat(64), stores: [] };
     if (request.operation === "sources") return [{ sourceProvider: "taobao", sourceProductId: "123", title: "수집 상품", mainImage: "" }];
-    if (request.operation === "jobs" || request.operation === "queue") return [];
+    if (request.operation === "jobs" || request.operation === "queue" || request.operation === "image-jobs") return [];
+    if (request.operation === "image-job-settings") return { enabled: false, scanIntervalSeconds: 60, workerEnabled: false, errorCode: "" };
     if (request.operation === "get") return structuredClone(product);
     if (request.operation === "save") { product = { ...product, ...request, revision: product.revision + 1 }; return structuredClone(product); }
     return structuredClone(settings);
@@ -124,7 +125,7 @@ describe("store settings and common product editor", () => {
     if (view === "source") expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "stages", query: "없음" });
     await click("검색 초기화");
     expect(document.querySelector<HTMLInputElement>('[aria-label="상품 검색 키워드"]')?.value).toBe("");
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-pressed]')!.click()); await settle();
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed], [aria-label="업로드 상품 목록"] button[aria-pressed]')!.click()); await settle();
     await input("상품명", "저장 전 이름");
     expect(document.querySelector<HTMLInputElement>('[aria-label="상품 검색 키워드"]')?.disabled).toBe(true);
     expect([...document.querySelectorAll("button")].find(b => b.textContent === "검색")?.disabled).toBe(true);
@@ -135,7 +136,7 @@ describe("store settings and common product editor", () => {
     expect(document.querySelector('[aria-label="소싱 단계"]')?.textContent).toContain("업로드 준비 (1)");
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(el => el.textContent === "업로드 준비 (1)")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
     await settle();
-    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "workspace", page: 1, stage: "ready" });
+    expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "workspace", page: 1, pageSize: 20, stage: "ready" });
   });
   it("starts selected-store import and refreshes cards on verified completion", async () => {
     const original = mock.request.getMockImplementation(); let imported = false;
