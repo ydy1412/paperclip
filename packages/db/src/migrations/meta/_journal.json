@@ -2115,6 +2115,13 @@
       "when": 1791838663109,
       "tag": "0303_forwarder_aside_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 304,
+      "version": "7",
+      "when": 1792103369614,
+      "tag": "0304_sourcing_capture_connections",
+      "breakpoints": true
     }
   ]
 }

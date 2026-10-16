@@ -26,6 +26,13 @@ export const sourcingApi = {
 };
 
 const forwarderPath = (companyId: string, projectId: string) => `/companies/${encodeURIComponent(companyId)}/sourcing/projects/${encodeURIComponent(projectId)}/forwarders`;
+export type CaptureConnection = { id: string; name: string; createdAt: string; expiresAt: string; lastUsedAt: string | null; revokedAt: string | null };
+const capturePath = (companyId: string, projectId: string) => `/companies/${encodeURIComponent(companyId)}/sourcing/projects/${encodeURIComponent(projectId)}/capture-connections`;
+export const sourcingCaptureApi = {
+  list: (companyId: string, projectId: string) => api.get<{ connections: CaptureConnection[]; serverUrl: string }>(capturePath(companyId, projectId)),
+  create: (companyId: string, projectId: string, name: string) => api.post<CaptureConnection & { token: string }>(capturePath(companyId, projectId), { name }),
+  revoke: (companyId: string, projectId: string, id: string) => api.delete<void>(`${capturePath(companyId, projectId)}/${encodeURIComponent(id)}`),
+};
 export const sourcingForwardersApi = {
   providers: (companyId: string, projectId: string) => api.get<SourcingForwarderProvider[]>(`${forwarderPath(companyId, projectId)}/providers`),
   list: (companyId: string, projectId: string) => api.get<SourcingForwarder[]>(forwarderPath(companyId, projectId)),

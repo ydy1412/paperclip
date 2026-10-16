@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Dovix 상품 보내기",
+  "description": "현재 보고 있는 타오바오 상품을 Dovix의 가공 전 상품으로 보냅니다.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "114",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*", "http://127.0.0.1/*", "http://localhost/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_title": "Dovix로 상품 보내기", "default_popup": "popup.html"},
+  "options_page": "options.html"
+}

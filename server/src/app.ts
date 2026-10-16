@@ -55,6 +55,7 @@ import { sourcingForwarderRoutes } from "./routes/sourcing-forwarders.js";
 import { agentProfileRoutes } from "./routes/agent-profiles.js";
 import { dobiOrderRoutes } from "./routes/dobi-orders.js";
 import { sourcingCatalogRoutes } from "./routes/sourcing-catalog.js";
+import { sourcingCaptureRoutes } from "./routes/sourcing-capture.js";
 import { sourcingForwarderBrowser } from "./services/sourcing-forwarder-browser.js";
 import { marketingRoutes } from "./routes/marketing.js";
 import { startMarketingConnectionWorker } from "./services/marketing-connection-workflow.js";
@@ -546,6 +547,7 @@ export async function createApp(
     chatWebhookBodyParser,
   );
   app.use("/api/companies/:companyId/sourcing/projects/:projectId/order-management", express.json({ limit: "16mb", verify: captureRawBody }));
+  app.use("/api/sourcing-capture", express.json({ limit: "512kb", verify: captureRawBody }));
   app.use(
     express.json({
       limit: DEFAULT_JSON_BODY_LIMIT,
@@ -574,6 +576,8 @@ export async function createApp(
   // must be reachable by remote adapters that intentionally do not receive an
   // agent API key. Every request revalidates the active heartbeat row.
   app.use(runtimeConnectionIntentRoutes(db));
+  const captureRoutes = sourcingCaptureRoutes(db, { allowLocalBoard: opts.deploymentMode === "local_trusted" });
+  app.use(captureRoutes.ingress);
   app.use(
     actorMiddleware(db, {
       deploymentMode: opts.deploymentMode,
@@ -678,6 +682,7 @@ export async function createApp(
   api.use(sourcingForwarderRoutes(db, forwarderBrowser.open));
   api.use(agentProfileRoutes(db));
   api.use(sourcingCatalogRoutes(db));
+  api.use(captureRoutes.management);
   api.use(marketingRoutes(db, process.env.PAPERCLIP_MARKETING_PUBLICATION_ENABLED === "true" ? marketingAsideTransport(db) : undefined, opts.storageService));
   const connectionWorker = opts.marketingConnectionString
     ? await startMarketingConnectionWorker(db, { connectionString: opts.marketingConnectionString }) : null;

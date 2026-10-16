@@ -1,4 +1,5 @@
 export { companies } from "./companies.js";
+export { sourcingCaptureConnections } from "./sourcing_capture_connections.js";
 export { companyLogos } from "./company_logos.js";
 export { companyTransferRuns } from "./company_transfer_runs.js";
 export { companyOnboardingSeeds } from "./company_onboarding_seeds.js";

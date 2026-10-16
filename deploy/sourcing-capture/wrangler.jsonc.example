@@ -1,0 +1,9 @@
+{
+  "name": "dovix-product-capture",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vpc_services": [{ "binding": "DOVIX", "service_id": "REPLACE_WITH_DOVIX_CAPTURE_VPC_SERVICE_ID" }]
+}
