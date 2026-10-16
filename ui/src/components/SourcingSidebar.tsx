@@ -16,9 +16,9 @@ export function SourcingSidebar() {
   return (
     <aside data-shopping-sidebar className="flex h-full min-h-0 w-full flex-col bg-background">
       <div className="flex h-(--sz-60px) shrink-0 items-center px-3">
-        <span className="px-2 text-sm font-semibold">쇼핑몰 관리</span>
+        <span className="px-2 text-sm font-semibold">Commerce</span>
       </div>
-      <nav aria-label="쇼핑몰 관리" className={primarySidebarStyles.nav}>
+      <nav aria-label="Commerce" className={primarySidebarStyles.nav}>
         <div className={primarySidebarStyles.group}>
           {sourcingViews.map(view => {
             const next = new URLSearchParams(params);
@@ -47,7 +47,7 @@ export function SourcingSidebar() {
       </nav>
       <div className="shrink-0 border-t border-border px-3 py-3">
         <Link to="/dashboard" onClick={closeMobileSidebar} className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground">
-          <ArrowLeft className="size-3.5" aria-hidden="true" />전체 메뉴
+          <ArrowLeft className="size-3.5" aria-hidden="true" />All menus
         </Link>
       </div>
     </aside>

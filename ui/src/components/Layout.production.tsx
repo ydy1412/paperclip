@@ -20,6 +20,7 @@ import {
 import { Sidebar } from "./Sidebar.production";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar.production";
 import { SourcingSidebar } from "./SourcingSidebar";
+import { KnowledgeSidebar } from "./KnowledgeSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar.production";
 import { AppDetailSidebar } from "./AppConnectionSidebar.production";
@@ -157,6 +158,7 @@ export function Layout() {
   );
   const isToolsRoute = companyPathSegments[0]?.toLowerCase() === "tools";
   const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
+  const isKnowledgeRoute = companyPathSegments[0]?.toLowerCase() === "knowledge";
   const isAppsRoute = companyPathSegments[0]?.toLowerCase() === "apps";
   const appDetailConnectionId =
     isAppsRoute &&
@@ -227,6 +229,8 @@ export function Layout() {
     <CompanySettingsSidebar />
   ) : isSourcingRoute ? (
     <SourcingSidebar />
+  ) : isKnowledgeRoute ? (
+    <KnowledgeSidebar />
   ) : appDetailConnectionId ? (
     <AppDetailSidebar kind="connection" connectionId={appDetailConnectionId} />
   ) : appDetailApplicationId ? (

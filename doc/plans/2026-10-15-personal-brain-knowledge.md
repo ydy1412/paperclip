@@ -180,3 +180,52 @@ managed-runtime compatible deployment and backup boundary described above.
 - Source/diff review and Graphify relation checks were completed. No source
   originals, running managed server, credentials or connection permissions were
   replaced. No master promotion or operating deployment is part of these PRs.
+
+## 2026-10-16: Navigation, fast search, and light graph
+
+Use the Commerce contextual-sidebar layout for Knowledge in both the current and
+installed-compatible shells. The global sidebar has one Knowledge link; the local
+sidebar owns Library / Ask & Search / Knowledge Graph and All menus. Preserve
+vault/project context and old Paperclip links. Standardize built-in menu labels
+in English, while retaining user content and explanatory Korean text.
+
+Search must show verified recalled passages without waiting for local LLM
+reflection. Start one bounded recall per submitted query. Generate an AI answer
+only on explicit request; cap that wait and keep already loaded source evidence
+available on cancellation, error, or timeout. Hide stale generated answers after
+failed evidence refreshes. No new data store or ingestion pipeline.
+
+The graph uses a white canvas with readable dark labels and a pale evidence
+panel in either app theme. Keep graph colors in the existing index.css token
+root. Validate desktop/mobile contextual navigation, retrieval before synthesis,
+cancellation/stale-response boundaries, real retrieval latency, and light graph
+rendering before PR and compatible UI rollout.
+
+Verification for this follow-up uses focused navigation, workspace, explorer, and
+graph regression tests plus UI typecheck/build and token gates. The pre-existing
+broad-suite host and baseline limits above remain; this UI-only change does not
+claim a new full-suite pass. Live board recall returned 13 verified facts in
+9.4 seconds before the UI change. Browser fixtures distinguish source retrieval
+from optional synthesis and confirm a white graph under dark app mode.
+
+The 30-second synthesis limit bounds browser waiting and aborts its HTTP request.
+It does not claim to terminate a Hindsight model job that already started.
+
+Final focused verification: 120 tests in seven suites passed, including both
+shell modes, legacy links, project/vault retention, mobile close behavior,
+search-before-generation, late-response cancellation, and the 30-second limit.
+UI typecheck, production build, and token gates passed. Aside u1 checked the
+real React fixture pages: exactly one recall on search, reflection only after
+Generate answer, graph selection to document, English explorer controls, and
+white graph/dark labels in dark app mode. No window or unhandled-promise error
+occurred in that checked interaction flow. Three 390px iframe layouts had no
+page overflow; this is not a physical mobile-device test. Evidence is retained
+in ignored tmp/knowledge-navigation-speed. Operating browser authentication is
+still separate from this fixture proof and the authenticated board API proof.
+
+The release is a static UI overlay built from the reviewed merged dev commit.
+Back up index.html and sw.js, keep prior hashed assets, atomically switch the
+entry files, and verify served hashes plus knowledge API reads. Core, running
+agent processes, database schema and credentials do not require changes. The
+private deployment receipt records before/after hashes, health, and rollback
+paths; restore its two saved entry files to revert this UI rollout.

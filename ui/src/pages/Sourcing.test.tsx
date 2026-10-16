@@ -61,13 +61,13 @@ describe("Shopping mall Settings-style workspace", () => {
 
   it("renders vertical workflow links in order, with readable labels even beside a collapsed rail", async () => {
     await render();
-    const nav = container.querySelector('nav[aria-label="쇼핑몰 관리"]')!;
+    const nav = container.querySelector('nav[aria-label="Commerce"]')!;
     const links = [...nav.querySelectorAll("a")];
-    expect(links.map(link => link.textContent)).toEqual(["소싱", "상품 업로드", "주문", "쇼핑몰 관리 설정"]);
+    expect(links.map(link => link.textContent)).toEqual(["Sourcing", "Products", "Orders", "Store Settings"]);
     expect(links[0].getAttribute("aria-current")).toBe("page");
     expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     expect(nav.querySelector(".sr-only")).toBeNull();
-    expect(container.querySelector('section[aria-label="쇼핑몰 관리"] h1')?.textContent).toBe("소싱");
+    expect(container.querySelector('section[aria-label="Commerce"] h1')?.textContent).toBe("Sourcing");
     expect(container.textContent).toContain("상품 가공 서비스 미연결");
     expect(container.textContent).not.toContain("예시 데이터");
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
@@ -75,17 +75,17 @@ describe("Shopping mall Settings-style workspace", () => {
 
   it("changes workflow and breadcrumb without losing the selected project", async () => {
     await render();
-    await act(async () => (container.querySelector('nav[aria-label="쇼핑몰 관리"] a:nth-child(2)') as HTMLAnchorElement).click());
-    expect(container.querySelector("h1")?.textContent).toBe("상품 업로드");
+    await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(2)') as HTMLAnchorElement).click());
+    expect(container.querySelector("h1")?.textContent).toBe("Products");
     expect(container.querySelector("[data-location]")?.textContent).toContain("project=project");
     expect(container.querySelector("[data-location]")?.textContent).toContain("view=uploads");
-    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "쇼핑몰 관리", href: "/sourcing" }, { label: "상품 업로드" }]);
+    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "Commerce", href: "/sourcing" }, { label: "Products" }]);
     expect(container.textContent).toContain("등록 상품을 공통 상품별로 관리합니다.");
   });
 
   it("restores the orders view and mounts the independent order domain in the selected scope", async () => {
     await render("/DOB/sourcing?project=project&view=orders");
-    expect(container.querySelector("h1")?.textContent).toBe("주문");
+    expect(container.querySelector("h1")?.textContent).toBe("Orders");
     const workspace = container.querySelector('section[aria-label="주문 작업실"]');
     expect(workspace?.getAttribute("data-order-company")).toBe("company");
     expect(workspace?.getAttribute("data-order-project")).toBe("project");
@@ -107,7 +107,7 @@ describe("Shopping mall Settings-style workspace", () => {
 
   it("falls back to sourcing for an unknown workflow", async () => {
     await render("/DOB/sourcing?view=unrecognized");
-    expect(container.querySelector("h1")?.textContent).toBe("소싱");
+    expect(container.querySelector("h1")?.textContent).toBe("Sourcing");
   });
 
   it("shows access denial without rendering project names", async () => {
@@ -128,34 +128,34 @@ describe("Shopping mall Settings-style workspace", () => {
   it("closes the mobile shell drawer after selecting a workflow", async () => {
     mock.mobile = true;
     await render();
-    await act(async () => (container.querySelector('nav[aria-label="쇼핑몰 관리"] a:nth-child(3)') as HTMLAnchorElement).click());
+    await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(3)') as HTMLAnchorElement).click());
     expect(mock.closeSidebar).toHaveBeenCalledWith(false);
-    expect(container.querySelector("h1")?.textContent).toBe("주문");
+    expect(container.querySelector("h1")?.textContent).toBe("Orders");
   });
   it("clears workflow-specific filters/detail but retains project on sidebar navigation", async () => {
     await render("/DOB/sourcing?project=project&view=orders&state=Shipping&account=seller&page=2&q=123&item=shipment&source=Taobao&validation=incomplete&data=live");
-    await act(async () => (container.querySelector('nav[aria-label="쇼핑몰 관리"] a:nth-child(2)') as HTMLAnchorElement).click());
+    await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(2)') as HTMLAnchorElement).click());
     expect(container.querySelector("[data-location]")?.textContent).toBe("/DOB/sourcing?project=project&view=uploads");
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
   });
   it("retains filters and selection when clicking the already active workflow", async () => {
     const url = "/DOB/sourcing?project=project&view=sourcing&source=Taobao&item=example-product-1";
     await render(url);
-    await act(async () => (container.querySelector('nav[aria-label="쇼핑몰 관리"] a:first-child') as HTMLAnchorElement).click());
+    await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:first-child') as HTMLAnchorElement).click());
     expect(container.querySelector("[data-location]")?.textContent).toBe(url);
   });
   it("opens settings below orders, clears order filters and renders inline forwarder administration", async () => {
     await render("/DOB/sourcing?project=project&view=orders&state=Preparing&account=seller&page=2&q=123&item=shipment&from=2026-10-01&to=2026-10-09");
-    await act(async () => (container.querySelector('nav[aria-label="쇼핑몰 관리"] a:nth-child(4)') as HTMLAnchorElement).click());
+    await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(4)') as HTMLAnchorElement).click());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
     expect(container.querySelector("[data-location]")?.textContent).toBe("/DOB/sourcing?project=project&view=settings");
-    expect(container.querySelector("h1")?.textContent).toBe("쇼핑몰 관리 설정");
+    expect(container.querySelector("h1")?.textContent).toBe("Store Settings");
     expect(container.querySelector('section[aria-label="배송대행지 관리"]')).not.toBeNull();
     expect(container.querySelector('section[aria-label="주문관리 연결 설정"]')?.getAttribute("data-order-project")).toBe("project");
     expect(container.textContent).toContain("배송대행지 추가");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(mock.forwarders).toHaveBeenCalledWith("company", "project");
-    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "쇼핑몰 관리", href: "/sourcing" }, { label: "쇼핑몰 관리 설정" }]);
+    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "Commerce", href: "/sourcing" }, { label: "Store Settings" }]);
   });
   it("restores settings from URL and scopes its list to the changed project", async () => {
     await render("/DOB/sourcing?project=project&view=settings");
@@ -164,7 +164,7 @@ describe("Shopping mall Settings-style workspace", () => {
     await act(async () => { select.value = "second"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
     expect(mock.forwarders).toHaveBeenLastCalledWith("company", "second");
-    expect(container.querySelector("h1")?.textContent).toBe("쇼핑몰 관리 설정");
+    expect(container.querySelector("h1")?.textContent).toBe("Store Settings");
   });
   it("does not request forwarders for an unavailable project", async () => {
     await render("/DOB/sourcing?project=unknown&view=settings");
