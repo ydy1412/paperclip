@@ -76,8 +76,10 @@ vi.mock("./CompanySettingsSidebar", () => ({
 }));
 
 vi.mock("./SourcingSidebar", () => ({
-  SourcingSidebar: () => <nav aria-label="쇼핑몰 관리">Shopping mall sidebar</nav>,
+  SourcingSidebar: () => <nav aria-label="Commerce">Shopping mall sidebar</nav>,
 }));
+
+vi.mock("./KnowledgeSidebar", () => ({ KnowledgeSidebar: () => <nav aria-label="Knowledge">Knowledge sidebar</nav> }));
 
 vi.mock("./AppsSidebar", () => ({
   AppsSidebar: () => <div>Apps sidebar</div>,
@@ -374,8 +376,8 @@ describe("Layout", () => {
     });
   });
 
-  it.each([false, true])("hosts Shopping mall navigation beside the primary menu (streamlined=%s)", async streamlined => {
-    currentPathname = "/PAP/sourcing";
+  it.each([[false, "sourcing", "Commerce"], [true, "sourcing", "Commerce"], [false, "knowledge/ask", "Knowledge"], [true, "knowledge/graph", "Knowledge"]] as const)("hosts domain navigation beside the primary menu (streamlined=%s, route=%s)", async (streamlined, route, label) => {
+    currentPathname = `/PAP/${route}`;
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableApps: true, enableStreamlinedUi: streamlined });
     const root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -383,7 +385,7 @@ describe("Layout", () => {
     await flushReact();
     await flushReact();
     expect(container.textContent).toContain("Main company nav");
-    expect(container.querySelector('nav[aria-label="쇼핑몰 관리"]')).not.toBeNull();
+    expect(container.querySelector(`nav[aria-label="${label}"]`)).not.toBeNull();
     expect(container.querySelectorAll("[data-secondary-sidebar]")).toHaveLength(1);
     await act(async () => root.unmount());
   });

@@ -29,11 +29,11 @@ export function Sourcing() {
     !params.has("project") ? availableProjects.find(project => project.name === "Auto Sourcing")?.id ?? "" : "";
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "쇼핑몰 관리", href: "/sourcing" }, { label: view.label }]);
+    setBreadcrumbs([{ label: "Commerce", href: "/sourcing" }, { label: view.label }]);
   }, [setBreadcrumbs, view.label]);
 
   return (
-    <section aria-label="쇼핑몰 관리" className="min-w-0 space-y-6">
+    <section aria-label="Commerce" className="min-w-0 space-y-6">
       <header className="flex min-w-0 flex-wrap items-start justify-between gap-4">
         <h1 className="break-words text-xl font-semibold text-foreground">{view.label}</h1>
         <label className="grid w-60 min-w-0 max-w-full gap-1 text-xs text-muted-foreground">

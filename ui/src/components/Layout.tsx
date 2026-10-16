@@ -6,6 +6,7 @@ import { Outlet, useLocation, useNavigate, useNavigationType, useParams } from "
 import { Sidebar } from "./Sidebar";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar";
 import { SourcingSidebar } from "./SourcingSidebar";
+import { KnowledgeSidebar } from "./KnowledgeSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar";
 import { AppDetailSidebar } from "./AppConnectionSidebar";
@@ -122,6 +123,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const isCompanySettingsRoute = shellRoute.builtInContextualSurface === "settings";
   const companyPathSegments = shellRoute.companySegments;
   const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
+  const isKnowledgeRoute = companyPathSegments[0]?.toLowerCase() === "knowledge";
   const isTaskDetailRoute = shellRoute.isTaskDetail;
   const { enabled: agentChatEnabled } = useAgentChatEnabled();
   const isAgentChatRoute = agentChatEnabled && companyPathSegments[0]?.toLowerCase() === "chats";
@@ -182,6 +184,8 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     <CompanySettingsSidebar />
   ) : isSourcingRoute ? (
     <SourcingSidebar />
+  ) : isKnowledgeRoute ? (
+    <KnowledgeSidebar />
   ) : !streamlinedUiEnabled && shellRoute.builtInContextualSurface === "skills" ? (
     <SkillsContextualSidebar />
   ) : appDetailConnectionId ? (
@@ -228,6 +232,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     || isAppsRoute
     || isToolsRoute
     || isSourcingRoute
+    || isKnowledgeRoute
   );
   const replacesPrimarySidebar = streamlinedUiEnabled && hasSecondarySidebar && !keepsPrimarySidebar;
   const showsAdjacentSecondarySidebar = hasSecondarySidebar && (!streamlinedUiEnabled || keepsPrimarySidebar);

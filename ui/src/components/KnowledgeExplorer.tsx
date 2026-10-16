@@ -15,7 +15,7 @@ import { cn } from "../lib/utils";
 type Mode = "edit" | "preview" | "split";
 type Buffer = { content: string; revision: string; dirty: boolean; mode: Mode };
 type Action = "folder" | "note" | "rename" | "move" | "trash" | "restore" | "copy" | "latest";
-const labels: Record<Action, string> = { folder: "새 폴더", note: "새 파일", rename: "이름 변경", move: "이동", trash: "휴지통으로 보내기", restore: "복원", copy: "수정본 만들기", latest: "최신 원문 확인" };
+const labels: Record<Action, string> = { folder: "New folder", note: "New file", rename: "Rename", move: "Move", trash: "Move to Trash", restore: "Restore", copy: "Create editable copy", latest: "Review latest source" };
 const errorText = (error: unknown) => error instanceof Error ? error.message : "요청을 완료하지 못했습니다. 다시 시도해 주세요.";
 const operationId = () => crypto.randomUUID();
 
@@ -153,7 +153,7 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
     setBusy(true); setError("");
     try {
       const result = await brain.write<{ id: string }>(company, vault.id, "knowledge_" + tools[kind], { ...args, operationId: operationId() });
-      setModal(null); setMessage(labels[kind] + " 완료");
+      setModal(null); setMessage(labels[kind] + " complete");
       if (kind === "trash") {
         const affected = items.filter(x => x.id === item!.id || x.path.startsWith(item!.path + "/")).map(x => x.id);
         setTabs(previous => previous.filter(id => !affected.includes(id)));
@@ -186,18 +186,18 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
     if (event.key === "F2" && item.writable && can("move")) { event.preventDefault(); action("rename", item); }
     if (event.key === "Delete" && item.writable && can("trash_item")) { event.preventDefault(); action("trash", item); }
   }
-  const treeContent = <aside className="kb-explorer" aria-label="자료 탐색기">
-    <div className="kb-explorer-heading"><strong>탐색기</strong><span>Personal Brain</span></div>
+  const treeContent = <aside className="kb-explorer" aria-label="File explorer">
+    <div className="kb-explorer-heading"><strong>Explorer</strong><span>Personal Brain</span></div>
     <div className="kb-explorer-actions">
-      <Button size="icon" variant="ghost" aria-label="새 파일" disabled={busy || !can("create_document")} onClick={() => action("note", selectedItem)}><FilePlus2 className="size-4" /></Button>
-      <Button size="icon" variant="ghost" aria-label="새 폴더" disabled={busy || !can("create_folder")} onClick={() => action("folder", selectedItem)}><FolderPlus className="size-4" /></Button>
-      <Button size="icon" variant="ghost" aria-label="파일 업로드" disabled={busy || !can("upload")} onClick={() => uploadRef.current?.click()}><Upload className="size-4" /></Button>
-      <Button size="icon" variant="ghost" aria-label="탐색기 새로고침" disabled={busy} onClick={() => void refresh()}><RefreshCw className="size-4" /></Button>
+      <Button size="icon" variant="ghost" aria-label="New file" disabled={busy || !can("create_document")} onClick={() => action("note", selectedItem)}><FilePlus2 className="size-4" /></Button>
+      <Button size="icon" variant="ghost" aria-label="New folder" disabled={busy || !can("create_folder")} onClick={() => action("folder", selectedItem)}><FolderPlus className="size-4" /></Button>
+      <Button size="icon" variant="ghost" aria-label="Upload file" disabled={busy || !can("upload")} onClick={() => uploadRef.current?.click()}><Upload className="size-4" /></Button>
+      <Button size="icon" variant="ghost" aria-label="Refresh explorer" disabled={busy} onClick={() => void refresh()}><RefreshCw className="size-4" /></Button>
       <input ref={uploadRef} className="hidden" type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx" onChange={e => void upload(e.target.files?.[0])} />
     </div>
-    <label className="kb-tree-search"><Search className="size-4" /><Input aria-label="폴더·파일 검색" placeholder="폴더·파일 검색" value={query} onChange={e => setQuery(e.target.value)} /></label>
+    <label className="kb-tree-search"><Search className="size-4" /><Input aria-label="Search folders and files" placeholder="Search folders and files" value={query} onChange={e => setQuery(e.target.value)} /></label>
     {!tree.isLoading && !tree.error && (!vault.actions?.length || !tree.data?.actions?.length) && <p className="kb-readonly-hint">읽기 전용 연결입니다. 파일을 추가하려면 Apps에서 쓰기 권한이 있는 연결을 선택해 주세요.</p>}
-    <div ref={treeRef} role="tree" aria-label="폴더와 파일" className="kb-tree">
+    <div ref={treeRef} role="tree" aria-label="Folders and files" className="kb-tree">
       {tree.isLoading && <p role="status" className="p-3 text-sm">폴더 불러오는 중</p>}
       {!tree.isLoading && !tree.error && !rows.length && <p className="p-3 text-sm text-muted-foreground">{query ? "일치하는 폴더·파일이 없습니다." : "아직 자료가 없습니다."}</p>}
       {rows.map(({ item, depth }, index) => <ContextMenu.Root key={item.id}>
@@ -213,39 +213,39 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
           <span className="truncate">{item.name}</span>{item.path.startsWith("Processed/") && <span className="kb-tree-derived">자동</span>}
         </button></ContextMenu.Trigger>
         <ContextMenu.Portal><ContextMenu.Content className="kb-context-menu">
-          {item.canCreate && <><ContextMenu.Item disabled={!can("create_document")} onSelect={() => action("note", item)}>새 파일</ContextMenu.Item><ContextMenu.Item disabled={!can("create_folder")} onSelect={() => action("folder", item)}>새 폴더</ContextMenu.Item></>}
-          <ContextMenu.Item disabled={!item.writable || !can("move")} onSelect={() => action("rename", item)}>이름 변경</ContextMenu.Item>
-          <ContextMenu.Item disabled={!item.writable || !can("move")} onSelect={() => action("move", item)}>이동</ContextMenu.Item>
-          <ContextMenu.Item disabled={!item.writable || !can("trash_item")} onSelect={() => action("trash", item)}>휴지통으로 보내기</ContextMenu.Item>
+          {item.canCreate && <><ContextMenu.Item disabled={!can("create_document")} onSelect={() => action("note", item)}>New file</ContextMenu.Item><ContextMenu.Item disabled={!can("create_folder")} onSelect={() => action("folder", item)}>New folder</ContextMenu.Item></>}
+          <ContextMenu.Item disabled={!item.writable || !can("move")} onSelect={() => action("rename", item)}>Rename</ContextMenu.Item>
+          <ContextMenu.Item disabled={!item.writable || !can("move")} onSelect={() => action("move", item)}>Move</ContextMenu.Item>
+          <ContextMenu.Item disabled={!item.writable || !can("trash_item")} onSelect={() => action("trash", item)}>Move to Trash</ContextMenu.Item>
         </ContextMenu.Content></ContextMenu.Portal>
       </ContextMenu.Root>)}
     </div>
-    <Button variant="ghost" className="kb-trash-button" aria-pressed={showTrash} onClick={() => setShowTrash(!showTrash)}><Trash2 className="size-4" />휴지통</Button>
+    <Button variant="ghost" className="kb-trash-button" aria-pressed={showTrash} onClick={() => setShowTrash(!showTrash)}><Trash2 className="size-4" />Trash</Button>
   </aside>;
-  const reader = <article className="kb-editor" aria-label="문서 작업 공간">
-    <div className="kb-document-tabs" role="tablist" aria-label="열린 문서">
-      <Button variant="ghost" size="icon" aria-label="탐색기 표시 전환" onClick={() => setShowTree(!showTree)}><PanelLeft className="size-4" /></Button>
+  const reader = <article className="kb-editor" aria-label="Document workspace">
+    <div className="kb-document-tabs" role="tablist" aria-label="Open documents">
+      <Button variant="ghost" size="icon" aria-label="Toggle explorer" onClick={() => setShowTree(!showTree)}><PanelLeft className="size-4" /></Button>
       {tabs.map(id => <div key={id} className={cn("kb-document-tab", documentId === id && !showTrash && "active")}>
         <button role="tab" aria-selected={documentId === id && !showTrash} onClick={() => open(id)}>{items.find(i => i.id === id)?.name ?? (id === doc?.id ? doc.title : "문서")}{buffers[id]?.dirty && <span aria-label="미저장"> ●</span>}</button>
-        <button aria-label={`${items.find(i => i.id === id)?.name ?? "문서"} 탭 닫기`} disabled={busy} onClick={() => buffers[id]?.dirty ? setClosing(id) : removeTab(id)}><X className="size-3" /></button>
+        <button aria-label={`${items.find(i => i.id === id)?.name ?? "문서"} Close tab`} disabled={busy} onClick={() => buffers[id]?.dirty ? setClosing(id) : removeTab(id)}><X className="size-3" /></button>
       </div>)}
     </div>
-    {showTrash ? <div className="kb-reader-content"><h2>휴지통</h2><p className="text-sm text-muted-foreground">파일과 폴더를 원래 위치로 복원할 수 있습니다.</p>{trash.error && <p role="alert">{errorText(trash.error)}</p>}{trash.isLoading && <p role="status">휴지통 불러오는 중</p>}{trash.data?.items.map(t => <div className="kb-trash-row" key={t.id}><div><strong>{t.name}</strong><p>{t.path}</p></div><Button size="sm" variant="outline" disabled={!can("restore") || busy} onClick={() => action("restore", undefined, t)}>복원</Button></div>)}{trash.data?.items.length === 0 && <p className="text-sm">휴지통이 비어 있습니다.</p>}</div>
-      : tree.error || detail.error ? <div role="alert" className="p-5">{errorText(tree.error ?? detail.error)}<Button variant="outline" onClick={() => void refresh()}>재시도</Button></div>
-        : !documentId ? <div className="kb-editor-empty"><Folder className="size-8" /><h2>자료실</h2><p>왼쪽에서 폴더를 펼치고 파일을 열어 보세요.</p><Button variant="outline" disabled={!can("create_document")} onClick={() => action("note")}>새 파일 만들기</Button></div>
+    {showTrash ? <div className="kb-reader-content"><h2>Trash</h2><p className="text-sm text-muted-foreground">파일과 폴더를 원래 위치로 복원할 수 있습니다.</p>{trash.error && <p role="alert">{errorText(trash.error)}</p>}{trash.isLoading && <p role="status">휴지통 불러오는 중</p>}{trash.data?.items.map(t => <div className="kb-trash-row" key={t.id}><div><strong>{t.name}</strong><p>{t.path}</p></div><Button size="sm" variant="outline" disabled={!can("restore") || busy} onClick={() => action("restore", undefined, t)}>Restore</Button></div>)}{trash.data?.items.length === 0 && <p className="text-sm">휴지통이 비어 있습니다.</p>}</div>
+      : tree.error || detail.error ? <div role="alert" className="p-5">{errorText(tree.error ?? detail.error)}<Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
+        : !documentId ? <div className="kb-editor-empty"><Folder className="size-8" /><h2>Library</h2><p>왼쪽에서 폴더를 펼치고 파일을 열어 보세요.</p><Button variant="outline" disabled={!can("create_document")} onClick={() => action("note")}>New file</Button></div>
           : detail.isLoading ? <p role="status" className="p-5">문서 불러오는 중</p> : doc && <>
             <div className="kb-editor-toolbar"><span className="truncate" title={doc.path}>{current?.path ?? doc.path}</span><div className="flex flex-wrap items-center gap-1">
-              {isText && buffer && ["edit", "preview", "split"].map(mode => <Button key={mode} variant={buffer.mode === mode ? "secondary" : "ghost"} size="sm" disabled={!editable && mode !== "preview"} onClick={() => putBuffer(documentId, { ...buffer, mode: mode as Mode })}>{mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "나란히"}</Button>)}
-              {editable && <Button size="sm" disabled={busy || !buffer?.dirty || conflict} onClick={() => void save(documentId)}><Save className="size-3" />저장</Button>}
-              {doc.kind === "generated" && <Button size="sm" variant="outline" disabled={!can("create_document") || busy} onClick={() => action("copy")}>수정본 만들기</Button>}
+              {isText && buffer && ["edit", "preview", "split"].map(mode => <Button key={mode} variant={buffer.mode === mode ? "secondary" : "ghost"} size="sm" disabled={!editable && mode !== "preview"} onClick={() => putBuffer(documentId, { ...buffer, mode: mode as Mode })}>{mode === "edit" ? "Edit" : mode === "preview" ? "Preview" : "Split"}</Button>)}
+              {editable && <Button size="sm" disabled={busy || !buffer?.dirty || conflict} onClick={() => void save(documentId)}><Save className="size-3" />Save</Button>}
+              {doc.kind === "generated" && <Button size="sm" variant="outline" disabled={!can("create_document") || busy} onClick={() => action("copy")}>Create editable copy</Button>}
             </div></div>
-            {conflict && <div role="alert" className="kb-conflict">다른 곳에서 수정되었습니다. 임시 입력은 보관 중입니다.<Button size="sm" variant="outline" onClick={() => action("latest")}>최신 원문 확인</Button></div>}
+            {conflict && <div role="alert" className="kb-conflict">다른 곳에서 수정되었습니다. 임시 입력은 보관 중입니다.<Button size="sm" variant="outline" onClick={() => action("latest")}>Review latest source</Button></div>}
             <div className={cn("kb-editor-body", editable && buffer?.mode === "split" && "kb-editor-split")}>
               {isText && editable && buffer && buffer.mode !== "preview" && <Textarea aria-label="문서 Markdown 편집" className="kb-source-editor" value={buffer.content} onChange={e => { putBuffer(documentId, { ...buffer, content: e.target.value, dirty: true }); setMessage("브라우저 임시 입력 · 서버 미저장"); }} />}
               {(!editable || buffer?.mode !== "edit") && <div className="kb-reader-content">
                 {doc.kind === "generated" && <p className="knowledge-generated-note">자동 정리된 원본입니다. 수정본을 만들어 편집할 수 있습니다.</p>}
                 {doc.state === "stale" ? <p role="status">원본이 변경되어 정리 내용을 갱신하고 있습니다.</p> : isText ? <MarkdownBody>{editable && buffer ? buffer.content : doc.content ?? ""}</MarkdownBody>
-                  : <>{doc.contentType.startsWith("image/") ? <img className="knowledge-original-image" src={brain.file(company, vault.id, doc)} alt={doc.title} /> : doc.contentType === "application/pdf" ? <iframe className="knowledge-original-pdf" title={doc.title} src={brain.file(company, vault.id, doc)} /> : <p>이 형식은 원본 파일로 확인해 주세요.</p>}<Button variant="outline" asChild><a href={brain.file(company, vault.id, doc, true)}>원본 파일 내려받기</a></Button></>}
+                  : <>{doc.contentType.startsWith("image/") ? <img className="knowledge-original-image" src={brain.file(company, vault.id, doc)} alt={doc.title} /> : doc.contentType === "application/pdf" ? <iframe className="knowledge-original-pdf" title={doc.title} src={brain.file(company, vault.id, doc)} /> : <p>이 형식은 원본 파일로 확인해 주세요.</p>}<Button variant="outline" asChild><a href={brain.file(company, vault.id, doc, true)}>Download original</a></Button></>}
                 {!!doc.references?.length && <div className="knowledge-inline-sources"><h3>이 지식의 근거</h3>{doc.references.map(ref => <button key={ref.sourceId} className="knowledge-source-card" onClick={() => open(ref.docId)}><strong>{ref.path.split("/").at(-1)}</strong><small>{ref.locator ?? ref.path}</small></button>)}</div>}
               </div>}
             </div>
@@ -261,11 +261,11 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
     <Dialog open={!!modal} onOpenChange={open => { if (!open && !busy) setModal(null); }}><DialogContent><DialogHeader><DialogTitle>{modal && labels[modal.action]}</DialogTitle><DialogDescription>{modal?.action === "trash" ? "내용을 보존해 휴지통으로 이동합니다. 하위 폴더와 파일도 함께 이동합니다." : modal?.action === "latest" ? "최신 원문을 확인하고 선택하세요. 최신본 사용을 누르면 현재 임시 입력을 버립니다." : "Personal Brain의 실제 폴더와 파일에 반영합니다."}</DialogDescription></DialogHeader>
       {modal?.action === "latest" ? <div className="kb-conflict-preview"><MarkdownBody>{doc?.content ?? ""}</MarkdownBody></div> : modal?.action !== "trash" && <>
         <label className="grid gap-2 text-sm">이름<Input aria-label="이름" autoFocus value={name} onChange={e => setName(e.target.value)} /></label>
-        {modal?.action !== "rename" && <label className="grid gap-2 text-sm">위치<select className="knowledge-select" aria-label="저장할 폴더" value={parentId} onChange={e => setParentId(e.target.value)}><option value="" disabled>폴더 선택</option>{folders.filter(f => modal?.item?.type !== "folder" || (f.id !== modal.item.id && !f.path.startsWith(modal.item.path + "/"))).map(f => <option key={f.id} value={f.id}>{f.path}</option>)}</select></label>}
+        {modal?.action !== "rename" && <label className="grid gap-2 text-sm">위치<select className="knowledge-select" aria-label="Destination folder" value={parentId} onChange={e => setParentId(e.target.value)}><option value="" disabled>Select a folder</option>{folders.filter(f => modal?.item?.type !== "folder" || (f.id !== modal.item.id && !f.path.startsWith(modal.item.path + "/"))).map(f => <option key={f.id} value={f.id}>{f.path}</option>)}</select></label>}
       </>}
       {modal?.action === "trash" && <p className="text-sm">{modal.item?.path}</p>}{error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><Button variant="ghost" disabled={busy} onClick={() => setModal(null)}>취소</Button><Button disabled={busy || (modal?.action !== "trash" && modal?.action !== "latest" && (!name.trim() || !parentId))} onClick={() => void submit()}>{modal?.action === "latest" ? "최신본 사용" : "확인"}</Button></DialogFooter>
+      <DialogFooter><Button variant="ghost" disabled={busy} onClick={() => setModal(null)}>Cancel</Button><Button disabled={busy || (modal?.action !== "trash" && modal?.action !== "latest" && (!name.trim() || !parentId))} onClick={() => void submit()}>{modal?.action === "latest" ? "Use latest version" : "Confirm"}</Button></DialogFooter>
     </DialogContent></Dialog>
-    <Dialog open={!!closing} onOpenChange={open => { if (!open && !busy) setClosing(null); }}><DialogContent><DialogHeader><DialogTitle>변경 내용을 저장할까요?</DialogTitle><DialogDescription>서버에 저장하지 않은 내용이 있습니다.</DialogDescription></DialogHeader><DialogFooter><Button variant="ghost" disabled={busy} onClick={() => setClosing(null)}>취소</Button><Button variant="outline" disabled={busy} onClick={() => { if (closing) { clearDraft(scope + ":" + closing); delete buffersRef.current[closing]; setBuffers({ ...buffersRef.current }); removeTab(closing); } }}>버리기</Button><Button disabled={busy || !can("save_document")} onClick={async () => { if (closing && await save(closing)) removeTab(closing); }}>저장 후 닫기</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={!!closing} onOpenChange={open => { if (!open && !busy) setClosing(null); }}><DialogContent><DialogHeader><DialogTitle>변경 내용을 저장할까요?</DialogTitle><DialogDescription>서버에 저장하지 않은 내용이 있습니다.</DialogDescription></DialogHeader><DialogFooter><Button variant="ghost" disabled={busy} onClick={() => setClosing(null)}>Cancel</Button><Button variant="outline" disabled={busy} onClick={() => { if (closing) { clearDraft(scope + ":" + closing); delete buffersRef.current[closing]; setBuffers({ ...buffersRef.current }); removeTab(closing); } }}>Discard</Button><Button disabled={busy || !can("save_document")} onClick={async () => { if (closing && await save(closing)) removeTab(closing); }}>Save and close</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }

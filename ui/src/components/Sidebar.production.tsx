@@ -202,9 +202,9 @@ export function Sidebar() {
           ) : null}
           <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
           <KnowledgeNavigation />
-          <SidebarNavItem to="/marketing" label="마케팅" icon={Megaphone} />
-          <SidebarNavItem to="/sourcing" label="쇼핑몰 관리" icon={ShoppingBag} />
-          <SidebarNavItem to="/agent-profiles" label="에이전트 프로필" icon={Boxes} />
+          <SidebarNavItem to="/marketing" label="Marketing" icon={Megaphone} />
+          <SidebarNavItem to="/sourcing" label="Commerce" icon={ShoppingBag} />
+          <SidebarNavItem to="/agent-profiles" label="Agent Profiles" icon={Boxes} />
           <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
           {showWorkspacesLink ? (
             <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />

@@ -189,7 +189,7 @@ describe("Sidebar", () => {
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({});
     const root = await renderSidebar(true);
     try {
-      const link = [...container.querySelectorAll("nav a")].find(item => item.textContent === "자료실");
+      const link = [...container.querySelectorAll("nav a")].find(item => item.textContent === "Knowledge");
       expect(link?.getAttribute("href")).toBe("/knowledge");
       expect(container.textContent).toContain("Work");
     } finally {
@@ -202,10 +202,10 @@ describe("Sidebar", () => {
     const root = await renderSidebar(production);
     try {
       const links = [...container.querySelectorAll("nav a")];
-      const marketingIndex = links.findIndex(item => item.textContent === "마케팅");
+      const marketingIndex = links.findIndex(item => item.textContent === "Marketing");
       const sourcing = links[marketingIndex + 1];
       expect(marketingIndex).toBeGreaterThanOrEqual(0);
-      expect(sourcing?.textContent).toBe("쇼핑몰 관리");
+      expect(sourcing?.textContent).toBe("Commerce");
       expect(sourcing?.getAttribute("href")).toBe("/sourcing");
       expect(sourcing?.closest('[data-slot="collapsible"]')?.textContent).toContain("Work");
     } finally {
@@ -563,8 +563,8 @@ describe("Sidebar", () => {
     const labels = (section: Element | undefined) => [...(section?.querySelectorAll("a") ?? [])]
       .map((anchor) => anchor.textContent?.trim());
 
-    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "자료실", "질문·검색", "지식 그래프", "마케팅", "쇼핑몰 관리"]);
-    expect(labels(orgSection)).toEqual(["Agents", "에이전트 프로필", "Skills", "Connectors", "Audit"]);
+    expect(labels(workSection)).toEqual(["Tasks", "Projects", "Routines", "Artifacts", "Knowledge", "Marketing", "Commerce"]);
+    expect(labels(orgSection)).toEqual(["Agents", "Agent Profiles", "Skills", "Connectors", "Audit"]);
     expect(sections.indexOf(workSection!)).toBeLessThan(sections.indexOf(orgSection!));
     expect(
       workSection?.querySelector('a[href="/issues"] svg')?.classList.contains("lucide-circle-check"),

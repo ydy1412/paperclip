@@ -35,6 +35,23 @@ Existing tiers already in index.css (~80+ tokens) — extraction maps to these o
 7. **Words are part of the system.** One name per concept across the entire UI — the canonical term is *task* (never *issue* or *ticket* in copy, labels, or empty states). Buttons name the action ("Approve hire," not "Submit"). Errors say what happened and what to do. Empty states say what to do first. **Note:** enforcing the task rename is a visible change and is explicitly OUT of the zero-visual-change extraction run; it happens in its own follow-up run.
 8. **Agent-modifiable by design.** The system must be changeable via instructions: single token source, lint rules that enforce it, and this document kept current. A correct change should be expressible as "edit tokens + run checks," not "visit 40 files."
 
+## Domain navigation and menu language
+
+Knowledge and Commerce use the same contextual-sidebar layout in desktop and
+mobile shells. The company sidebar contains one link per domain. Domain pages
+own their local navigation and an All menus link. Do not nest the Knowledge
+pages in the global company menu or repeat desktop page tabs above the content.
+Keep vault/project selection when moving between Knowledge pages.
+
+Use English for built-in global and domain menu names: Knowledge, Library,
+Ask & Search, Knowledge Graph, Commerce, Sourcing, Products, Orders, Store
+Settings, Marketing, and Agent Profiles. Preserve user-authored names and
+content. Explanatory text can remain Korean.
+
+The Personal Brain graph has a white canvas and pale evidence pane in both app
+themes. Its node, line, label and selection colors come from the existing
+knowledge-map tokens. Dark app mode must not reduce contrast inside this panel.
+
 ## Form and wizard footers
 
 Keep **Save & exit** (or Cancel/Back) and the primary Continue/Connect/Finish
