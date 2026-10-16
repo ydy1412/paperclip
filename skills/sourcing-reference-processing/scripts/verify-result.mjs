@@ -8,9 +8,26 @@ const url = value => String(value ?? '').replace(/^\/\//, 'https://').replaceAll
 const numbers = value => String(value ?? '').match(/\d+(?:[.,]\d+)?/g) ?? [];
 const chinese = /[\u3400-\u9fff]/u;
 
+export function auditText(product, source) {
+  const errors = [];
+  const labels = new Map();
+  for (const sku of product.skus) {
+    if (/^\d{7,}_/.test(sku.name)) errors.push('internal_id_in_display_name:' + sku.id);
+    if (sku.options.some(o => !o.name.trim() || !o.value.trim())) errors.push('empty_option:' + sku.id);
+    const label = JSON.stringify([sku.name.trim(), sku.options.map(o => [o.name.trim(), o.value.trim()])]);
+    const original = source.skus.find(s => s.skuId === sku.id);
+    const signature = JSON.stringify(original?.options ?? []);
+    if (labels.has(label) && labels.get(label) !== signature) errors.push('option_distinction_lost:' + sku.id);
+    labels.set(label, signature);
+  }
+  if ((String(product.description).match(/>\s*옵션\s*(?:설명|안내)\s*</g) ?? []).length > 1)
+    errors.push('duplicate_option_section');
+  return errors;
+}
+
 // Structural checks complement actual before/after image inspection; they cannot judge pixels.
 export function audit(product, source, review) {
-  const errors = [];
+  const errors = auditText(product, source);
   const require = (ok, code) => { if (!ok) errors.push(code); };
   require(product.id === review.productId && product.revision === review.revision, 'revision_or_product_changed');
   require(product.sourceProvider === source.provider && product.sourceProductId === source.productId
@@ -36,6 +53,16 @@ export function audit(product, source, review) {
   require(review.categoryMatchesAllSkus === true && typeof review.categoryEvidence === 'string'
     && review.categoryEvidence.trim().length >= 5, 'category_review_missing');
   require(Array.isArray(review.blockingProcessingIssues) && review.blockingProcessingIssues.length === 0, 'processing_blockers_remaining');
+  const style = review.referenceStyle;
+  const hasReferences = style && Array.isArray(style.references) && style.references.length > 0
+    && style.references.every(r => /^[a-f0-9]{32}$/.test(r.productId) && r.productId !== product.id
+      && Number.isInteger(r.revision) && r.revision > 0 && typeof r.reason === 'string' && r.reason.trim().length >= 5)
+    && new Set(style.references.map(r => r.productId)).size === style.references.length;
+  const honestFallback = style?.status === 'no_relevant_reference' && style.catalogComplete === true
+    && Array.isArray(style.references) && style.references.length === 0
+    && typeof style.reason === 'string' && style.reason.trim().length >= 5;
+  require(Boolean((hasReferences || honestFallback) && Array.isArray(style.appliedRules) && style.appliedRules.length > 0
+    && style.appliedRules.every(rule => typeof rule === 'string' && rule.trim().length >= 5)), 'reference_style_review_missing');
 
   const sourceUrls = new Set((source.images ?? []).flatMap(i => [url(i.src), url(i.lazySrc)]).filter(Boolean));
   for (const sku of source.skus ?? []) for (const image of sku.images ?? []) sourceUrls.add(url(typeof image === 'string' ? image : image.src));
@@ -49,6 +76,8 @@ export function audit(product, source, review) {
     if (!evidence) continue;
     require(evidence.visualPass === true && typeof evidence.notes === 'string' && evidence.notes.trim().length >= 5, 'image_review_failed:' + image);
     require(evidence.noText === true && evidence.textReviewPerformed === true, 'image_text_review_failed:' + image);
+    require(evidence.whiteBackgroundPass === true && evidence.centeredProductPass === true
+      && evidence.completeProductPass === true && evidence.width === evidence.height, 'image_presentation_review_failed:' + image);
     require(sourceUrls.has(url(evidence.sourceImageUrl)), 'image_source_not_verified:' + image);
     require(Number.isInteger(evidence.width) && evidence.width > 0 && Number.isInteger(evidence.height) && evidence.height > 0, 'image_dimensions_missing:' + image);
     if (!sourceUrls.has(image)) require(image.endsWith('/images/' + product.id + '/' + evidence.assetId + '.png'), 'unverified_derivative:' + image);
@@ -85,7 +114,16 @@ export async function main(file, env = process.env) {
     const product = await call('get-managed-product', { projectId: review.projectId, productId: p.productId });
     const source = await call('get-processing-source', { projectId: review.projectId, accountId: review.accountId,
       sourceProvider: p.sourceProvider, productId: p.sourceProductId });
-    checks.push(audit(product, source, p));
+    const check = audit(product, source, p);
+    for (const reference of p.referenceStyle?.references ?? []) {
+      const current = await call('get-managed-product', { projectId: review.projectId, productId: reference.productId });
+      if (current.id !== reference.productId || current.revision !== reference.revision
+          || !current.listings?.some(l => l.remoteProductId)) {
+        check.errors.push('reference_changed_or_not_uploaded:' + reference.productId);
+      }
+    }
+    check.passed = check.errors.length === 0;
+    checks.push(check);
   }
   return { passed: checks.every(c => c.passed), pixelReviewRequired: true, checks };
 }

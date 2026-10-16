@@ -1767,3 +1767,15 @@ upgrade the entire server or change the Auto Sourcing worker. Evidence and exact
 runtime/rollback receipts: tmp/forwarder-aside-verification/{live-login-result.json,
 preview-workflow.log,compatible-result.json,runtime-stage.json,deployment.json}.
 Only a complete deployment receipt proves the operating rollout.
+
+
+### 2026-10-16 — Uploaded-reference processing improvement
+
+Use the current uploaded catalogue as style evidence, without treating other listings as target product facts. A read-only skill helper scans uploaded pages sequentially, ranks title matches with category only as a hint, re-reads the top candidate details and records IDs/revisions and style warnings. It must report incomplete or changing pagination. No new database, supplier crawl, upload or paid image generation is needed.
+
+The observed catalogue has 244 imported products. Titles are 24–38 characters (median 28), 232 descriptions include an option section and 169 include a detail section. Internal collector prefixes occur in 229 products, empty option values in 62 and duplicate option sections in 6. These are observations, not mandatory lengths or approval of legacy defects. Build Korean target names/options from source facts and retain SKU identity/order/prices. Use one option section and preserve distinctions between purchase combinations.
+
+Extend the existing result auditor to detect empty axes, internal display prefixes, collapsed option combinations, repeated option sections and absent/stale uploaded-reference evidence. Align the skill image review with the native white-product recipe: white background, complete product centered, square, no text, original product identity retained. Server jobs retain ownership of generation/retries. Verify read-only live reference selection, isolated adversarial audit cases and the deployed company skill file hashes. Product text, marketplace listings, runtime core/UI and ongoing image jobs are outside this skill rollout.
+
+
+Verification: 8 Node tests passed, including injected plugin HTTP authorization/read-only dispatch, later-page selection, incomplete/changed pagination, stale reference rejection, source combination/price preservation and presentation review failures. Existing Codex skill injection and native processing plugin integration tests passed (5 cases, real isolated PostgreSQL/SQLite/HTTP). The live board read path scanned all 244 uploaded products across 13 sequential pages for lamp and cart examples, re-read selected details and produced scoped style profiles. The current operating company skill matched the previous dev files before update. Full repository/UI build and a paid or agent-driven product-processing run are not claimed for this skill-only change.
