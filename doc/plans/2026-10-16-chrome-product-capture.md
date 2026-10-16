@@ -28,6 +28,14 @@ retry/navigation loops. Changing connection clears pending snapshots.
 
 ## Verification and rollout
 
+Continuation on 2026-10-16: the user deferred the Dobi authentication investigation
+and resumed this feature. Provide the actual extension ZIP from Shopping settings
+with short installation steps. Generate it from an explicit source-file allowlist
+for both development and production UI builds. Reuse the existing ZIP writer;
+include no fixture data, connection keys, test files or browser profiles. Verify an
+actual browser download and its archive contents before updating the existing PR.
+Fixed public ingress and operating rollout remain distinct from source completion.
+
 Test real SQLite atomic storage, scope, duplicates and original preservation;
 HTTP auth/revocation and authoritative scope; extraction on fixture pages;
 extension setup/click/retry and unprocessed UI. Distinguish fixture browser,
@@ -111,3 +119,33 @@ available detail images do not prove the full product description was loaded.
 A duplicate does not refresh an existing original. Capturing other marketplaces,
 refreshing supplier versions, Web Store publication and automatic browser traversal
 are outside this change.
+
+## Installable distribution verified 2026-10-16
+
+Shopping settings now supplies an actual ZIP download and three installation
+steps. The Vite integration uses the existing ZIP writer and an explicit list
+of ten runtime/README files. It serves the ZIP during development and includes
+`downloads/dovix-chrome-product-capture.zip` in the production UI build. There
+is no new package dependency, browser installation or user-profile change.
+
+The four focused settings/archive cases passed. Final UI typecheck, build and
+token gates passed. The seven existing extension/Worker cases passed again.
+The MV3 test now loads the downloaded archive instead of a repository copy,
+then downloads it again using the real settings link and verifies its entries.
+One synthetic product navigation, actual Quick Tunnel/native storage, image
+display, duplicate, exact-payload retry and revocation still pass with no page
+errors. Independent Python ZIP/CRC inspection confirms ten entries and exact
+source bytes, including the unchanged activeTab-only shipped manifest.
+
+Aside u1 verified the download response (`200`, `application/zip`), all three
+instructions, desktop at 1440x900, and the same content in a 390x844 iframe
+with body width 390 and no visible alerts. Evidence: `tmp/chrome-capture/` files
+`download-aside.json`, `download-desktop.png`, `download-narrow.png`, and the
+updated `extension-report.json`. Scoped Graphify now has 107 nodes/148 edges;
+the ZIP writer dependency was also checked in source.
+
+The existing authenticated Wrangler installation and Personal Brain VPC service
+were checked read-only. No named capture service/Worker, operating rollout or
+PR merge was performed. The prior full-suite/native results above are reused
+where source is unchanged; this continuation does not claim a new full-workspace
+or live Taobao/native-permission test.

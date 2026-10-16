@@ -19,6 +19,10 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 it("issues project-labelled one-time setup and hides it without leaving credential text", async () => {
+  const download = host.querySelector<HTMLAnchorElement>('a[download]')!;
+  expect(download.textContent).toBe("확장 파일 받기");
+  expect(download.getAttribute("href")).toBe("/downloads/dovix-chrome-product-capture.zip");
+  expect(host.textContent).toContain("chrome://extensions");
   expect(host.textContent).not.toContain(token); await click("연결 정보 만들기");
   expect(mock.create).toHaveBeenCalledWith("company", "project", "내 크롬");
   const setup = JSON.parse(host.querySelector<HTMLTextAreaElement>("textarea")!.value);

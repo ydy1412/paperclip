@@ -9,6 +9,7 @@ import { sourcingCaptureRoutes } from "../../server/src/routes/sourcing-capture.
 import { sourcingCatalogRoutes } from "../../server/src/routes/sourcing-catalog.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
 import { companyMemberships } from "../../packages/db/src/index.ts";
+import { productCaptureExtensionPlugin } from "../../ui/src/lib/vite-product-capture.ts";
 await mkdir("tmp/chrome-capture", { recursive: true });
 await writeFile("tmp/chrome-capture/preview.html", `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dovix 수집 검증</title><div id="root"></div><script type="module" src="/ui/src/components/SourcingCaptureSettings.browser-fixture.tsx"></script></html>`);
 const f = await startProcessingFixture();
@@ -25,7 +26,7 @@ app.get("/api/plugins", (_req, res) => res.json([f.plugin]));
 app.post("/api/plugins/:id/data/:key", async (req, res) => res.json({ data: await f.data(req.body.params ?? {}, req.params.key) }));
 app.use(errorHandler); const server = app.listen(0, "127.0.0.1"); await new Promise(r => server.once("listening", r));
 const apiUrl = `http://127.0.0.1:${(server.address() as any).port}`;
-const vite = await createServer({ root: process.cwd(), configFile: false, plugins: [react(), tailwindcss()], resolve: { alias: { "@": `${process.cwd()}/ui/src`, "react": `${process.cwd()}/ui/node_modules/react`, "react-dom": `${process.cwd()}/ui/node_modules/react-dom` } }, server: { host: "127.0.0.1", port: 6017, strictPort: true, proxy: { "/api": apiUrl } } }); await vite.listen();
+const vite = await createServer({ root: process.cwd(), configFile: false, plugins: [react(), tailwindcss(), productCaptureExtensionPlugin(`${process.cwd()}/extensions/chrome-product-capture`)], resolve: { alias: { "@": `${process.cwd()}/ui/src`, "react": `${process.cwd()}/ui/node_modules/react`, "react-dom": `${process.cwd()}/ui/node_modules/react-dom` } }, server: { host: "127.0.0.1", port: 6017, strictPort: true, proxy: { "/api": apiUrl } } }); await vite.listen();
 let tunnel;
 if (process.argv.includes("--tunnel")) {
  tunnel = spawn("cloudflared", ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${ingressPort}`], { stdio: ["ignore", "ignore", "pipe"] });

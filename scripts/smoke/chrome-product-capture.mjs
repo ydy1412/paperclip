@@ -2,9 +2,10 @@
 // The test copy pregrants only its fixture origins; the shipped manifest stays activeTab-only.
 import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, writeFile, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { readZipArchive } from "../../packages/shared/dist/portability-zip.js";
 const info = JSON.parse(await readFile(process.env.DOVIX_CAPTURE_FIXTURE_INFO ?? "tmp/chrome-capture/preview-info.json", "utf8"));
 assert.equal(new URL(info.apiUrl).hostname, "127.0.0.1", "Only a disposable loopback fixture may issue test credentials");
 const base = `${info.apiUrl}/api/companies/${info.companyId}/sourcing/projects/${info.projectId}/capture-connections`;
@@ -15,7 +16,17 @@ const productId = String(Date.now());
 const directory = await mkdtemp(path.join(os.tmpdir(), "dovix-capture-extension-"));
 let context;
 try {
- const extension = path.join(directory, "extension"); await cp("extensions/chrome-product-capture", extension, { recursive: true });
+ const downloadUrl = new URL("/downloads/dovix-chrome-product-capture.zip", info.url);
+ const archiveResponse = await fetch(downloadUrl); assert.equal(archiveResponse.status, 200);
+ assert.match(archiveResponse.headers.get("content-type"), /application\/zip/);
+ const shipped = await readZipArchive(new Uint8Array(await archiveResponse.arrayBuffer()));
+ assert.equal(shipped.rootPath, "dovix-chrome-product-capture"); assert.equal(Object.keys(shipped.files).length, 10);
+ const extension = path.join(directory, "extension"); await mkdir(extension);
+ for (const [name, contents] of Object.entries(shipped.files)) {
+  assert.equal(typeof contents, "string"); assert.equal(name, path.basename(name));
+  assert.equal(contents, await readFile(path.join("extensions/chrome-product-capture", name), "utf8"));
+  await writeFile(path.join(extension, name), contents);
+ }
  const manifestPath = path.join(extension, "manifest.json"); const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
  const origin = new URL(info.captureUrl); manifest.host_permissions = ["https://item.taobao.com/*", `${origin.protocol}//${origin.hostname}/*`];
  await writeFile(manifestPath, JSON.stringify(manifest));
@@ -59,6 +70,13 @@ try {
  const row = rows.find(r => r.source?.sourceProductId === productId); assert.equal(row?.stage, "unprocessed"); assert.equal(row.source.optionCount, 1);
  assert.equal(row.mainImage, state.item.images[0]);
  const workspacePage = await context.newPage(); await workspacePage.goto(info.url);
+ const downloadReady = workspacePage.waitForEvent("download");
+ await workspacePage.getByRole("link", { name: "확장 파일 받기" }).click();
+ const download = await downloadReady;
+ assert.equal(download.suggestedFilename(), "dovix-chrome-product-capture.zip");
+ const browserArchive = await readZipArchive(new Uint8Array(await readFile(await download.path())));
+ assert.deepEqual(browserArchive.files, shipped.files);
+ await workspacePage.screenshot({ path: "tmp/chrome-capture/settings.png", fullPage: true });
  await workspacePage.getByRole("button", { name: "소싱 상품", exact: true }).click();
  await workspacePage.locator('[aria-label="소싱 상품 목록"] button').filter({ hasText: state.item.title }).click();
  const originalImage = workspacePage.locator('img[alt="상품 대표 이미지"]');
@@ -70,7 +88,7 @@ try {
  p = await popup(); await p.locator("#status").filter({ hasText: "만료되었거나 해제" }).waitFor({ timeout: 45000 });
  assert.equal(productNavigations, 1, "No extra product navigation, collection or retry page request is allowed");
  assert.deepEqual(runtimeErrors, []);
- const report = { runtime: "real MV3 Chromium with pregranted disposable origins", currentTab: "intercepted synthetic Taobao page; no live Taobao access", transport: origin.hostname.endsWith("trycloudflare.com") ? "actual Quick Tunnel -> Dovix PostgreSQL -> native HTTP/SQLite" : "configured capture receiver", setup: true, exactPriceAndOptions: true, unprocessedReadback: true, capturedImageLoadedInUi: true, duplicate: true, failedSnapshotRetry: true, revocation: true, runtimeErrors, productNavigations, nativePermissionPrompt: "manual; not covered by pregranted fixture" };
+ const report = { runtime: "real MV3 Chromium with pregranted disposable origins", currentTab: "intercepted synthetic Taobao page; no live Taobao access", transport: origin.hostname.endsWith("trycloudflare.com") ? "actual Quick Tunnel -> Dovix PostgreSQL -> native HTTP/SQLite" : "configured capture receiver", browserDownloadVerified: true, loadedFromDownloadedArchive: true, setup: true, exactPriceAndOptions: true, unprocessedReadback: true, capturedImageLoadedInUi: true, duplicate: true, failedSnapshotRetry: true, revocation: true, runtimeErrors, productNavigations, nativePermissionPrompt: "manual; not covered by pregranted fixture" };
  await writeFile("tmp/chrome-capture/extension-report.json", JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
 } finally {
  await context?.close(); await fetch(`${base}/${connection.id}`, { method: "DELETE" }); await rm(directory, { recursive: true, force: true });

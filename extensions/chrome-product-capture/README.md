@@ -2,7 +2,8 @@
 
 Chrome Manifest V3 확장. 현재 `https://item.taobao.com/item.htm?id=...`만 지원합니다.
 
-1. `chrome://extensions`에서 개발자 모드를 켜고 이 폴더를 압축 해제된 확장으로 불러옵니다.
+1. Dovix 쇼핑몰 관리 → 설정 → 크롬 상품 수집에서 **확장 파일 받기**를 눌러 ZIP의 압축을 풉니다.
+   `chrome://extensions`에서 개발자 모드를 켜고 압축을 푼 `dovix-chrome-product-capture` 폴더를 불러옵니다.
    확장을 툴바에 고정하면 상품 페이지에서 바로 누를 수 있습니다.
 2. Dovix 쇼핑몰 관리 → 설정 → 크롬 상품 수집에서 연결 이름과 수집 서버 주소를 확인하고 연결 정보를 만듭니다.
 3. 확장의 연결 설정에 붙여넣고 선택한 서버의 전송 권한을 허용합니다.
@@ -23,3 +24,8 @@ Chrome Manifest V3 확장. 현재 `https://item.taobao.com/item.htm?id=...`만 �
 서비스 워커에서 처리됩니다. 브라우저 중단 등으로 응답이 유실되면 재시도할 수 있습니다.
 
 관리자 배포: `deploy/sourcing-capture/README.md`.
+
+개발자는 저장소 루트에서 `pnpm --filter @paperclipai/ui build`로
+`ui/dist/downloads/dovix-chrome-product-capture.zip`을 만들 수 있습니다.
+기본 UI 개발 서버와 정식 UI 빌드에는 같은
+허용 목록의 설치 파일이 포함되며, 테스트·연결 정보·브라우저 프로필은 제외합니다.
