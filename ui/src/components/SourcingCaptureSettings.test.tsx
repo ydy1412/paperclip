@@ -43,3 +43,24 @@ it("lists only safe metadata and reports revocation failure without claiming it 
   expect(host.textContent).toContain("아직 수집하지 않음"); mock.revoke.mockRejectedValueOnce(new Error("offline"));
   await click("연결 해제"); expect(mock.revoke).toHaveBeenCalledWith("company", "project", row.id); expect(host.querySelector('[role="alert"]')?.textContent).toContain("해제하지 못했습니다");
 });
+
+it("shows copy success only after the shared clipboard write resolves and clears success on a later failure", async () => {
+  await click("연결 정보 만들기");
+  let finish: () => void = () => {};
+  const write = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const commandDescriptor = Object.getOwnPropertyDescriptor(document, "execCommand");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: write } });
+  Object.defineProperty(document, "execCommand", { configurable: true, value: vi.fn(() => false) });
+  try {
+    await click("연결 정보 복사"); expect(host.textContent).not.toContain("복사됨");
+    expect(write).toHaveBeenCalledWith(host.querySelector<HTMLTextAreaElement>("textarea")!.value);
+    await act(async () => finish()); await settle(); expect(host.textContent).toContain("복사됨");
+    write.mockRejectedValueOnce(new Error("Denied")); await click("복사됨");
+    expect(host.textContent).not.toContain("복사됨"); expect(host.querySelector('[role="alert"]')?.textContent).toContain("직접 선택해 복사");
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")!.value).toContain(token);
+  } finally {
+    if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor); else Reflect.deleteProperty(navigator, "clipboard");
+    if (commandDescriptor) Object.defineProperty(document, "execCommand", commandDescriptor); else Reflect.deleteProperty(document, "execCommand");
+  }
+});

@@ -690,14 +690,15 @@ export function Layout() {
             </div>
           ) : (
             <SidebarShell
+              className={isSourcingRoute ? "commerce-rail" : undefined}
               open={sidebarOpen}
-              collapsed={collapsed}
-              peeking={peeking}
+              collapsed={isSourcingRoute ? true : collapsed}
+              peeking={isSourcingRoute ? false : peeking}
               resizable
-              onPanelMouseEnter={handlePanelPointerEnter}
-              onPanelMouseLeave={handlePanelPointerLeave}
-              onPanelFocusCapture={collapsed ? handlePanelFocus : undefined}
-              onPanelBlurCapture={collapsed ? handlePanelBlur : undefined}
+              onPanelMouseEnter={isSourcingRoute ? undefined : handlePanelPointerEnter}
+              onPanelMouseLeave={isSourcingRoute ? undefined : handlePanelPointerLeave}
+              onPanelFocusCapture={!isSourcingRoute && collapsed ? handlePanelFocus : undefined}
+              onPanelBlurCapture={!isSourcingRoute && collapsed ? handlePanelBlur : undefined}
             >
               <div className="flex flex-1 min-h-0">
                 <Sidebar />
@@ -707,7 +708,7 @@ export function Layout() {
           )}
 
           {!isMobile && hasSecondarySidebar ? (
-            <SecondarySidebar>{secondarySidebar}</SecondarySidebar>
+            <SecondarySidebar className={isSourcingRoute ? "commerce-sidebar" : undefined}>{secondarySidebar}</SecondarySidebar>
           ) : null}
 
           <div

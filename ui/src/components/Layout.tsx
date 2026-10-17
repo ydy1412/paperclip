@@ -231,11 +231,10 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     || shellRoute.builtInContextualSurface === "routine"
     || isAppsRoute
     || isToolsRoute
-    || isSourcingRoute
     || isKnowledgeRoute
   );
-  const replacesPrimarySidebar = streamlinedUiEnabled && hasSecondarySidebar && !keepsPrimarySidebar;
-  const showsAdjacentSecondarySidebar = hasSecondarySidebar && (!streamlinedUiEnabled || keepsPrimarySidebar);
+  const replacesPrimarySidebar = streamlinedUiEnabled && !isSourcingRoute && hasSecondarySidebar && !keepsPrimarySidebar;
+  const showsAdjacentSecondarySidebar = hasSecondarySidebar && (isSourcingRoute || !streamlinedUiEnabled || keepsPrimarySidebar);
   const contextualSurface: ContextualSidebarSurface | null = !streamlinedUiEnabled || !hasSecondarySidebar
     ? null
     : routeSidebarSlot && !shellRoute.builtInContextualSurface
@@ -257,9 +256,9 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   });
 
   useLayoutEffect(() => {
-    setForceCollapsed(!streamlinedUiEnabled && hasSecondarySidebar);
+    setForceCollapsed(isSourcingRoute || (!streamlinedUiEnabled && hasSecondarySidebar));
     return () => setForceCollapsed(false);
-  }, [hasSecondarySidebar, setForceCollapsed, streamlinedUiEnabled]);
+  }, [hasSecondarySidebar, isSourcingRoute, setForceCollapsed, streamlinedUiEnabled]);
 
   useEffect(() => {
     const previous = previousShellRoute.current;
@@ -678,14 +677,15 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
           </div>
         ) : (
           <SidebarShell
+            className={isSourcingRoute ? "commerce-rail" : undefined}
             open={sidebarOpen}
-            collapsed={replacesPrimarySidebar ? false : collapsed}
-            peeking={replacesPrimarySidebar ? false : peeking}
+            collapsed={isSourcingRoute ? true : replacesPrimarySidebar ? false : collapsed}
+            peeking={isSourcingRoute || replacesPrimarySidebar ? false : peeking}
             resizable
-            onPanelMouseEnter={replacesPrimarySidebar ? undefined : handlePanelPointerEnter}
-            onPanelMouseLeave={replacesPrimarySidebar ? undefined : handlePanelPointerLeave}
-            onPanelFocusCapture={!replacesPrimarySidebar && collapsed ? handlePanelFocus : undefined}
-            onPanelBlurCapture={!replacesPrimarySidebar && collapsed ? handlePanelBlur : undefined}
+            onPanelMouseEnter={isSourcingRoute || replacesPrimarySidebar ? undefined : handlePanelPointerEnter}
+            onPanelMouseLeave={isSourcingRoute || replacesPrimarySidebar ? undefined : handlePanelPointerLeave}
+            onPanelFocusCapture={!isSourcingRoute && !replacesPrimarySidebar && collapsed ? handlePanelFocus : undefined}
+            onPanelBlurCapture={!isSourcingRoute && !replacesPrimarySidebar && collapsed ? handlePanelBlur : undefined}
           >
             <div className="flex flex-1 min-h-0">
               {replacesPrimarySidebar ? (
@@ -702,7 +702,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         )}
 
         {!isMobile && showsAdjacentSecondarySidebar && !keepsPrimarySidebar ? (
-          <SecondarySidebar className="w-60 shrink-0">
+          <SecondarySidebar className={isSourcingRoute ? "commerce-sidebar" : "w-60 shrink-0"}>
             {secondarySidebar}
           </SecondarySidebar>
         ) : null}

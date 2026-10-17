@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { sourcingCaptureApi } from "../api/sourcing";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -19,24 +20,24 @@ export function SourcingCaptureSettings({ companyId, projectId, projectName = "�
   const revoke = useMutation({ mutationFn: (id: string) => sourcingCaptureApi.revoke(companyId, projectId, id),
     onSuccess: () => { setSetup(""); setError(""); void cache.invalidateQueries({ queryKey: key }); }, onError: () => setError("연결을 해제하지 못했습니다.") });
   function copySetup() {
-    if (typeof navigator.clipboard?.writeText !== "function") { setError("연결 정보를 직접 선택해 복사해 주세요."); return; }
-    void navigator.clipboard.writeText(setup).then(() => { setCopied(true); setError(""); }, () => setError("연결 정보를 직접 선택해 복사해 주세요."));
+    setCopied(false);
+    void copyTextToClipboard(setup).then(() => { setCopied(true); setError(""); }, () => setError("연결 정보를 직접 선택해 복사해 주세요."));
   }
   return <section aria-label="크롬 상품 수집" className="space-y-4">
     <div><h2 className="text-lg font-semibold">크롬 상품 수집</h2><p className="text-sm text-muted-foreground">타오바오 상품 페이지에서 확장 버튼을 누르면 이 프로젝트의 가공 전 상품으로 보냅니다.</p></div>
-    <div className="space-y-3 rounded-md border border-border p-4">
+    <details className="space-y-3 rounded-md border border-border p-4"><summary className="cursor-pointer text-sm font-medium">기기 추가·확장 설치</summary>
       <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-medium">처음 한 번만 설치하세요</h3><Button asChild variant="outline"><a href="/downloads/dovix-chrome-product-capture.zip" download>확장 파일 받기</a></Button></div>
       <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
         <li>받은 ZIP 파일의 압축을 풉니다.</li>
         <li>크롬 주소창에 <code>chrome://extensions</code>를 입력하고 개발자 모드를 켭니다. ‘압축해제된 확장 프로그램을 로드’에서 압축을 푼 폴더를 선택합니다.</li>
         <li>아래에서 연결 정보를 만든 뒤 확장의 연결 설정에 붙여넣습니다. 확장을 툴바에 고정하면 이후에는 상품 페이지에서 버튼만 누르면 됩니다.</li>
       </ol>
-    </div>
     <form className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end" onSubmit={e => { e.preventDefault(); setSetup(""); create.mutate(); }}>
       <label className="min-w-0 space-y-1 text-sm">연결 이름<Input value={name} onChange={e => setName(e.target.value)} required maxLength={100} /></label>
       <label className="min-w-0 space-y-1 text-sm sm:flex-1">수집 서버 주소<Input type="url" value={serverUrl} onChange={e => setOrigin(e.target.value)} placeholder="https://수집-서버-주소" required /></label>
       <Button disabled={create.isPending || !name.trim()}>연결 정보 만들기</Button>
     </form>
+    </details>
     {(error || connections.error) && <p role="alert" className="text-sm text-destructive">{error || "수집 연결을 조회하지 못했습니다."}</p>}
     {setup && <div className="space-y-2 rounded-md border border-border p-4"><label htmlFor="capture-setup" className="text-sm font-medium">확장의 연결 설정에 붙여넣으세요. 연결키는 이 화면에서만 표시됩니다.</label>
       <textarea id="capture-setup" readOnly value={setup} rows={7} className="w-full rounded-md border border-input bg-background p-3 font-mono text-xs" />

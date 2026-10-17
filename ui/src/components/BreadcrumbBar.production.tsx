@@ -40,7 +40,7 @@ function GlobalToolbar({ context }: { context: GlobalToolbarContext }) {
 }
 
 export function BreadcrumbBar() {
-  const { breadcrumbs, mobileToolbar } = useBreadcrumbs();
+  const { breadcrumbs, mobileToolbar, breadcrumbToolbar } = useBreadcrumbs();
   const { toggleSidebar, isMobile } = useSidebar();
   const { selectedCompanyId, selectedCompany } = useCompany();
 
@@ -52,7 +52,7 @@ export function BreadcrumbBar() {
     [selectedCompanyId, selectedCompany?.issuePrefix],
   );
 
-  const globalToolbarSlots = <GlobalToolbar context={globalToolbarSlotContext} />;
+  const globalToolbarSlots = <div className="ml-auto flex min-w-0 items-center gap-2">{breadcrumbToolbar}<GlobalToolbar context={globalToolbarSlotContext} /></div>;
 
   if (isMobile && mobileToolbar) {
     return (
