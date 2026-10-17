@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type Db, agents, heartbeatRuns, issues, projects, pluginConfig } from "@paperclipai/db";
-import { envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema, workspaceItemSchema, candidateSchema, catalogPricePreviewSchema, catalogCategoryRecommendationSchema, catalogCategoryMetadataSchema, imageProcessingJobSchema, imageProcessingSettingsSchema } from "@paperclipai/shared";
+import { storeCategoryNodeSchema, storeCategoryMetadataSchema, detailDefaultSchema, detailReferenceSchema, envBindingSecretRefSchema, catalogRequestSchema, storeSettingRequestSchema, storeSettingsSchema, managedProductSchema, publicationJobSchema, catalogStageCountsSchema, workspaceItemSchema, candidateSchema, catalogPricePreviewSchema, catalogCategoryRecommendationSchema, catalogCategoryMetadataSchema, imageProcessingJobSchema, imageProcessingSettingsSchema } from "@paperclipai/shared";
 import type { HostServices, WorkerHostCallContext } from "@paperclipai/plugin-sdk";
 import { forbidden, HttpError } from "../errors.js";
 import { pluginRegistryService } from "./plugin-registry.js";
@@ -106,11 +106,11 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
   }
   async function catalog(value: unknown, context: WorkerHostCallContext | undefined, write: boolean) {
     const input = catalogRequestSchema.parse(value);
-    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview", "category-recommend", "category-metadata", "image-inspect", "image-content", "image-provider-status", "image-jobs", "image-job-settings"];
+    const reads = ["settings", "list", "stages", "sources", "get", "jobs", "import-status", "workspace", "price-preview", "category-recommend", "category-metadata", "category-tree", "store-category-metadata", "detail-defaults", "detail-reference", "image-inspect", "image-content", "image-provider-status", "image-jobs", "image-job-settings"];
     if (reads.includes(input.operation) === write) throw forbidden("허용되지 않은 상품 작업입니다.");
     if (context?.invocationScope?.agentRun && write && !["save", "source", "image-process"].includes(input.operation)) throw forbidden("상품 가져오기와 실제 업로드는 운영 화면에서 실행해 주세요.");
     const { config, accounts } = await authorize(input, context, true);
-    if (["category-recommend", "category-metadata", "image-inspect", "image-process", "image-content", "image-provider-status", "image-jobs", "image-job-settings", "image-job-configure", "image-job-retry", "image-job-adopt"].includes(input.operation) && !Object.hasOwn(config.projects, input.projectId))
+    if (["category-recommend", "category-metadata", "category-tree", "store-category-metadata", "detail-defaults", "detail-reference", "detail-default-save", "image-inspect", "image-process", "image-content", "image-provider-status", "image-jobs", "image-job-settings", "image-job-configure", "image-job-retry", "image-job-adopt"].includes(input.operation) && !Object.hasOwn(config.projects, input.projectId))
       throw forbidden("프로젝트에 연결된 상품 가공 도구가 아닙니다.");
     if (input.operation === "source" && !(config.sourceProducts?.[input.projectId] ?? []).includes(`${input.sourceProvider}:${input.sourceProductId}`)) {
       const access = z.object({ allowed: z.boolean() }).parse(await catalogCall(input.companyId, config.serviceToken, "source-access", input));
@@ -131,6 +131,10 @@ export function autoSourcingPluginService(db: Db, pluginId: string, options: { p
     else if (operation === "candidate-collect") result = candidateSchema.parse(raw);
     else if (operation === "price-preview") result = catalogPricePreviewSchema.parse(raw);
     else if (operation === "category-recommend") result = catalogCategoryRecommendationSchema.parse(raw);
+    else if (operation === "category-tree") result = z.array(storeCategoryNodeSchema).parse(raw);
+    else if (operation === "store-category-metadata") result = storeCategoryMetadataSchema.parse(raw);
+    else if (operation === "detail-defaults" || operation === "detail-default-save") result = detailDefaultSchema.parse(raw);
+    else if (operation === "detail-reference") result = detailReferenceSchema.parse(raw);
     else if (operation === "category-metadata") result = catalogCategoryMetadataSchema.parse(raw);
     else if (operation === "image-inspect") result = catalogImageAnalysisSchema.parse(raw);
     else if (operation === "image-jobs" || operation === "image-job-retry" || operation === "image-job-adopt") {

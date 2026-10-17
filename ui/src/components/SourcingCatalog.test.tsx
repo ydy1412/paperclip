@@ -29,6 +29,9 @@ beforeEach(() => {
   mock.request.mockReset(); mock.request.mockImplementation(async (_company, _project, request) => {
     if (request.operation === "import-status") return { state: "idle", errorCode: "", products: 0 };
     if (request.operation === "stages") return { all: 1, processing: 0, ready: 1, queued: 0, attention: 0, uploaded: 0 };
+    if (request.operation === "category-tree") return [];
+    if (request.operation === "store-category-metadata") return { provider: "coupang", categoryId: request.categoryId, name: "가구 / 의자", fields: [], digest: "digest", fetchedAtUtcTicks: 0 };
+    if (request.operation === "detail-defaults") return { storeId: request.storeId, revision: 0, topImages: [], bottomImages: [], referenceProductId: "" };
     if (request.operation === "category-metadata") return { code: 100, name: "가구 / 의자" };
     if (request.operation === "settings") return structuredClone(settings);
     if (request.operation === "list") return [structuredClone(product)];
@@ -78,6 +81,7 @@ describe("store settings and common product editor", () => {
     const source = { id: "source", kind: "source", title: "수집 원본 B", mainImage: "", stage: "unprocessed", product: null, candidate: null, source: { sourceProvider: "taobao", sourceProductId: "456", title: "수집 원본 B", mainImage: "", url: "https://item.taobao.com/item.htm?id=456", description: "<p>상세 HTML</p>", optionCount: 1 } };
     mock.request.mockImplementation(async (...args) => {
       const request = args[2];
+      if (request.operation === "detail-defaults") return { storeId: request.storeId, revision: 1, topImages: ["https://images.example.test/notice-top.png"], bottomImages: [], referenceProductId: "" };
       if (request.operation === "candidate-import") { imported = true; return { added: 1 }; }
       if (request.operation === "workspace") return promoted ? [{ id: product.id, kind: "product", title: product.title, mainImage: product.mainImage, stage: "processing", product, candidate: null, source: null }] : imported ? [candidate, source] : [];
       if (request.operation === "stages") return { all: imported ? 2 : 0, candidate: imported ? 1 : 0, unprocessed: imported && !promoted ? 1 : 0, processing: promoted ? 1 : 0, ready: 0, queued: 0, uploaded: 0, attention: 0 };
@@ -92,7 +96,12 @@ describe("store settings and common product editor", () => {
     await act(async () => document.querySelectorAll<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')[1].click()); await settle();
     expect(document.querySelector('[aria-label="가공 전 상품 정보"] iframe')).not.toBeNull();
     expect(mock.request.mock.calls.some(c => c[2].operation === "source")).toBe(false);
-    await click("가공 시작"); expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "source", sourceProvider: "taobao", sourceProductId: "456" });
+    expect(document.querySelector('iframe')?.getAttribute("srcdoc")).toContain("notice-top.png");
+    await click("쇼핑몰"); await input("하단 이미지 주소", "https://images.example.test/notice-bottom.png");
+    const bottom = host.querySelector<HTMLInputElement>('[aria-label="하단 이미지 주소"]')!.closest("fieldset")!;
+    await act(async () => [...bottom.querySelectorAll("button")].find(b => b.textContent === "추가")!.click()); await settle();
+    expect(mock.request.mock.calls.some(c => c[2].operation === "source")).toBe(false);
+    await click("이 구성으로 상세 편집 시작"); expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "source", sourceProvider: "taobao", sourceProductId: "456", storeDetails: [expect.objectContaining({ storeId: storeA, topImages: ["https://images.example.test/notice-top.png"], bottomImages: ["https://images.example.test/notice-bottom.png"] })] }));
     expect(document.querySelector('[aria-label="상품 편집"]')).not.toBeNull();
   });
   it("blocks candidate selection and collection while a product has unsaved edits", async () => {
@@ -172,7 +181,7 @@ describe("store settings and common product editor", () => {
     expect(mock.request).toHaveBeenCalledWith("company", "project", { operation: "business", name: "사업자 B", registrationNumber: "" });
     await click("쇼핑몰 등록"); const select = document.querySelector<HTMLSelectElement>('[aria-label="쇼핑몰 종류"]')!;
     await act(async () => { select.value = "naver"; select.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect(document.querySelector('[aria-label="애플리케이션 Secret"]')).not.toBeNull(); expect(document.querySelector('[aria-label="Secret Key"]')).toBeNull(); expect(document.body.textContent).toContain("연결 정보 저장만 지원");
+    expect(document.querySelector('[aria-label="애플리케이션 Secret"]')).not.toBeNull(); expect(document.querySelector('[aria-label="Secret Key"]')).toBeNull(); expect(document.body.textContent).toContain("상품 가져오기·업로드는 아직 지원하지 않습니다");
   });
   it("renders one image/title card, saves edits and queues selected registered and missing stores", async () => {
     await render(<SourcingProducts companyId="company" projectId="project" view="uploads" />);
@@ -201,7 +210,7 @@ describe("store settings and common product editor", () => {
   it("provides the same editable fields from a sourcing item", async () => {
     product.listings = []; await render(<SourcingProducts companyId="company" projectId="project" view="source" />); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="소싱 상품 목록"] button[aria-pressed]')!.click()); await settle();
     await click("HTML 편집");
-    for (const label of ["상품명", "대표 이미지 URL", "카테고리 코드", "상세 설명", "옵션 1 상품명", "옵션 1-1 이름", "옵션 1-1 값"]) expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
+    for (const label of ["상품명", "대표 이미지 URL", "상세 설명", "옵션 1 상품명", "옵션 1-1 이름", "옵션 1-1 값"]) expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     expect(document.body.textContent).toContain("쇼핑몰 선택");
   });
 });
@@ -213,11 +222,15 @@ describe("managed product browser buffer and save-next", () => {
   }
   it("restores scoped unfinished edits after remount and clears the buffer only on cancel or successful save", async () => {
     await render(editor()); await input("상품명", "브라우저 초안");
+    await click("쇼핑몰"); await input("상단 이미지 주소", "https://images.example.test/draft-notice.png");
+    const top = host.querySelector<HTMLInputElement>('[aria-label="상단 이미지 주소"]')!.closest("fieldset")!;
+    await act(async () => [...top.querySelectorAll("button")].find(b => b.textContent === "추가")!.click()); await settle();
     await click("옵션·가격"); await click("기본정보");
     expect(host.querySelector<HTMLInputElement>('[aria-label="상품명"]')!.value).toBe("브라우저 초안");
     expect(host.textContent).toContain("브라우저 임시 저장됨 · 서버 저장 전");
     const key = productDraftKey("company", "project", product.id);
     expect(JSON.parse(window.localStorage.getItem(key)!).baseRevision).toBe(1);
+    expect(JSON.parse(window.localStorage.getItem(key)!).product.storeDetails[0].topImages).toEqual(["https://images.example.test/draft-notice.png"]);
     expect(mock.request.mock.calls.some(c => c[2].operation === "save")).toBe(false);
     await render(null); await render(editor({ projectId: "other" }));
     expect(host.querySelector<HTMLInputElement>('[aria-label="상품명"]')!.value).toBe("상품 A");
@@ -236,7 +249,7 @@ describe("managed product browser buffer and save-next", () => {
     expect(host.textContent).toContain("다른 저장 버전");
     await click("편집기로 복구");
     expect(host.querySelector<HTMLInputElement>('[aria-label="상품명"]')!.value).toBe("이전 버전 초안");
-    expect(host.querySelector<HTMLInputElement>('[aria-label="카테고리 코드"]')!.value).toBe("100");
+    expect(JSON.parse(window.localStorage.getItem(productDraftKey("company", "project", product.id))!).product.categoryCode).toBe("100");
     await click("변경 저장");
     expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "save", expectedRevision: 2 }));
     await render(null); writeProductDraft("company", "project", 1, { ...product, title: "폐기할 초안" }); await render(editor()); await click("임시 저장 폐기");

@@ -114,3 +114,22 @@
 - UI typecheck, UI production build, token gates, diff whitespace 검사 통과. 로그는 `/tmp/dovix-commerce-final-ui-{types,build}.log`, `/tmp/dovix-commerce-final-token-gates.log`. 빌드의 기존 큰 chunk/혼합 dynamic import 경고는 남는다.
 - 기존 설치 core8f8a0ab7e 및 entry index-DhP2jgWE.js 일치 확인. 코어/DB/API/서버 재시작 없이 검토된 merged dev UI만 정적 반영한다. PR 검토 전에는 병합/배포하지 않는다.
 - 운영 Chrome 최종 소싱/상품/주문 캡처는 부모 에이전트가 수행한다.
+
+## 후속 승인: 쇼핑몰 카테고리·상세 공지/배너 (2026-10-17)
+
+새 feature/commerce-category-details와 별도 AutoSourcing feature에서 구현한다. 공통 상품/기존 카테고리 호환을 보존하고 쇼핑몰 탭에서 각 store의 실제 taxonomy 검색·계층·필수정보를 선택·저장한다. CategorySupported와 발행 CatalogSupported를 분리하며 네이버 발행을 지원한다고 표시하지 않는다.
+
+공통공지 기본값은 설정에서 관리하고 managed 상품에 명시적 적용/재정의한다. 상단·하단 이미지 URL/순서/삭제/실제 미리보기는 원본문과 별도 저장, 동일 조합을 발행에도 사용한다. source-only 선택은 생성/저장/유료 작업을 일으키지 않으며 읽기 미리보기와 명시적 가공 시작을 구분한다. 부모가 실제 기존공지 이미지 근거를 전달한다. 임의 이미지를 만들지 않는다.
+
+초안 복구/저장readback/다음이동 비교에 새 편집필드를 포함하고 가격취소·충돌/등록category불변/회사projectstore scope를 검증한다. 관련 집중검사·UI/API빌드·token gates 및 Chrome 후보 화면만 검증하고 전체/stress/baseline 반복은 금지한다. 두 저장소 dev PR 제출 후 부모 검토 전 병합·배포하지 않는다.
+
+
+### 직접 구현 전환 및 검증 결과 (2026-10-17)
+
+사용자 요청으로 Sol 위임을 중단하고 부모가 직접 마무리했다. 카테고리는 쇼핑몰 탭에서 각각 설정하며 공통 코드 수동 입력을 제거했다. 구매 옵션은 기존 SKU별 값을 사용한다. 기본 공지는 쇼핑몰별 저장·버전 보호하며 가공 전 미리보기, 명시적 초안 복사, 상품별 재정의를 지원한다. 기존 공지는 썸네일에서 직접 선택하고 동일 URL 재삽입·상하단 각각20개 초과 선택을 막는다. 공지를 펼친 쇼핑몰 카드는 전체 너비로 확장하고 좁은 화면에서 잘리던 fieldset을 수정했다.
+
+- UI Catalog/draft/실제 공지 조합 23개 통과. Host/HTTP/SQLite 기존 경로 5개 통과. Native actual SQLite/HTTPS store 구성4개 및 기존 category/catalog9개 결과를 확인했다. 전체/stress 검사는 실행하지 않았다.
+- Shared build, UI typecheck/build, token gates 통과. 기존 Vite CSS highlight/큰 chunk 경고는 남는다.
+- Chrome 격리 DB에서 공지 선택·저장, 실제 PNG 크기/로드, source-only 상단→본문→하단 미리보기와 명시적 생성, 쿠팡·네이버 카테고리 각각 저장, 옵션별 값 보존을 확인했다. 390px에서 visible input/section/fieldset이 편집기 밖으로 넘치지 않음을 확인하고 viewport를 복구했다.
+- 증거: tmp/commerce-category-details/{settings-notice,source-notice-preview,product-categories-wide,product-categories-narrow,naver-category}.jpg. 개인정보·원본문·운영 계정 상태를 변경한 테스트는 없다. 실제 네이버 계정과 판매 상품 전송은 미검증이다.
+- 운영은 기존 core8f8 호환 절차를 따른다. AutoSourcing additive migration/DB backup → Dovix scoped shared/bridge/UI 순서로 반영하며 운영 DB journal 전체 교체는 금지한다. PR·운영 결과는 실제 실행 후 별도로 기록한다.

@@ -1,3 +1,4 @@
+import { SourcingNoticeDefaults } from "./SourcingNoticeDefaults";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StoreSettings } from "@paperclipai/shared";
@@ -34,11 +35,12 @@ export function SourcingStoreSettings({ companyId, projectId }: { companyId: str
     {data.data && !data.data.businesses.length && <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">사업자를 등록한 다음 사업자별 쇼핑몰을 추가해 주세요.</p>}
     {data.data?.businesses.map(b => <section key={b.id} className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">{b.name}</h3>{b.registrationNumber && <p className="text-xs text-muted-foreground">사업자번호 {b.registrationNumber}</p>}</div><Button variant="outline" size="sm" onClick={() => openStore(null, b.id)}>쇼핑몰 추가</Button></div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.data!.stores.filter(s => s.businessId === b.id).map(s => <article key={s.id} className="space-y-3 rounded-md border border-border p-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.data!.stores.filter(s => s.businessId === b.id).map(s => <article key={s.id} className="commerce-store-card min-w-0 space-y-3 rounded-md border border-border p-3">
         <button type="button" className="w-full text-left" onClick={() => openStore(s)}><span className="block font-medium">{s.name}</span><span className="text-xs text-muted-foreground">{data.data!.providers.find(p => p.id === s.provider)?.name} · {s.enabled ? "사용 중" : "사용 중지"} · {s.hasCredentials ? "연결 정보 저장됨" : "연결 정보 필요"}</span></button>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openStore(s)}>연결 정보</Button><Button size="sm" disabled={!s.enabled || !s.catalogSupported || mutate.isPending || s.importState === "running"} onClick={() => mutate.mutate({ operation: "import", storeId: s.id })}>{s.importState === "running" ? "가져오는 중" : s.importState === "failed" ? "가져오기 재개" : "쿠팡 상품 가져오기"}</Button></div>
-        {!s.catalogSupported && <p className="text-xs text-muted-foreground">계정 등록 지원 · 상품 연동 준비 중</p>}
+        <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => openStore(s)}>연결 정보</Button><Button size="sm" disabled={!s.enabled || !s.catalogSupported || mutate.isPending || s.importState === "running"} onClick={() => mutate.mutate({ operation: "import", storeId: s.id })}>{s.importState === "running" ? "가져오는 중" : s.importState === "failed" ? "가져오기 재개" : s.provider === "coupang" ? "쿠팡 상품 가져오기" : "상품 가져오기"}</Button></div>
+        {!s.catalogSupported && <p className="text-xs text-muted-foreground">{s.categorySupported ? "카테고리 조회 지원 · 상품 업로드 준비 중" : "계정 등록 지원 · 상품 연동 준비 중"}</p>}
         {s.importState === "succeeded" && <p className="text-xs text-muted-foreground">상품 가져오기 완료</p>}{s.importError && <p className="text-xs text-destructive">{catalogErrorMessage(new Error(s.importError))}</p>}
+      <SourcingNoticeDefaults companyId={companyId} projectId={projectId} storeId={s.id} />
       </article>)}</div>
       {!!data.data!.legacyAccounts.length && <label className="grid gap-1 text-sm">기존 판매 계정 연결<select aria-label={`${b.name} 기존 계정 연결`} className={fieldClass} value="" disabled={mutate.isPending} onChange={e => e.target.value && mutate.mutate({ operation: "attach", businessId: b.id, accountId: e.target.value })}><option value="">계정 선택</option>{data.data!.legacyAccounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.provider})</option>)}</select></label>}
     </section>)}
@@ -51,7 +53,7 @@ export function SourcingStoreSettings({ companyId, projectId }: { companyId: str
           {provider?.fields.map(f => <label key={f.key} className="grid gap-1 text-sm">{f.label}<input aria-label={f.label} className={fieldClass} type={f.secret ? "password" : "text"} autoComplete="off" required={f.required && !editing} maxLength={4096} value={credentials[f.key] ?? ""} placeholder={editing ? "변경할 때만 입력" : ""} onChange={e => setCredentials({ ...credentials, [f.key]: e.target.value })} /></label>)}
           {provider?.catalogSupported && <label className="grid gap-1 text-sm">배송 설정 기준 쿠팡 상품 ID (추가 등록용)<input aria-label="배송 설정 기준 상품 ID" className={fieldClass} value={template} inputMode="numeric" pattern="[0-9]*" maxLength={30} onChange={e => setTemplate(e.target.value)} /><span className="text-xs text-muted-foreground">이 쇼핑몰의 기존 상품에서 배송·반품 설정을 가져옵니다.</span></label>}
           <label className="flex gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />사용</label>
-          {!provider?.catalogSupported && <p className="text-sm text-muted-foreground">연결 정보 저장만 지원합니다. 상품 가져오기·업로드는 연동 구현 후 사용할 수 있습니다.</p>}
+          {!provider?.catalogSupported && <p className="text-sm text-muted-foreground">카테고리 조회 지원 여부는 쇼핑몰 설정에서 확인할 수 있습니다. 상품 가져오기·업로드는 아직 지원하지 않습니다. 네이버 인증은 개인 스토어 SELF 연결을 사용합니다.</p>}
         </>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}<Button type="submit" disabled={mutate.isPending}>{mutate.isPending ? "저장 중" : "저장"}</Button>
       </form></DialogContent></Dialog>
