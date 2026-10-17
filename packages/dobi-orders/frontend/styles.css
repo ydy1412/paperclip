@@ -23,3 +23,8 @@ tr[data-order-row]{cursor:pointer}.selectionbar{flex-wrap:wrap}.filterbar{flex-w
 .metric:first-child{background:transparent}.selectionbar{background:var(--muted)}#nav .nav-count{background:var(--muted);color:var(--muted-foreground)}
 
 #nav button[hidden]{display:none}
+
+.commerce-order-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--dobi-value-84);margin-bottom:var(--dobi-value-19)}
+.commerce-order-actions details .actions-inline{padding:var(--dobi-value-19)}
+.commerce-order-filters{border-bottom:var(--dobi-value-28) solid var(--border)}
+.commerce-order-filters>summary{cursor:pointer;padding:var(--dobi-value-19);color:var(--muted-foreground)}

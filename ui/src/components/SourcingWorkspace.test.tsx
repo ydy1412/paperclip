@@ -41,6 +41,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); cache.clear(); host.remove(); });
 
+async function chooseSize(value: string) { await act(async () => { const select = host.querySelector<HTMLSelectElement>('[aria-label="페이지당 조회 개수"]')!; select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); }); await settle(); }
 describe("candidate collection selection", () => {
   it("queries 20, 50 and 100 rows, resets the page and clears selections when the size changes", async () => {
     rows = Array.from({ length: 125 }, (_, i) => candidate(String(i + 1)));
@@ -54,13 +55,13 @@ describe("candidate collection selection", () => {
     await render(); expect(host.querySelectorAll('tbody tr')).toHaveLength(20);
     await click(button("다음")); expect(host.querySelector('nav')?.textContent).toContain("2 페이지");
     await click(all()); expect(host.textContent).toContain("20개 선택");
-    await click(button("50개 조회")); expect(host.querySelectorAll('tbody tr')).toHaveLength(50);
-    expect(host.querySelector('nav')?.textContent).toContain("1 페이지"); expect(host.textContent).toContain("0개 선택");
-    await click(button("100개 조회")); expect(host.querySelectorAll('tbody tr')).toHaveLength(100);
+    await chooseSize("50"); expect(host.querySelectorAll('tbody tr')).toHaveLength(50);
+    expect(host.querySelector('nav')?.textContent).toContain("1 페이지"); expect(all().getAttribute("aria-checked")).toBe("false");
+    await chooseSize("100"); expect(host.querySelectorAll('tbody tr')).toHaveLength(100);
     await click(button("다음")); expect(host.querySelectorAll('tbody tr')).toHaveLength(25); expect(button("다음").disabled).toBe(true);
     expect(requests()).toHaveLength(0);
   });
-  it("shows a compact candidate table with site, product ID and URL while preserving full keywords in details", async () => {
+  it("shows a compact candidate list with source access while preserving full keywords and IDs in details", async () => {
     rows = [candidate("732092188696")];
     rows[0].candidate!.mainKeyword = "장스탠드, 마카롱 램프, 스탠드 조명";
     rows[0].candidate!.subKeyword = "긴 서브 키워드와 검색용 문구";
@@ -68,7 +69,7 @@ describe("candidate collection selection", () => {
     await render();
     const table = host.querySelector('table')!;
     expect(table.querySelector('caption')?.textContent).toBe("소싱 후보 목록");
-    expect([...table.querySelectorAll('thead th')].map(th => th.textContent)).toEqual(["선택", "대표 키워드", "사이트", "상품 ID", "URL", "수집 상태"]);
+    expect([...table.querySelectorAll('thead th')].map(th => th.textContent)).toEqual(["", "수집 후보", "사이트", "수집 상태"]);
     expect(table.textContent).toContain("장스탠드"); expect(table.textContent).toContain("타오바오");
     expect(table.textContent).not.toContain("마카롱 램프"); expect(table.textContent).not.toContain("긴 서브 키워드");
     const link = table.querySelector<HTMLAnchorElement>('a')!;
@@ -89,14 +90,14 @@ describe("candidate collection selection", () => {
     await render();
     const tableRows = [...host.querySelectorAll('tbody tr')];
     expect(tableRows[0].textContent).toContain("타오바오");
-    expect(tableRows[1].querySelectorAll('td')[1].textContent).toBe("example.com");
-    expect(tableRows[2].querySelectorAll('td')[1].textContent).toBe("taobao.com.example.com");
+    expect(tableRows[1].querySelectorAll('td')[1].textContent).toContain("example.com");
+    expect(tableRows[2].querySelectorAll('td')[1].textContent).toContain("taobao.com.example.com");
     expect(tableRows[3].querySelector('a')).toBeNull(); expect(tableRows[3].textContent).toContain("URL 확인 필요");
     expect(requests()).toHaveLength(0);
   });
 
   it("selects only eligible candidates and queues each once without opening the detail panel", async () => {
-    await render(); expect(queue().disabled).toBe(true);
+    await render(); expect(host.querySelector('[aria-label="소싱 후보 정보"]')).toBeNull(); expect([...host.querySelectorAll("button")].some(b => b.textContent === "선택한 후보 수집 큐에 추가")).toBe(false);
     await click(checkbox("소싱 후보 선택: 후보 1"));
     expect(all().getAttribute("aria-checked")).toBe("mixed");
     expect(host.querySelector('[aria-label="소싱 후보 정보"]')).toBeNull();
@@ -105,7 +106,7 @@ describe("candidate collection selection", () => {
     await click(queue());
     expect(requests().map(call => call[2].candidateId)).toEqual(["1", "2"]);
     expect(requests().every(call => call[0] === "company" && call[1] === "project")).toBe(true);
-    expect(host.textContent).toContain("수집 요청 2개 접수"); expect(host.textContent).toContain("0개 선택");
+    expect(host.textContent).toContain("수집 요청 2개 접수"); expect(all().getAttribute("aria-checked")).toBe("false");
     expect(queue().disabled).toBe(true);
   });
 
@@ -130,7 +131,7 @@ describe("candidate collection selection", () => {
       return normal?.(...args);
     });
     await render(); await click(checkbox("소싱 후보 선택: 후보 1")); await click(queue());
-    expect(host.textContent).toContain("1개 확인 필요"); expect(host.textContent).toContain("0개 선택");
+    expect(host.textContent).toContain("1개 확인 필요"); expect(all().getAttribute("aria-checked")).toBe("false");
     expect(queue().disabled).toBe(true); expect(requests()).toHaveLength(1);
   });
 
@@ -152,7 +153,7 @@ describe("candidate collection selection", () => {
   it("keeps selection within its page, query, company and project and excludes newly busy candidates", async () => {
     rows.push(...Array.from({ length: 14 }, (_, index) => candidate(String(7 + index), "queued")));
     await render(); await click(checkbox("소싱 후보 선택: 후보 1"));
-    await click(button("다음")); expect(host.textContent).toContain("0개 선택");
+    await click(button("다음")); expect(all().getAttribute("aria-checked")).toBe("false");
     await click(checkbox("소싱 후보 선택: 후보 2"));
     await act(async () => {
       const input = host.querySelector<HTMLInputElement>('[aria-label="상품 검색 키워드"]')!;
@@ -160,11 +161,11 @@ describe("candidate collection selection", () => {
     });
     await act(async () => host.querySelector('form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); await settle();
     expect(mock.request).toHaveBeenCalledWith("company", "project", expect.objectContaining({ operation: "workspace", page: 1, query: "장스탠드" }));
-    expect(host.textContent).toContain("0개 선택");
-    await click(checkbox("소싱 후보 선택: 후보 1")); await render("other-company"); expect(host.textContent).toContain("0개 선택");
-    await click(checkbox("소싱 후보 선택: 후보 2")); await render("other-company", "other-project"); expect(host.textContent).toContain("0개 선택");
+    expect(all().getAttribute("aria-checked")).toBe("false");
+    await click(checkbox("소싱 후보 선택: 후보 1")); await render("other-company"); expect(all().getAttribute("aria-checked")).toBe("false");
+    await click(checkbox("소싱 후보 선택: 후보 2")); await render("other-company", "other-project"); expect(all().getAttribute("aria-checked")).toBe("false");
     await click(checkbox("소싱 후보 선택: 후보 1")); rows[0].candidate!.collectionState = "collecting";
     await act(async () => cache.invalidateQueries({ queryKey: ["sourcing-catalog", "other-company", "other-project"] })); await settle();
-    expect(host.textContent).toContain("0개 선택"); expect(queue().disabled).toBe(true); expect(requests()).toHaveLength(0);
+    expect(all().getAttribute("aria-checked")).toBe("false"); expect([...host.querySelectorAll("button")].some(b => b.textContent === "선택한 후보 수집 큐에 추가")).toBe(false); expect(requests()).toHaveLength(0);
   });
 });

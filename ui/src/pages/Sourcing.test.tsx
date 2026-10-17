@@ -5,13 +5,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BreadcrumbProvider, useBreadcrumbs } from "../context/BreadcrumbContext";
 import { Sourcing } from "./Sourcing";
 import { SourcingSidebar } from "../components/SourcingSidebar";
 import { ApiError } from "../api/client";
 
 const mock = vi.hoisted(() => ({ company: "company", mobile: false, closeSidebar: vi.fn(), projects: vi.fn(), breadcrumbs: vi.fn(), forwarders: vi.fn() }));
 vi.mock("../api/sourcing", () => ({ sourcingApi: { plugin: async () => null }, sourcingForwardersApi: { list: mock.forwarders } }));
-vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mock.breadcrumbs }) }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: mock.company, selectedCompany: { issuePrefix: "DOB" } }) }));
 vi.mock("../context/SidebarContext", () => ({ useSidebar: () => ({ isMobile: mock.mobile, collapsed: true, peeking: false, setSidebarOpen: mock.closeSidebar }) }));
 vi.mock("../hooks/useStreamlinedUiEnabled", () => ({ useStreamlinedUiEnabled: () => ({ enabled: false }) }));
@@ -50,10 +50,12 @@ describe("Shopping mall Settings-style workspace", () => {
     container.remove();
   });
 
+  function HeaderToolbar() { return <header>{useBreadcrumbs().breadcrumbToolbar}</header>; }
+
   async function render(url = "/DOB/sourcing?project=project") {
     await act(async () => root.render(
       <MemoryRouter initialEntries={[url]}><QueryClientProvider client={cache}>
-        <SourcingSidebar /><Sourcing /><Location />
+        <BreadcrumbProvider><HeaderToolbar /><SourcingSidebar /><Sourcing /><Location /></BreadcrumbProvider>
       </QueryClientProvider></MemoryRouter>,
     ));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
@@ -63,11 +65,11 @@ describe("Shopping mall Settings-style workspace", () => {
     await render();
     const nav = container.querySelector('nav[aria-label="Commerce"]')!;
     const links = [...nav.querySelectorAll("a")];
-    expect(links.map(link => link.textContent)).toEqual(["Sourcing", "Products", "Orders", "Store Settings"]);
+    expect(links.map(link => link.textContent)).toEqual(["소싱", "상품", "주문", "설정"]);
     expect(links[0].getAttribute("aria-current")).toBe("page");
     expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     expect(nav.querySelector(".sr-only")).toBeNull();
-    expect(container.querySelector('section[aria-label="Commerce"] h1')?.textContent).toBe("Sourcing");
+    expect(container.querySelector('section[aria-label="Commerce"] h1')?.textContent).toBe("소싱");
     expect(container.textContent).toContain("상품 가공 서비스 미연결");
     expect(container.textContent).not.toContain("예시 데이터");
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
@@ -76,16 +78,16 @@ describe("Shopping mall Settings-style workspace", () => {
   it("changes workflow and breadcrumb without losing the selected project", async () => {
     await render();
     await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(2)') as HTMLAnchorElement).click());
-    expect(container.querySelector("h1")?.textContent).toBe("Products");
+    expect(container.querySelector("h1")?.textContent).toBe("상품");
     expect(container.querySelector("[data-location]")?.textContent).toContain("project=project");
     expect(container.querySelector("[data-location]")?.textContent).toContain("view=uploads");
-    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "Commerce", href: "/sourcing" }, { label: "Products" }]);
-    expect(container.textContent).toContain("등록 상품을 공통 상품별로 관리합니다.");
+    expect(document.title).toContain("상품 • Commerce");
+    expect(container.querySelector('[aria-label="업로드 상품 목록"]')).not.toBeNull();
   });
 
   it("restores the orders view and mounts the independent order domain in the selected scope", async () => {
     await render("/DOB/sourcing?project=project&view=orders");
-    expect(container.querySelector("h1")?.textContent).toBe("Orders");
+    expect(container.querySelector("h1")?.textContent).toBe("주문");
     const workspace = container.querySelector('section[aria-label="주문 작업실"]');
     expect(workspace?.getAttribute("data-order-company")).toBe("company");
     expect(workspace?.getAttribute("data-order-project")).toBe("project");
@@ -107,7 +109,7 @@ describe("Shopping mall Settings-style workspace", () => {
 
   it("falls back to sourcing for an unknown workflow", async () => {
     await render("/DOB/sourcing?view=unrecognized");
-    expect(container.querySelector("h1")?.textContent).toBe("Sourcing");
+    expect(container.querySelector("h1")?.textContent).toBe("소싱");
   });
 
   it("shows access denial without rendering project names", async () => {
@@ -130,7 +132,7 @@ describe("Shopping mall Settings-style workspace", () => {
     await render();
     await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(3)') as HTMLAnchorElement).click());
     expect(mock.closeSidebar).toHaveBeenCalledWith(false);
-    expect(container.querySelector("h1")?.textContent).toBe("Orders");
+    expect(container.querySelector("h1")?.textContent).toBe("주문");
   });
   it("clears workflow-specific filters/detail but retains project on sidebar navigation", async () => {
     await render("/DOB/sourcing?project=project&view=orders&state=Shipping&account=seller&page=2&q=123&item=shipment&source=Taobao&validation=incomplete&data=live");
@@ -149,13 +151,13 @@ describe("Shopping mall Settings-style workspace", () => {
     await act(async () => (container.querySelector('nav[aria-label="Commerce"] a:nth-child(4)') as HTMLAnchorElement).click());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
     expect(container.querySelector("[data-location]")?.textContent).toBe("/DOB/sourcing?project=project&view=settings");
-    expect(container.querySelector("h1")?.textContent).toBe("Store Settings");
+    expect(container.querySelector("h1")?.textContent).toBe("설정");
     expect(container.querySelector('section[aria-label="배송대행지 관리"]')).not.toBeNull();
     expect(container.querySelector('section[aria-label="주문관리 연결 설정"]')?.getAttribute("data-order-project")).toBe("project");
     expect(container.textContent).toContain("배송대행지 추가");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(mock.forwarders).toHaveBeenCalledWith("company", "project");
-    expect(mock.breadcrumbs).toHaveBeenLastCalledWith([{ label: "Commerce", href: "/sourcing" }, { label: "Store Settings" }]);
+    expect(document.title).toContain("설정 • Commerce");
   });
   it("restores settings from URL and scopes its list to the changed project", async () => {
     await render("/DOB/sourcing?project=project&view=settings");
@@ -164,12 +166,27 @@ describe("Shopping mall Settings-style workspace", () => {
     await act(async () => { select.value = "second"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
     expect(mock.forwarders).toHaveBeenLastCalledWith("company", "second");
-    expect(container.querySelector("h1")?.textContent).toBe("Store Settings");
+    expect(container.querySelector("h1")?.textContent).toBe("설정");
   });
   it("does not request forwarders for an unavailable project", async () => {
     await render("/DOB/sourcing?project=unknown&view=settings");
     expect(mock.forwarders).not.toHaveBeenCalled();
     expect(container.textContent).toContain("배송대행지를 관리할 프로젝트를 선택해 주세요.");
+  });
+
+  it("restores order settings links into the requested section", async () => {
+    await render("/DOB/sourcing?project=project&view=settings&orderTab=settings");
+    expect(container.querySelector('#commerce-automation')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('#commerce-stores')?.hasAttribute('hidden')).toBe(true);
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>('nav[aria-label="설정 구획"] button')].find(b => b.textContent === '사업자·쇼핑몰')!.click());
+    expect(container.querySelector('[data-location]')?.textContent).toContain('orderTab=connections');
+    expect(container.querySelector('#commerce-stores')?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it("falls back to store settings when the section is invalid", async () => {
+    await render("/DOB/sourcing?project=project&view=settings&settingsSection=unknown");
+    expect(container.querySelector('#commerce-stores')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('#commerce-automation')?.hasAttribute('hidden')).toBe(true);
   });
 
 });
