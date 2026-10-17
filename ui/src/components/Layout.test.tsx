@@ -385,7 +385,7 @@ describe("Layout", () => {
     await flushReact();
     await flushReact();
     expect(container.textContent).toContain("Main company nav");
-    if (route === "sourcing") expect(mockSetForceCollapsed).toHaveBeenCalledWith(true);
+    expect(mockSetForceCollapsed).toHaveBeenCalledWith(true);
     expect(container.querySelector(`nav[aria-label="${label}"]`)).not.toBeNull();
     expect(container.querySelectorAll("[data-secondary-sidebar]")).toHaveLength(1);
     await act(async () => root.unmount());
