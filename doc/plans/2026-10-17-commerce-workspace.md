@@ -133,3 +133,10 @@
 - Chrome 격리 DB에서 공지 선택·저장, 실제 PNG 크기/로드, source-only 상단→본문→하단 미리보기와 명시적 생성, 쿠팡·네이버 카테고리 각각 저장, 옵션별 값 보존을 확인했다. 390px에서 visible input/section/fieldset이 편집기 밖으로 넘치지 않음을 확인하고 viewport를 복구했다.
 - 증거: tmp/commerce-category-details/{settings-notice,source-notice-preview,product-categories-wide,product-categories-narrow,naver-category}.jpg. 개인정보·원본문·운영 계정 상태를 변경한 테스트는 없다. 실제 네이버 계정과 판매 상품 전송은 미검증이다.
 - 운영은 기존 core8f8 호환 절차를 따른다. AutoSourcing additive migration/DB backup → Dovix scoped shared/bridge/UI 순서로 반영하며 운영 DB journal 전체 교체는 금지한다. PR·운영 결과는 실제 실행 후 별도로 기록한다.
+
+
+### 운영 확인 후 보완
+
+Native PR28/dev2eebd02와 Dovix PR43/dev00db8de 운영 반영 완료. Dovix core8f8/journal/기존 도메인 및 확장 다운로드의 hash를 보존했고 PostgreSQL 백업을 읽어 검증했다. 실제 쿠팡 카테고리 GET은 성공했다. Native는 DB 사본/운영 DB51개 기존 테이블과 수집 대기11건을 보존했다. 실행 전 명시적 CLI migration이 필요하고 launchd teardown 완료 후 재등록한다. 초기 절차 누락과 재등록 실패는 복구했으며 영수증에 원인/복구 경계를 남겼다.
+
+선택 속성·인증·서류는 접어서 필수값과 상하단 이미지가 먼저 보이게 한다. 운영 상품의 http 이미지가 새 HTTPS 선택 목록에서 제외되는 문제를 확인해 backend reference/조합/공지 제외와 UI 조합에 동일한 HTTPS 정규화를 적용한다. 원본문은 변경하지 않는다. 운영의 기존 공지 선택과 가공 전 미리보기를 다시 검증하고 결과는 tmp/commerce-category-details에 기록한다.
