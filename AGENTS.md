@@ -159,24 +159,17 @@ Notes:
 
 ## 7. Verification Before Hand-off
 
-Default local/agent test path:
+Choose verification from the changed behavior. For layout changes, check the
+affected screens, related interactions, and the UI build. Run focused tests for
+changed behavior; do not add tests that only repeat styles or DOM structure.
+Reuse valid results while their code and environment remain unchanged.
 
-```sh
-pnpm test
-```
+Do not run repo-wide tests, unrelated server suites, external integration tests,
+or repeated baseline comparisons merely to prepare a layout PR. Expand checks
+only when an affected dependency, a new failure, or an explicit release request
+requires them. Record the reason before starting an expensive check.
 
-This is the cheap default and only runs the Vitest suite. Browser suites stay opt-in:
-
-```sh
-pnpm test:e2e
-pnpm test:release-smoke
-```
-
-Run the browser suites only when your change touches them or when you are explicitly verifying CI/release flows.
-
-For normal issue work, run the smallest relevant verification first. Do not default to repo-wide typecheck/build/test on every heartbeat when a narrower check is enough to prove the change.
-
-Run this full check before claiming repo work done in a PR-ready hand-off, or when the change scope is broad enough that targeted checks are not sufficient:
+Repo-wide checks remain available for changes that require that scope:
 
 ```sh
 pnpm -r typecheck
@@ -184,7 +177,14 @@ pnpm test:run
 pnpm build
 ```
 
-If anything cannot be run, explicitly report what was not run and why.
+Browser release suites (`pnpm test:e2e`, `pnpm test:release-smoke`) and stress
+fixtures are opt-in. The real Git streaming stress test creates 40,000 files;
+it is skipped unless `PAPERCLIP_RUN_GIT_STRESS_TEST=1` is set explicitly. See
+`doc/DEVELOPING.md` for the isolated command. Never enable it for routine UI work.
+
+Report the actual check scope, results, and anything not run. A focused pass is
+not a repo-wide pass. Stop at the agreed verification scope; do not automatically
+launch unrelated recovery tests after a failure.
 
 ## 8. API and Auth Expectations
 
@@ -223,7 +223,7 @@ When creating a pull request (via `gh pr create` or any other method), you **mus
 A change is done when all are true:
 
 1. Behavior matches `doc/SPEC-implementation.md`
-2. Typecheck, tests, and build pass
+2. Checks required by the changed scope pass, with unrun checks reported
 3. Contracts are synced across db/shared/server/ui
 4. Docs updated when behavior or commands change
 5. PR description follows the [PR template](.github/PULL_REQUEST_TEMPLATE.md) with all sections filled in (including Model Used)

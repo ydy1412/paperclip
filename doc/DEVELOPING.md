@@ -31,6 +31,22 @@ checkout can reproduce its dependencies. Do not assume the upstream trusted
 runner or package-publishing workflow runs successfully in this fork. Validate
 the lockfile and existing local checks before integration.
 
+## Focused verification and optional stress tests
+
+Match checks to the change. Layout work needs affected screen and interaction
+checks plus the UI build. It does not require the full server suite. Record
+unrun checks rather than claiming the whole repository passed.
+
+The Git streaming stress fixture creates 40,000 temporary files to exercise
+filename streams above 32 MiB. Routine Vitest runs skip it. Run it alone only
+when validating that Git streaming behavior or explicitly requested stress work:
+
+```sh
+PAPERCLIP_RUN_GIT_STRESS_TEST=1 pnpm exec vitest run --project @paperclipai/server server/src/services/workspace-git-snapshot-streaming.test.ts
+```
+
+Do not include that command in routine UI validation or automatic retry scripts.
+
 ## Dovix Git and release workflow
 
 - `origin` is `ydy1412/paperclip`, the Dovix repository. `upstream` is
