@@ -1,4 +1,4 @@
-import type { ManagedProduct } from "@paperclipai/shared";
+import { storeProductDetailSchema, type ManagedProduct } from "@paperclipai/shared";
 
 export interface ProductDraftRecord { version: 1; companyId: string; projectId: string; baseRevision: number; product: ManagedProduct }
 // Buffers retain unfinished names/prices; server validation still applies on save.
@@ -8,6 +8,7 @@ function isRecord(value: unknown): value is ProductDraftRecord {
   const text = (v: unknown, max: number) => typeof v === "string" && v.length <= max;
   return r.version === 1 && typeof r.companyId === "string" && typeof r.projectId === "string" && Number.isInteger(r.baseRevision) && r.baseRevision > 0 && !!p &&
     text(p.id, 100) && text(p.title, 100) && text(p.mainImage, 4096) && text(p.description, 2000000) && text(p.categoryCode, 100) &&
+    (p.storeDetails == null || Array.isArray(p.storeDetails) && p.storeDetails.length <= 50 && p.storeDetails.every(d => storeProductDetailSchema.safeParse(d).success)) &&
     Array.isArray(p.skus) && p.skus.length <= 1000 && p.skus.every(s => s && text(s.id, 100) && text(s.name, 1000) && text(s.image, 4096) &&
       (s.salePrice == null || typeof s.salePrice === "number" && Number.isFinite(s.salePrice)) && Array.isArray(s.options) && s.options.length <= 100 && s.options.every(o => o && text(o.name, 1000) && text(o.value, 1000)));
 }
@@ -29,6 +30,11 @@ export function clearProductDraft(companyId: string, projectId: string, productI
 }
 /** Only editable fields are restored; ownership, listings and revision always come from the live read. */
 export function restoreProductDraft(current: ManagedProduct, record: ProductDraftRecord): ManagedProduct {
-  const { title, mainImage, description, categoryCode, skus } = record.product;
-  return { ...current, title, mainImage, description, categoryCode: current.listings.length ? current.categoryCode : categoryCode, skus };
+  const { title, mainImage, description, categoryCode, skus, storeDetails } = record.product;
+  return { ...current, title, mainImage, description, categoryCode: current.listings.length ? current.categoryCode : categoryCode, skus, storeDetails: storeDetails?.map(detail => {
+    if (!current.listings.some(l => l.storeId === detail.storeId && !!l.remoteProductId)) return detail;
+    const saved = current.storeDetails?.find(d => d.storeId === detail.storeId);
+    const categoryId = saved?.categoryId ?? current.categoryCode;
+    return { ...detail, categoryId, values: categoryId === detail.categoryId ? detail.values : saved?.values ?? {} };
+  }) };
 }

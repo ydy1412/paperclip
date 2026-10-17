@@ -3864,6 +3864,7 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 .commerce-product-fields { display: grid; min-width: 0; gap: calc(var(--spacing) * 6); }
 .commerce-product-photo { width: var(--commerce-photo-size); height: var(--commerce-photo-size); max-width: 100%; object-fit: contain; background: var(--muted); border-radius: var(--radius-md); }
 .commerce-editor-tabs { display: flex; gap: calc(var(--spacing) * 6); border-bottom: 1px solid var(--border); }
+.commerce-store-card:has(> details[open]) { grid-column: 1 / -1; }
 .commerce-editor-tabs button { padding: calc(var(--spacing) * 3) 0; border-bottom: 2px solid transparent; font-size: var(--text-sm); color: var(--muted-foreground); }
 .commerce-editor-tabs button[aria-pressed="true"] { border-color: var(--foreground); color: var(--foreground); font-weight: 600; }
 .commerce-product-row { display: flex; width: 100%; gap: calc(var(--spacing) * 3); padding: calc(var(--spacing) * 3); border-bottom: 1px solid var(--border); border-left: 3px solid transparent; text-align: left; }
