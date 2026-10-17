@@ -12,6 +12,8 @@ import { ApiError } from "../api/client";
 
 const mock = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("../api/sourcing", () => ({ sourcingCatalogApi: mock }));
+// Geometry is verified in Chrome; jsdom has no ResizeObserver.
+vi.mock("./SourcingEditorLayout", () => ({ SourcingEditorLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("./SourcingProcessing", () => ({ SourcingProcessing: () => null }));
 const business = "a".repeat(32), storeA = "b".repeat(32), storeB = "c".repeat(32), productId = "d".repeat(32);
 let settings: StoreSettings; let product: ManagedProduct; let root: Root; let host: HTMLDivElement; let cache: QueryClient;

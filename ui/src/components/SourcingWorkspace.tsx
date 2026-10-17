@@ -8,6 +8,7 @@ import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { SourcingSourcePreview } from "./SourcingSourcePreview";
+import { SourcingEditorLayout } from "./SourcingEditorLayout";
 import { SourcingProductEditor } from "./SourcingProductEditor";
 import { SourcingProcessing } from "./SourcingProcessing";
 import { SourcingImageJobs } from "./SourcingImageJobs";
@@ -100,7 +101,7 @@ export function SourcingWorkspace({ companyId, projectId, onEditingChange }: { c
       <p className="text-xs text-muted-foreground">큐에 넣은 순서대로 한 상품씩 수집합니다.</p>
       {result && <><p role="status" className="text-sm">수집 요청 {result.accepted}개 접수{result.failures.length > 0 && ` · ${result.failures.length}개 확인 필요`}</p>{result.failures.length > 0 && <ul className="space-y-1 text-sm text-destructive">{result.failures.map(item => <li key={item.id}>{item.title}: {item.message}</li>)}</ul>}</>}
     </div>}
-    <div className="commerce-editor-layout"><section aria-label="소싱 상품 목록" className="min-w-0 space-y-2">    <form aria-label="상품 키워드 검색" className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); if (dirty || busy) return; setQuery(search.trim()); setPage(1); setSelected(null); }}><label className="grid min-w-0 flex-1 gap-1 text-sm"><span className="sr-only">키워드 검색</span><Input aria-label="상품 검색 키워드" type="search" placeholder="상품명·상품번호·메인/서브 키워드" maxLength={200} disabled={dirty || busy} value={search} onChange={e => setSearch(e.target.value)} /></label><Button disabled={dirty || busy}>검색</Button><Button type="button" variant="outline" disabled={dirty || busy || (!search && !query)} onClick={() => { setSearch(""); setQuery(""); setPage(1); setSelected(null); }}>검색 초기화</Button></form>
+    <SourcingEditorLayout><section aria-label="소싱 상품 목록" className="min-w-0 space-y-2">    <form aria-label="상품 키워드 검색" className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); if (dirty || busy) return; setQuery(search.trim()); setPage(1); setSelected(null); }}><label className="grid min-w-0 flex-1 gap-1 text-sm"><span className="sr-only">키워드 검색</span><Input aria-label="상품 검색 키워드" type="search" placeholder="상품명·상품번호·메인/서브 키워드" maxLength={200} disabled={dirty || busy} value={search} onChange={e => setSearch(e.target.value)} /></label><Button disabled={dirty || busy}>검색</Button><Button type="button" variant="outline" disabled={dirty || busy || (!search && !query)} onClick={() => { setSearch(""); setQuery(""); setPage(1); setSelected(null); }}>검색 초기화</Button></form>
 
       <div className="commerce-list-scroll">{list.isLoading && <p className="text-sm text-muted-foreground">상품 조회 중</p>}
       {list.data?.length === 0 && <p className="rounded-lg border border-border p-6 text-sm text-muted-foreground">{query ? "검색 결과가 없습니다." : stage === "candidate" || stage === "all" ? "기존 소싱 후보를 불러오거나 다른 단계를 선택해 주세요." : "이 단계의 상품이 없습니다."}</p>}
@@ -132,7 +133,7 @@ export function SourcingWorkspace({ companyId, projectId, onEditingChange }: { c
           {candidate ? <><dl className="space-y-2 text-sm"><div><dt className="text-muted-foreground">메인 키워드</dt><dd>{candidate.mainKeyword || "없음"}</dd></div><div><dt className="text-muted-foreground">서브 키워드</dt><dd>{candidate.subKeyword || "없음"}</dd></div><div><dt className="text-muted-foreground">수집 상태</dt><dd>{collectionStates[candidate.collectionState]}</dd></div></dl>{candidate.errorCode && <p className="text-sm text-destructive">{catalogErrorMessage(new Error(candidate.errorCode))}</p>}<Button disabled={selectionDisabled || !["idle", "failed"].includes(candidate.collectionState)} onClick={() => action.mutate({ operation: "candidate-collect", candidateId: candidate.id })}>{candidate.collectionState === "failed" ? "수집 다시 시작" : "Aside로 수집 시작"}</Button>{candidate.collectionState === "reconciliation_required" && <p className="text-sm text-muted-foreground">기존 수집 세션의 결과를 확인하고 있습니다. 자동으로 새 수집을 시작하지 않습니다.</p>}</>
             : null}
         </aside> : <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">상품을 선택하면 해당 단계의 정보와 작업이 표시됩니다.</div>}
-    </div>
+    </SourcingEditorLayout>
 
 
     <details className="rounded-lg border border-border p-4"><summary className="cursor-pointer text-sm font-medium">고급 도구 · 원본 근거·크롭 계획 가공</summary><div className="pt-4"><SourcingProcessing companyId={companyId} projectId={projectId} /></div></details>
