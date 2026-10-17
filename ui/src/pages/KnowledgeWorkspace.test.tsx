@@ -5,9 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { KnowledgeWorkspace } from "./KnowledgeWorkspace";
-const mock = vi.hoisted(() => ({ vaults: vi.fn(), read: vi.fn(), crumbs: vi.fn() }));
+const mock = vi.hoisted(() => ({ vaults: vi.fn(), read: vi.fn(), crumbs: vi.fn(), toolbar: vi.fn() }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company", selectedCompany: null }) }));
-vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mock.crumbs }) }));
+vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mock.crumbs, setBreadcrumbToolbar: mock.toolbar }) }));
 vi.mock("../api/knowledgeWorkspace", () => ({ knowledgeWorkspaceApi: { vaults: mock.vaults, read: mock.read, file: () => "/file" } }));
 vi.mock("../api/plugins", () => ({ pluginsApi: { list: async () => [] } }));
 vi.mock("./Knowledge", () => ({ Knowledge: () => <div>기존 Paperclip 보관함</div> }));
@@ -43,6 +43,28 @@ beforeEach(() => { vi.clearAllMocks(); container = document.createElement("div")
 afterEach(() => { if (root) flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 describe("Knowledge workspace", () => {
   it("defaults to the personal vault and opens source-backed summary and original", async () => { render(); await wait(() => expect(container.textContent).toContain("summary.md")); flushSync(() => (container.querySelector('[data-tree-id="summary"]') as HTMLButtonElement).click()); await wait(() => expect(container.textContent).toContain("근거 있는 요약")); flushSync(() => (container.querySelector('.knowledge-source-card') as HTMLButtonElement).click()); await wait(() => expect(container.textContent).toContain("현재 원문")); expect(mock.read).toHaveBeenCalledWith("company", "brain", "knowledge_document", { id: "original" }, expect.any(AbortSignal)); });
+  it("clears Knowledge scope controls when leaving the workspace", async () => {
+    render('/knowledge/ask?vault=brain&project=Alpha');
+    await wait(() => expect(container.querySelector('[aria-label="Project"]')).not.toBeNull());
+    expect(mock.toolbar.mock.calls.at(-1)?.[0]).toBeTruthy();
+    flushSync(() => root.render(<div>Another page</div>));
+    expect(mock.toolbar).toHaveBeenLastCalledWith(null);
+  });
+  it("selects one recalled passage while retaining the source-backed answer workflow", async () => {
+    const normal = mock.read.getMockImplementation()!;
+    mock.read.mockImplementation(async (...args) => args[2] === 'memory_recall' ? {items: [
+      {id:'first', text:'첫 번째 근거 전문', reference:summary.references[0]},
+      {id:'second', text:'두 번째 근거 전문', reference:{...summary.references[0], path:'Inbox/second.md'}},
+    ], incomplete:false} : normal(...args));
+    render('/knowledge/ask?vault=brain');
+    await wait(() => expect(container.querySelector('.knowledge-ask-suggestions button')).not.toBeNull());
+    flushSync(() => (container.querySelector('.knowledge-ask-suggestions button') as HTMLButtonElement).click());
+    await wait(() => expect(container.querySelectorAll('.knowledge-result-row')).toHaveLength(2));
+    expect(container.querySelector('[aria-label="Evidence detail"]')?.textContent).toContain('첫 번째 근거 전문');
+    flushSync(() => (container.querySelectorAll('.knowledge-result-row')[1] as HTMLButtonElement).click());
+    expect(container.querySelector('[aria-label="Evidence detail"]')?.textContent).toContain('두 번째 근거 전문');
+    expect(container.querySelectorAll('.knowledge-result-row')[1].getAttribute('aria-pressed')).toBe('true');
+  });
   it("preserves legacy document links in the separate Paperclip vault", async () => { render("/knowledge?id=old-page&project=old-project"); await wait(() => expect(container.textContent).toContain("기존 Paperclip 보관함")); expect(mock.read).not.toHaveBeenCalled(); });
   it("shows search evidence before requesting a generated answer and opens its original", async () => {
     render("/knowledge/ask?vault=brain&project=Alpha");
@@ -64,7 +86,7 @@ describe("Knowledge workspace", () => {
     render("/knowledge/ask?vault=brain&project=Alpha");
     await wait(() => expect(container.querySelector('.knowledge-ask-suggestions button')).not.toBeNull());
     flushSync(() => (container.querySelector('.knowledge-ask-suggestions button') as HTMLButtonElement).click());
-    await wait(() => expect(container.textContent).toContain("Generate answer"));
+    await wait(() => expect([...container.querySelectorAll('button')].find(b => b.textContent === "Generate answer")?.disabled).toBe(false));
     flushSync(() => [...container.querySelectorAll('button')].find(b => b.textContent === "Generate answer")!.click());
     await wait(() => expect(container.textContent).toContain("Cancel generation"));
     expect(container.querySelector('.knowledge-answer-evidence')?.textContent).toContain("original.md");
@@ -82,7 +104,7 @@ describe("Knowledge workspace", () => {
     render("/knowledge/ask?vault=brain");
     await wait(() => expect(container.querySelector('.knowledge-ask-suggestions button')).not.toBeNull());
     flushSync(() => (container.querySelector('.knowledge-ask-suggestions button') as HTMLButtonElement).click());
-    await wait(() => expect(container.textContent).toContain("Generate answer"));
+    await wait(() => expect([...container.querySelectorAll('button')].find(b => b.textContent === "Generate answer")?.disabled).toBe(false));
     flushSync(() => [...container.querySelectorAll('button')].find(b => b.textContent === "Generate answer")!.click());
     deadlines.get(30_000)!.abort();
     await wait(() => expect(container.textContent).toContain("30초를 초과했습니다"));

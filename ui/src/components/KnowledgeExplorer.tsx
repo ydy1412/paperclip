@@ -255,7 +255,7 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
   return <div className="kb-workspace">
     {error && !modal && <p role="alert" className="knowledge-alert">{error}</p>}
     <ResizablePanelGroup orientation="horizontal" className="kb-panels">
-      {showTree && <><ResizablePanel defaultSize="25%" minSize="18%" maxSize="50%" className="kb-tree-panel">{treeContent}</ResizablePanel><ResizableHandle className="kb-resize-handle" /></>}
+      {showTree && <><ResizablePanel defaultSize="32%" minSize="24%" maxSize="50%" className="kb-tree-panel">{treeContent}</ResizablePanel><ResizableHandle className="kb-resize-handle" /></>}
       <ResizablePanel minSize="40%">{reader}</ResizablePanel>
     </ResizablePanelGroup>
     <Dialog open={!!modal} onOpenChange={open => { if (!open && !busy) setModal(null); }}><DialogContent><DialogHeader><DialogTitle>{modal && labels[modal.action]}</DialogTitle><DialogDescription>{modal?.action === "trash" ? "내용을 보존해 휴지통으로 이동합니다. 하위 폴더와 파일도 함께 이동합니다." : modal?.action === "latest" ? "최신 원문을 확인하고 선택하세요. 최신본 사용을 누르면 현재 임시 입력을 버립니다." : "Personal Brain의 실제 폴더와 파일에 반영합니다."}</DialogDescription></DialogHeader>

@@ -124,6 +124,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const companyPathSegments = shellRoute.companySegments;
   const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
   const isKnowledgeRoute = companyPathSegments[0]?.toLowerCase() === "knowledge";
+  const compactWorkspace = isSourcingRoute || isKnowledgeRoute;
   const isTaskDetailRoute = shellRoute.isTaskDetail;
   const { enabled: agentChatEnabled } = useAgentChatEnabled();
   const isAgentChatRoute = agentChatEnabled && companyPathSegments[0]?.toLowerCase() === "chats";
@@ -233,8 +234,8 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     || isToolsRoute
     || isKnowledgeRoute
   );
-  const replacesPrimarySidebar = streamlinedUiEnabled && !isSourcingRoute && hasSecondarySidebar && !keepsPrimarySidebar;
-  const showsAdjacentSecondarySidebar = hasSecondarySidebar && (isSourcingRoute || !streamlinedUiEnabled || keepsPrimarySidebar);
+  const replacesPrimarySidebar = streamlinedUiEnabled && !compactWorkspace && hasSecondarySidebar && !keepsPrimarySidebar;
+  const showsAdjacentSecondarySidebar = hasSecondarySidebar && (compactWorkspace || !streamlinedUiEnabled || keepsPrimarySidebar);
   const contextualSurface: ContextualSidebarSurface | null = !streamlinedUiEnabled || !hasSecondarySidebar
     ? null
     : routeSidebarSlot && !shellRoute.builtInContextualSurface
@@ -256,9 +257,9 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   });
 
   useLayoutEffect(() => {
-    setForceCollapsed(isSourcingRoute || (!streamlinedUiEnabled && hasSecondarySidebar));
+    setForceCollapsed(compactWorkspace || (!streamlinedUiEnabled && hasSecondarySidebar));
     return () => setForceCollapsed(false);
-  }, [hasSecondarySidebar, isSourcingRoute, setForceCollapsed, streamlinedUiEnabled]);
+  }, [hasSecondarySidebar, compactWorkspace, setForceCollapsed, streamlinedUiEnabled]);
 
   useEffect(() => {
     const previous = previousShellRoute.current;
@@ -677,15 +678,15 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
           </div>
         ) : (
           <SidebarShell
-            className={isSourcingRoute ? "commerce-rail" : undefined}
+            className={isKnowledgeRoute ? "knowledge-rail" : isSourcingRoute ? "commerce-rail" : undefined}
             open={sidebarOpen}
-            collapsed={isSourcingRoute ? true : replacesPrimarySidebar ? false : collapsed}
-            peeking={isSourcingRoute || replacesPrimarySidebar ? false : peeking}
+            collapsed={compactWorkspace ? true : replacesPrimarySidebar ? false : collapsed}
+            peeking={compactWorkspace || replacesPrimarySidebar ? false : peeking}
             resizable
-            onPanelMouseEnter={isSourcingRoute || replacesPrimarySidebar ? undefined : handlePanelPointerEnter}
-            onPanelMouseLeave={isSourcingRoute || replacesPrimarySidebar ? undefined : handlePanelPointerLeave}
-            onPanelFocusCapture={!isSourcingRoute && !replacesPrimarySidebar && collapsed ? handlePanelFocus : undefined}
-            onPanelBlurCapture={!isSourcingRoute && !replacesPrimarySidebar && collapsed ? handlePanelBlur : undefined}
+            onPanelMouseEnter={compactWorkspace || replacesPrimarySidebar ? undefined : handlePanelPointerEnter}
+            onPanelMouseLeave={compactWorkspace || replacesPrimarySidebar ? undefined : handlePanelPointerLeave}
+            onPanelFocusCapture={!compactWorkspace && !replacesPrimarySidebar && collapsed ? handlePanelFocus : undefined}
+            onPanelBlurCapture={!compactWorkspace && !replacesPrimarySidebar && collapsed ? handlePanelBlur : undefined}
           >
             <div className="flex flex-1 min-h-0">
               {replacesPrimarySidebar ? (
@@ -702,7 +703,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         )}
 
         {!isMobile && showsAdjacentSecondarySidebar && !keepsPrimarySidebar ? (
-          <SecondarySidebar className={isSourcingRoute ? "commerce-sidebar" : "w-60 shrink-0"}>
+          <SecondarySidebar className={compactWorkspace ? "commerce-sidebar" : "w-60 shrink-0"}>
             {secondarySidebar}
           </SecondarySidebar>
         ) : null}

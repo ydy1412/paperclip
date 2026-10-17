@@ -159,6 +159,7 @@ export function Layout() {
   const isToolsRoute = companyPathSegments[0]?.toLowerCase() === "tools";
   const isSourcingRoute = companyPathSegments[0]?.toLowerCase() === "sourcing";
   const isKnowledgeRoute = companyPathSegments[0]?.toLowerCase() === "knowledge";
+  const compactWorkspace = isSourcingRoute || isKnowledgeRoute;
   const isAppsRoute = companyPathSegments[0]?.toLowerCase() === "apps";
   const appDetailConnectionId =
     isAppsRoute &&
@@ -690,15 +691,15 @@ export function Layout() {
             </div>
           ) : (
             <SidebarShell
-              className={isSourcingRoute ? "commerce-rail" : undefined}
+              className={isKnowledgeRoute ? "knowledge-rail" : isSourcingRoute ? "commerce-rail" : undefined}
               open={sidebarOpen}
-              collapsed={isSourcingRoute ? true : collapsed}
-              peeking={isSourcingRoute ? false : peeking}
+              collapsed={compactWorkspace ? true : collapsed}
+              peeking={compactWorkspace ? false : peeking}
               resizable
-              onPanelMouseEnter={isSourcingRoute ? undefined : handlePanelPointerEnter}
-              onPanelMouseLeave={isSourcingRoute ? undefined : handlePanelPointerLeave}
-              onPanelFocusCapture={!isSourcingRoute && collapsed ? handlePanelFocus : undefined}
-              onPanelBlurCapture={!isSourcingRoute && collapsed ? handlePanelBlur : undefined}
+              onPanelMouseEnter={compactWorkspace ? undefined : handlePanelPointerEnter}
+              onPanelMouseLeave={compactWorkspace ? undefined : handlePanelPointerLeave}
+              onPanelFocusCapture={!compactWorkspace && collapsed ? handlePanelFocus : undefined}
+              onPanelBlurCapture={!compactWorkspace && collapsed ? handlePanelBlur : undefined}
             >
               <div className="flex flex-1 min-h-0">
                 <Sidebar />
@@ -708,7 +709,7 @@ export function Layout() {
           )}
 
           {!isMobile && hasSecondarySidebar ? (
-            <SecondarySidebar className={isSourcingRoute ? "commerce-sidebar" : undefined}>{secondarySidebar}</SecondarySidebar>
+            <SecondarySidebar className={compactWorkspace ? "commerce-sidebar" : undefined}>{secondarySidebar}</SecondarySidebar>
           ) : null}
 
           <div

@@ -229,3 +229,40 @@ entry files, and verify served hashes plus knowledge API reads. Core, running
 agent processes, database schema and credentials do not require changes. The
 private deployment receipt records before/after hashes, health, and rollback
 paths; restore its two saved entry files to revert this UI rollout.
+
+## 2026-10-17: Match Knowledge page bodies to Commerce
+
+The user requests the existing Commerce design for all Knowledge subpages.
+Use the current compact page title, breadcrumb toolbar scope controls, standard
+search inputs/buttons and one bordered list/detail workspace. Remove the large
+Ask introduction and independent connection-status row. Library keeps its real
+folder tree, resizable document editor and source links inside the same card
+rhythm. Ask uses a compact result list and a selected-evidence detail pane;
+optional generated answers, wait limits and cancellation still work. Graph
+keeps its white canvas, with compact controls and the same detail-panel spacing.
+
+Apply Commerce's compact global rail and contextual-sidebar width to Knowledge
+in both shells. Keep English navigation names, vault/project/legacy links,
+credential boundaries, drafts, original provenance and existing read/write
+behavior. Scope controls live in the breadcrumb toolbar and clear on unmount.
+Verify actual authenticated Commerce before editing; compare the three candidate
+Knowledge pages, then test selection, source opening, editor modes and graph
+selection under desktop/mobile and light/dark conditions. Deploy only the
+reviewed UI assets with a recorded backup and served hashes.
+
+Verification: 124 focused tests in seven suites passed. UI TypeScript, token
+gates and production build passed. Aside u1 read actual Commerce and compared
+the candidate through the existing Vite preview proxy and the user's normal
+browser session. No token injection or auth change was used. The candidate
+rendered a real document, returned 17 recall items, selected one passage, opened
+its original and read graph evidence. Its checked flow had no window error,
+unhandled rejection or failed request. Actual desktop rail/sidebar widths were
+64/160px, with no horizontal page overflow. Fixture checks also covered optional
+AI generation, editor Edit/Split modes, graph selection and light/dark palettes.
+Three 390px iframe layouts had no page overflow; these are not physical-phone
+tests. Private evidence is retained in tmp/knowledge-page-layout.
+
+UI-only rollout must preserve the current Commerce release's static entry hash
+until the final switch. Record the merged dev commit, back up index.html/sw.js,
+retain hashed assets, verify served JS/CSS hashes and keep the server process
+running. Core, credentials and database need no changes for this layout work.

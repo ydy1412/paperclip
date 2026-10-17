@@ -41,7 +41,12 @@ Knowledge and Commerce use the same contextual-sidebar layout in desktop and
 mobile shells. The company sidebar contains one link per domain. Domain pages
 own their local navigation and an All menus link. Do not nest the Knowledge
 pages in the global company menu or repeat desktop page tabs above the content.
-Keep vault/project selection when moving between Knowledge pages.
+Keep vault/project selection when moving between Knowledge pages. Knowledge
+page bodies follow the Commerce workbench: a text-base page title, scope controls
+in the breadcrumb toolbar (in-page on mobile), ordinary search controls and one
+bordered list/detail workspace. Library keeps a resizable tree/editor. Search
+uses selectable evidence rows with full detail on the right. Avoid oversized
+welcome headings, a separate status row, or a second outer page frame.
 
 Use English for built-in global and domain menu names: Knowledge, Library,
 Ask & Search, Knowledge Graph, Commerce, Sourcing, Products, Orders, Store
