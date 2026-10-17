@@ -1,6 +1,6 @@
 import type { StoreProductDetail } from "@paperclipai/shared";
 const decode = (url: string) => url.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#(?:39|x27);/gi, "'");
-const normalize = (url: string) => { const value = decode(url); return value.startsWith("//") ? "https:" + value : value; };
+const normalize = (url: string) => { const value = decode(url); return value.startsWith("//") ? "https:" + value : value.replace(/^http:/i, "https:"); };
 const escape = (url: string) => url.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;");
 export function composeDetailHtml(body: string, top: readonly string[], bottom: readonly string[]) {
   const present = new Set([...body.matchAll(/<img\b[^>]*?\b(?:src|data-src)\s*=\s*(["'])(.*?)\1/gi)].map(m => normalize(m[2])));
