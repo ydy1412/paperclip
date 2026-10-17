@@ -3861,8 +3861,13 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 }
 .commerce-sidebar { width: var(--commerce-sidebar-width); }
 .commerce-editor-layout { display: grid; min-width: 0; gap: 0; align-items: start; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--card); }
-.commerce-editor-layout > section { display: flex; flex-direction: column; gap: calc(var(--spacing) * 2); max-height: var(--commerce-list-mobile-height); overflow: hidden; padding: calc(var(--spacing) * 3); }
-.commerce-editor-layout > aside { display: flex; flex-direction: column; overflow: hidden; border: 0; border-radius: 0; padding: calc(var(--spacing) * 6); scrollbar-gutter: stable; }
+.commerce-editor-layout > section, .commerce-list-pane > section { display: flex; flex-direction: column; gap: calc(var(--spacing) * 2); overflow: hidden; padding: calc(var(--spacing) * 3); }
+.commerce-editor-layout > section { max-height: var(--commerce-list-mobile-height); }
+.commerce-list-pane > section { height: 100%; }
+.commerce-editor-layout > aside, .commerce-detail-pane > aside { display: flex; flex-direction: column; overflow: hidden; border: 0; border-radius: 0; padding: calc(var(--spacing) * 6); scrollbar-gutter: stable; }
+.commerce-detail-pane > aside { height: 100%; }
+.commerce-resizable-layout { align-items: stretch; }
+.commerce-resize-handle { border-inline: 1px solid var(--border); background: var(--muted); }
 .commerce-product-fields { display: grid; min-width: 0; gap: calc(var(--spacing) * 6); }
 .commerce-product-photo { width: var(--commerce-photo-size); height: var(--commerce-photo-size); max-width: 100%; object-fit: contain; background: var(--muted); border-radius: var(--radius-md); }
 .commerce-editor-tabs { display: flex; gap: calc(var(--spacing) * 6); border-bottom: 1px solid var(--border); }
@@ -3879,9 +3884,11 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   .commerce-editor-layout { grid-template-columns: minmax(0, 32fr) minmax(0, 68fr); }
   .commerce-editor-layout > section, .commerce-editor-layout > aside { height: var(--commerce-workspace-body-height); max-height: var(--commerce-workspace-body-height); }
   .commerce-editor-layout > section { border-right: 1px solid var(--border); }
+  /* The panel library supplies an inline percentage height. */
+  .commerce-resizable-layout { height: var(--commerce-workspace-body-height) !important; }
   .commerce-product-fields { grid-template-columns: var(--commerce-photo-size) minmax(0, 1fr); }
 }
-.commerce-editor-layout [aria-label="상품 상세 설명"] iframe { height: calc(var(--spacing) * 36); }
+.commerce-resizable-layout [aria-label="상품 상세 설명"] iframe { height: clamp(24rem, 60dvh, 48rem); }
 .commerce-review-entry:not([open]) > summary { max-width: calc(var(--spacing) * 52); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .commerce-list-scroll { min-height: 0; overflow-y: auto; flex: 1; }
 .commerce-list-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--spacing) * 2); padding-top: calc(var(--spacing) * 2); border-top: 1px solid var(--border); background: var(--card); }
@@ -3892,10 +3899,17 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 :is(.commerce-rail, .knowledge-rail) button[aria-label="Open account menu"] > span:last-child { display: none; }
 :is(.commerce-rail, .knowledge-rail) button[aria-label="Open account menu"] > span:first-child { flex-shrink: 0; }
 .commerce-editor-body { min-height: 0; overflow-y: auto; flex: 1; }
-.commerce-editor-layout > aside > header, .commerce-editor-tabs, .commerce-savebar { flex-shrink: 0; }
+.commerce-editor-layout > aside > header, .commerce-detail-pane > aside > header, .commerce-editor-tabs, .commerce-savebar { flex-shrink: 0; }
 .commerce-savebar > div { margin-left: auto; }
 .commerce-page-actions { position: absolute; top: 0; right: 0; }
 :is(.commerce-rail, .knowledge-rail) button[aria-label="Open account menu"] { min-width: calc(var(--spacing) * 6); }
+@media (max-width: 1023px) {
+  .commerce-resizable-layout { display: block !important; height: auto !important; }
+  .commerce-list-pane, .commerce-detail-pane { height: auto; overflow: visible; }
+  .commerce-list-pane > section { height: var(--commerce-list-mobile-height); }
+  .commerce-detail-pane > aside { height: auto; }
+  .commerce-resize-handle { display: none; }
+}
 @media (max-width: 767px) {
   .commerce-page-actions { position: relative; }
   .commerce-editor-layout > aside { max-height: none; }

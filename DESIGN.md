@@ -146,3 +146,9 @@ tokenize motion. Principles — reasoning only; values live in `ui/src/index.css
   in addition to each animation's own component-level guard.
 
 Agent Chat keeps pending questions as compact “Unanswered question” entries at their original position in history. A newer user message dismisses the old question form without resolving it. Opening the history entry restores the original form and its draft; submitting later uses the same durable question response path. Actual permission reviews retain their permission checks.
+
+Commerce product workspaces share a draggable list/detail divider. Keep the chosen
+width across Sourcing and Products and browser reloads. Resizing must retain
+selection and unsaved editor state. On narrow screens, stack the list above detail
+and hide the divider. Product description previews must have enough height to
+read an image-based detail page rather than a compact thumbnail.

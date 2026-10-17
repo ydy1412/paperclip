@@ -9,6 +9,8 @@ import { SourcingWorkspace } from "./SourcingWorkspace";
 
 const mock = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("../api/sourcing", () => ({ sourcingCatalogApi: mock }));
+// Geometry is verified in Chrome; jsdom has no ResizeObserver.
+vi.mock("./SourcingEditorLayout", () => ({ SourcingEditorLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("./SourcingProcessing", () => ({ SourcingProcessing: () => null }));
 let root: Root; let host: HTMLDivElement; let cache: QueryClient; let rows: SourcingWorkspaceItem[];
 const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 25)); });
