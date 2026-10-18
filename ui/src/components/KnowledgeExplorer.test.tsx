@@ -69,6 +69,14 @@ describe("Knowledge file explorer", () => {
     expect(writeText.mock.calls[0][0]).toContain("Revision: r1");
     expect(writeText.mock.calls[0][0]).toContain("Source: Inbox/a.md");
   });
+  it("does not record a citation when both clipboard methods fail", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("Blocked")) } });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: vi.fn().mockReturnValue(false) });
+    render(); await wait(() => expect(container.textContent).toContain("# Original"));
+    flushSync(() => [...container.querySelectorAll("button")].find(b => b.textContent === "Copy citation")!.click());
+    await wait(() => expect(container.textContent).toContain("클립보드에 복사할 수 없습니다"));
+    expect(mock.citation).not.toHaveBeenCalled();
+  });
   it("opens an actual tree including empty folders and separate document tabs", async () => {
     render(); await wait(() => expect(container.textContent).toContain("# Original"));
     expect(container.querySelector('[data-tree-id="empty"]')).not.toBeNull();

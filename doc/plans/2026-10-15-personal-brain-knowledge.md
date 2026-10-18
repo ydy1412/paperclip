@@ -25,7 +25,7 @@
   project filtering, navigation transitions, and the deployed build. Generation
   stays disabled. No new model or cross-user access grant is part of this repair.
 
-Validation for this repair: 73 focused UI/proxy/layout tests pass. UI TypeScript,
+Validation for this repair: 77 focused UI/proxy/layout/clipboard tests pass. UI TypeScript,
 the UI build, the token gate, and direct server TypeScript pass. The full server
 typecheck wrapper stops earlier on existing runner capability-manifest drift;
 this repair does not change that generated contract. An Aside candidate build
@@ -35,6 +35,15 @@ The global navigation stays 240px wide, with no horizontal page overflow.
 The preview uses isolated synthetic Knowledge data for writes; its WebSocket
 transport is not proxied. Native data/permission checks and operating verification
 are separate and recorded under ignored `tmp/knowledge-workflow/` receipts.
+PR CI also exposes pre-existing Docker context omissions, Runner generated-contract
+checks, and an unavailable dependency-review feature in this fork. Compare these
+with PR 49 rather than presenting a focused pass as all-CI green. The newly found
+clipboard-policy violation is repaired through the shared clipboard helper, with
+success/failure behavior verified. A hosted chat-retry visibility failure was
+checked with the exact Playwright case in a fresh local instance (3199 / 54338)
+using installed Chrome; it passes. No user instance or original is modified by
+that test. Full CI and deployment outcomes remain separate receipts.
+
 Personal Brain support is reviewed in
 [personal-brain-server PR 7](https://github.com/ydy1412/personal-brain-server/pull/7).
 

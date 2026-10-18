@@ -12,6 +12,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { clearDraft, DRAFT_DEBOUNCE_MS, loadDraft, saveDraft } from "../lib/composer-draft";
 import { cn } from "../lib/utils";
 import { documentProjects, withDocumentProjects } from "../lib/knowledge-documents";
+import { copyTextToClipboard } from "../lib/clipboard";
 
 type Mode = "edit" | "preview" | "split";
 type Buffer = { content: string; revision: string; dirty: boolean; mode: Mode; projectsDraft?: string; projectsError?: string };
@@ -133,7 +134,8 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument, gene
     if (!doc || buffer?.dirty || doc.state === "stale") return;
     const link = new URL(window.location.href); link.searchParams.set("doc", doc.id); link.searchParams.set("vault", vault.id);
     try {
-      await navigator.clipboard.writeText(`[${doc.title}](${link.href})\nSource: ${doc.path}\nRevision: ${doc.revision}`);
+      // A copied citation is recorded only after the browser confirms the copy.
+      await copyTextToClipboard(`[${doc.title}](${link.href})\nSource: ${doc.path}\nRevision: ${doc.revision}`);
       setMessage("출처와 원문 버전을 복사했습니다. 링크는 최신 원문을 엽니다.");
       try { await brain.citation(company, vault.id, doc.id, doc.revision); await cache.invalidateQueries({ queryKey: [...key, "usage"] }); }
       catch { setMessage("출처를 복사했습니다. 사용 기록은 저장하지 못했습니다."); }
