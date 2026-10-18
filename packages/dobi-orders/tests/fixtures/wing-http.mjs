@@ -7,7 +7,7 @@ export const fixtureDate=()=>new Date(Date.now()+9*3600000).toISOString().slice(
 
 /** Synthetic HTTP only: exercises the real login, cookie jar, and order collector. */
 export function wingHttpFixture({mfa=true}={}){
-  const state={vendorId:'SYNTHETIC_A1',cookie:'synthetic-session-1',logins:0,reads:0,missingCookies:0,failSearch:false};
+  const state={vendorId:'SYNTHETIC_A1',cookie:'synthetic-session-1',logins:0,reads:0,missingCookies:0,failSearch:false,accessDenied:false};
   const wing='https://wing.coupang.com',auth='https://xauth.coupang.com';
   const action=kind=>auth+'/auth/realms/seller/login-actions/'+(kind==='password'?'authenticate':'required-action')+'?execution='+kind;
   const form=kind=>kind==='password'?`<form id="kc-form-login" action="${action(kind)}"></form>`:kind==='method'?`<form id="mfa-method-form" action="${action(kind)}"><input id="btnSms" value="fixture-mobile"><input id="btnEmail" value="fixture-email"></form>`:`<form id="mfa-form" action="${action(kind)}"><input name="code"></form>`;
@@ -19,7 +19,9 @@ export function wingHttpFixture({mfa=true}={}){
     const u=new URL(raw);
     assert.ok([wing,auth].includes(u.origin),'No external or official-key endpoint is allowed');
     assert.equal(init.headers.Authorization,undefined);
-    if(u.origin===wing&&u.pathname==='/')return reply('',{status:302,headers:{Location:auth+'/auth/realms/seller/protocol/openid-connect/auth?client_id=wing'}});
+    if(u.origin===wing&&state.accessDenied)return reply('<h1>Access Denied</h1>',{status:403});
+    if(u.origin===wing&&u.pathname==='/')return reply('',{status:302,headers:{Location:'http://wing.coupang.com/login','Strict-Transport-Security':'max-age=31536000'}});
+    if(u.origin===wing&&u.pathname==='/login')return reply('',{status:302,headers:{Location:auth+'/auth/realms/seller/protocol/openid-connect/auth?client_id=wing'}});
     if(u.origin===auth&&u.pathname.endsWith('/openid-connect/auth'))return reply(form('password'));
     if(u.origin===auth&&init.method==='POST'){
       const body=Object.fromEntries(new URLSearchParams(init.body));

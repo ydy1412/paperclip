@@ -55,6 +55,15 @@ function jar(input,now){
  },serialize(){purge();return JSON.stringify([...entries.values()].sort((a,b)=>a.order-b.order).map(x=>x.c).filter(applicable));}};
 }
 function urlFor(raw,base=WING){let u;try{u=new URL(raw,base);}catch{fail('쿠팡 로그인 주소를 확인할 수 없습니다.','INVALID_ENDPOINT',502);}if(u.protocol!=='https:'||!HOSTS.has(u.hostname)||u.username||u.password||u.port||u.hash||/[\r\n\\]/.test(raw))fail('허용된 쿠팡 HTTPS 주소가 아닙니다.','INVALID_ENDPOINT',502);return u;}
+function redirectUrl(raw,source,response){
+ // Wing advertises HSTS but currently emits an http:// same-host login redirect.
+ // Apply that HTTPS policy before validation; never send a request over HTTP.
+ let next;try{next=new URL(raw,source);}catch{return urlFor(raw,source.href);}
+ const ages=(response.headers.get('strict-transport-security')||'').split(';').map(v=>v.trim()).filter(v=>/^max-age\s*=/i.test(v));
+ const age=ages.length===1&&ages[0].match(/^max-age\s*=\s*(?:([0-9]+)|"([0-9]+)")$/i);
+ if(next.protocol==='http:'&&source.protocol==='https:'&&next.hostname===source.hostname&&!next.port&&age&&Number(age[1]??age[2])>0&&!/[\r\n\\]/.test(raw)){next.protocol='https:';return urlFor(next.href,source.href);}
+ return urlFor(raw,source.href);
+}
 async function bounded(response){
  try{
  if(!response.body?.getReader){const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length>MAX_BODY)fail('쿠팡 응답이 너무 큽니다.','RESPONSE_LIMIT',502);return bytes;}
@@ -93,8 +102,9 @@ export function createCoupangSession({credentials={},fetchImpl=fetch,resolveHost
    if(!auth&&method==='POST'){const c=cookies.matched(u).find(c=>c.name==='XSRF-TOKEN');if(!c?.value)expired();let value;try{value=decodeURIComponent(c.value);}catch{fail('쿠팡 CSRF 쿠키 형식을 확인하지 못했습니다.','INVALID_COOKIES');}if(CONTROL.test(value))fail('쿠팡 CSRF 헤더 형식을 확인하지 못했습니다.','INVALID_COOKIES');headers['X-XSRF-TOKEN']=value;}
    let response;try{response=await (resolveHost?publicHttpsFetch:fetchImpl)(u.href,{method,headers,body,redirect:'manual',signal:AbortSignal.timeout(30000)});}catch{fail('쿠팡 응답을 받지 못했습니다. 정상 로그인창에서 다시 진행해주세요.','NETWORK_ERROR',502);}
    if(!response||!Number.isInteger(response.status)||response.redirected)fail('쿠팡 응답 이동을 확인하지 못했습니다.','INVALID_RESPONSE',502);cookies.update(response,u);
-   if(response.status>=300&&response.status<400){const location=response.headers.get('location');if(!location)fail('쿠팡 이동 주소가 없습니다.','INVALID_RESPONSE',502);const next=urlFor(location,u.href);if(!auth)expired();await response.body?.cancel().catch(()=>{});referer=u.href;u=next;method='GET';body=undefined;continue;}
-   if([401,403].includes(response.status))expired();if(!response.ok)fail(response.status===429?'쿠팡 조회가 제한되었습니다. 잠시 후 다시 시도해주세요.':'쿠팡 요청을 처리하지 못했습니다.','HTTP_ERROR',502);
+   if(response.status>=300&&response.status<400){const location=response.headers.get('location');if(!location)fail('쿠팡 이동 주소가 없습니다.','INVALID_RESPONSE',502);const next=redirectUrl(location,u,response);if(!auth)expired();await response.body?.cancel().catch(()=>{});referer=u.href;u=next;method='GET';body=undefined;continue;}
+   if(response.status===403){await response.body?.cancel().catch(()=>{});fail('쿠팡이 접근을 거부했습니다(403). 반복 로그인을 중단하고 공식 윙의 접속 상태를 확인해주세요.','ACCESS_DENIED',403);}
+   if(response.status===401)expired();if(!response.ok)fail(response.status===429?'쿠팡 조회가 제한되었습니다. 잠시 후 다시 시도해주세요.':'쿠팡 요청을 처리하지 못했습니다.','HTTP_ERROR',502);
    const bytes=await bounded(response);referer=u.href;const result=new Response([204,205,304].includes(response.status)?null:bytes,{status:response.status,headers:response.headers});Object.defineProperty(result,'wingUrl',{value:u.href});return result;
   }
   fail('쿠팡 로그인 이동 한도를 초과했습니다.','BROWSER_REQUIRED',409);

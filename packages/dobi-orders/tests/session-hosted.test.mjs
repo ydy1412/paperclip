@@ -64,6 +64,16 @@ test('실제 세션 요청·재시작·쿠키 갱신과 실패 시 기존 주문
   h.transport.state.failSearch=false;h.transport.state.cookie='synthetic-session-2';const renewed=await h.call('/connections/'+c.id+'/collect',range());assert.equal(renewed.status,200);assert.equal(h.transport.state.logins,2);assert.match((await h.vault.get(h.app.store.connection(c.id).credentialRef)).cookies,/synthetic-session-2/);
 });
 
+test('쿠팡 접근 거부는 비밀번호 재로그인 없이 중단하고 기존 주문을 보존한다',async t=>{
+  const h=await setup(t,{mfa:false}),c=await add(h);assert.equal((await login(h,c.id)).data.ok,true);
+  assert.equal((await h.call('/connections/'+c.id+'/collect',range())).status,200);
+  const original=h.app.store.all(),logins=h.transport.state.logins;
+  h.transport.state.accessDenied=true;
+  const result=await h.call('/connections/'+c.id+'/collect',range());assert.equal(result.status,403);assert.match(result.data.error,/접근을 거부/);
+  assert.equal(h.transport.state.logins,logins);assert.deepEqual(h.app.store.all(),original);
+  const blocked=await h.call('/connections/'+c.id+'/wing-login',{step:'start'});assert.equal(blocked.status,403);assert.equal(h.transport.state.logins,logins);
+});
+
 test('호스트는 키 방식 신규 저장과 Windows 로그인창을 거부하며 취소된 추가 인증을 이어가지 않는다',async t=>{
   const h=await setup(t),c=await add(h),url='/connections/'+c.id+'/wing-login';
   assert.equal((await h.call('/connections',{providerId:'coupang',name:'새 키 계정',mode:'official',credentials:{}})).status,400);
