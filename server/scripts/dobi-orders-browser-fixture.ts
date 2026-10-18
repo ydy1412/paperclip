@@ -26,6 +26,7 @@ await db.insert(companyMemberships).values({ companyId, principalType: "user", p
 const app = express(); app.use(express.json({ limit: "16mb" }));
 app.use((req, _res, next) => { req.actor = { type: "board", source: "local_implicit", userId: "dobi-browser-user", companyIds: [companyId] }; next(); });
 const transport = wingHttpFixture();
+transport.state.accessDenied = process.env.DOBI_BROWSER_WING_DENIED === "1";
 const ordersRoot = path.join(home, "orders");
 const seed = createStore(path.join(ordersRoot, companyId, projectId, "orders.sqlite"));
 const legacy = seed.saveConnection({ providerId: "coupang", kind: "market", channel: "쿠팡", name: "기존 쿠팡 계정", mode: "official", credentialRef: "synthetic-legacy", state: "인증 확인됨" });

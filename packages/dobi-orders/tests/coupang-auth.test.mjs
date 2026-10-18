@@ -100,6 +100,25 @@ test('바뀐 로그인 action·외부 도메인·비HTTPS·userinfo·포트·fra
   }
 });
 
+test('HSTS가 있는 같은 호스트의 HTTP 로그인 이동은 HTTPS로만 요청합니다',async()=>{
+  const h=harness((c,calls)=>{
+    assert.equal(c.url.protocol,'https:');
+    if(calls.length===1)return response('',{status:302,headers:{Location:'http://wing.coupang.com/login?returnUrl=%2F','Strict-Transport-Security':'max-age=31536000'}});
+    if(c.url.pathname==='/login'){assert.equal(c.url.search,'?returnUrl=%2F');return redirect(INITIAL);}
+    if(c.url.hostname==='xauth.coupang.com')return c.init.method==='POST'?response('complete'):response(passwordForm());
+    return identityRoutes()(c);
+  });
+  assert.equal((await h.session.login()).ok,true);
+  assert.equal(h.calls.some(c=>c.url.protocol==='http:'),false);
+});
+
+test('HSTS 누락·만료·잘못된 값·다른 호스트·포트는 HTTP 이동을 허용하지 않습니다',async()=>{
+  for(const [sts,location] of [[null,'http://wing.coupang.com/login'],['max-age=0','http://wing.coupang.com/login'],['max-age=invalid','http://wing.coupang.com/login'],['max-age=1; max-age=0','http://wing.coupang.com/login'],['max-age=31536000','http://xauth.coupang.com/login'],['max-age=31536000','http://wing.coupang.com:8080/login'],['max-age=31536000','http://user:secret@wing.coupang.com/login'],['max-age=31536000','http://wing.coupang.com/login#fragment']]){
+    const h=harness(()=>response('',{status:302,headers:{Location:location,...(sts?{'Strict-Transport-Security':sts}:{})}}));
+    await rejectsCode(h.session.login(),'INVALID_ENDPOINT');assert.equal(h.calls.length,1);
+  }
+});
+
 test('로그인 리다이렉트의 외부·비HTTPS 이동과 반복·한도를 요청 전에 차단합니다',async()=>{
   for(const location of ['https://evil.example/'+PRIVATE,'https://wing.coupang.com.evil.example/'+PRIVATE,'http://wing.coupang.com/'+PRIVATE,'https://'+PRIVATE+'@wing.coupang.com/']){const h=harness(()=>redirect(location));await rejectsCode(h.session.login(),'INVALID_ENDPOINT');assert.equal(h.calls.length,1);}
   const loop=harness(()=>redirect(WING+'/'));await rejectsCode(loop.session.login(),'BROWSER_REQUIRED');assert.equal(loop.calls.length,1);
@@ -113,7 +132,7 @@ test('전달용 세션 요청은 타 도메인·GET 본문·임의 POST·리다�
 });
 
 test('401·403·HTTP 오류·위장된 자동 리다이렉트·위치 없는 이동을 성공 처리하지 않습니다',async()=>{
-  for(const status of [401,403,429,500]){const h=harness(()=>response(PRIVATE,{status}));await assert.rejects(h.session.verifyIdentity(),e=>{noLeak(e);assert.equal(e.code,[401,403].includes(status)?'SESSION_REQUIRED':'HTTP_ERROR');return true;});assert.equal(h.calls.length,1);}
+  for(const status of [401,403,429,500]){const h=harness(()=>response(PRIVATE,{status}));await assert.rejects(h.session.verifyIdentity(),e=>{noLeak(e);assert.equal(e.code,status===401?'SESSION_REQUIRED':status===403?'ACCESS_DENIED':'HTTP_ERROR');return true;});assert.equal(h.calls.length,1);}
   const already=harness(()=>{const r=response('OK');Object.defineProperty(r,'redirected',{value:true});return r;});await rejectsCode(already.session.verifyIdentity(),'INVALID_RESPONSE');
   const missing=harness(()=>response('',{status:302}));await rejectsCode(missing.session.login(),'INVALID_RESPONSE');
   const network=harness(()=>{throw Error(PRIVATE);});await rejectsCode(network.session.login(),'NETWORK_ERROR');
