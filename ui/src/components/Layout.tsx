@@ -233,6 +233,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     || isAppsRoute
     || isToolsRoute
     || isKnowledgeRoute
+    || isSourcingRoute
   );
   const replacesPrimarySidebar = streamlinedUiEnabled && !compactWorkspace && hasSecondarySidebar && !keepsPrimarySidebar;
   const showsAdjacentSecondarySidebar = hasSecondarySidebar && (compactWorkspace || !streamlinedUiEnabled || keepsPrimarySidebar);
@@ -257,7 +258,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   });
 
   useLayoutEffect(() => {
-    setForceCollapsed(compactWorkspace || (!streamlinedUiEnabled && hasSecondarySidebar));
+    setForceCollapsed(!compactWorkspace && !streamlinedUiEnabled && hasSecondarySidebar);
     return () => setForceCollapsed(false);
   }, [hasSecondarySidebar, compactWorkspace, setForceCollapsed, streamlinedUiEnabled]);
 
@@ -678,10 +679,9 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
           </div>
         ) : (
           <SidebarShell
-            className={isKnowledgeRoute ? "knowledge-rail" : isSourcingRoute ? "commerce-rail" : undefined}
             open={sidebarOpen}
-            collapsed={compactWorkspace ? true : replacesPrimarySidebar ? false : collapsed}
-            peeking={compactWorkspace || replacesPrimarySidebar ? false : peeking}
+            collapsed={replacesPrimarySidebar ? false : collapsed}
+            peeking={replacesPrimarySidebar ? false : peeking}
             resizable
             onPanelMouseEnter={compactWorkspace || replacesPrimarySidebar ? undefined : handlePanelPointerEnter}
             onPanelMouseLeave={compactWorkspace || replacesPrimarySidebar ? undefined : handlePanelPointerLeave}
@@ -728,7 +728,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
             !isMobile && useStreamlinedTaskDetailShell && "streamlined-task-detail-surface",
           )}>
             {!isMobile && keepsPrimarySidebar ? (
-              <SecondarySidebar className="w-60 shrink-0 bg-background">
+              <SecondarySidebar className={compactWorkspace ? "commerce-sidebar shrink-0 bg-background" : "w-60 shrink-0 bg-background"}>
                 {secondarySidebar}
               </SecondarySidebar>
             ) : null}

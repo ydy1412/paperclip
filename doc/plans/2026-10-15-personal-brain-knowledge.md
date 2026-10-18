@@ -1,5 +1,52 @@
 # Personal Brain knowledge workspace
 
+## 2026-10-18 approved repair
+
+- Keep the global navigation expanded on Knowledge and Commerce. Do not clip an
+  expanded navigation component inside a forced icon rail. Keep their contextual
+  navigation adjacent and check narrow, wide, and mobile screens.
+- Follow `knowledge_status.generationEnabled`; raw mode must neither offer answer
+  generation nor describe stale summaries as being regenerated. Show ingestion
+  health and deferred generation history separately.
+- Use stored document titles for generated notes. Add explicit project labels to
+  editable originals through the existing revision-checked save operation. A
+  daily capture can belong to multiple projects; do not guess classifications or
+  rewrite historical originals automatically.
+- Identify the Personal Brain vault behind each authorized connection. Show one
+  choice per verified vault, preserve explicit connection links, and keep legacy
+  company Knowledge visibly separate.
+- Record local UI search/document reads and successful citation copies without
+  storing questions or note bodies. Report agent searches/reads from existing
+  invocation records; do not present unmeasured citations as zero. Update the
+  task skill to retrieve authorized knowledge and cite verified original sources.
+- Reduce repeated source reads within one library/graph request while retaining
+  fresh revision checks. Test conflicts, revoked access, and stale sources.
+- Verify source search → selection → original → source citation, raw mode,
+  project filtering, navigation transitions, and the deployed build. Generation
+  stays disabled. No new model or cross-user access grant is part of this repair.
+
+Validation for this repair: 77 focused UI/proxy/layout/clipboard tests pass. UI TypeScript,
+the UI build, the token gate, and direct server TypeScript pass. The full server
+typecheck wrapper stops earlier on existing runner capability-manifest drift;
+this repair does not change that generated contract. An Aside candidate build
+checks the actual classic layout as well as 1024/768/390px frames, save/copy/search,
+original navigation, stale notices, graph evidence, and return to Dashboard.
+The global navigation stays 240px wide, with no horizontal page overflow.
+The preview uses isolated synthetic Knowledge data for writes; its WebSocket
+transport is not proxied. Native data/permission checks and operating verification
+are separate and recorded under ignored `tmp/knowledge-workflow/` receipts.
+PR CI also exposes pre-existing Docker context omissions, Runner generated-contract
+checks, and an unavailable dependency-review feature in this fork. Compare these
+with PR 49 rather than presenting a focused pass as all-CI green. The newly found
+clipboard-policy violation is repaired through the shared clipboard helper, with
+success/failure behavior verified. A hosted chat-retry visibility failure was
+checked with the exact Playwright case in a fresh local instance (3199 / 54338)
+using installed Chrome; it passes. No user instance or original is modified by
+that test. Full CI and deployment outcomes remain separate receipts.
+
+Personal Brain support is reviewed in
+[personal-brain-server PR 7](https://github.com/ydy1412/personal-brain-server/pull/7).
+
 Implement the approved integrated mockup: Knowledge → Library / Ask / Graph.
 Personal Brain is the default vault; the existing company Paperclip knowledge
 remains a separate selectable vault. Do not migrate or re-ingest either store.

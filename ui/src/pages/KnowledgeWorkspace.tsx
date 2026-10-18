@@ -8,6 +8,8 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { knowledgeWorkspaceApi as brain, type BrainAnswer, type BrainLibrary, type BrainRecall, type BrainStatus } from "../api/knowledgeWorkspace";
 import { knowledgeApi, type KnowledgeList } from "../api/knowledge";
 import { pluginsApi } from "../api/plugins";
+import { projectsApi } from "../api/projects";
+import { visibleBrainVaults } from "../lib/knowledge-documents";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { MarkdownBody } from "../components/MarkdownBody";
@@ -23,18 +25,24 @@ export function KnowledgeWorkspace() {
   const currentView = getKnowledgeView(location.pathname, params.get("view") === "graph"), view = currentView.id;
   const legacy = !params.has("vault") && (params.has("id") || params.get("view") === "graph");
   const vaults = useQuery({ queryKey: ["brain-knowledge-vaults", company], queryFn: () => brain.vaults(company), enabled: !!company, retry: false });
-  const selectedVault = params.get("vault") ?? (legacy ? "paperclip" : vaults.data?.[0]?.id ?? "personal-brain");
+  const requestedVault = params.get("vault");
+  const vaultChoices = useMemo(() => visibleBrainVaults(vaults.data ?? [], requestedVault), [vaults.data, requestedVault]);
+  const selectedVault = requestedVault ?? (legacy ? "paperclip" : vaultChoices[0]?.id ?? "personal-brain");
   const paperclip = selectedVault === "paperclip", enabled = !!company && !!vaults.data?.some(v => v.id === selectedVault);
   const project = params.get("project") ?? "", doc = params.get("doc") ?? "";
   const query = params.get("q") ?? "";
   const cache = useQueryClient(), key = ["brain-knowledge", company, selectedVault];
   const library = useQuery({ queryKey: [...key, "library", project, query], queryFn: ({ signal }) => brain.read<BrainLibrary>(company, selectedVault, "knowledge_library",
-    { ...(project ? { project } : {}), ...(query ? { query } : {}), page: 1 }, signal), enabled: enabled && view !== "library", retry: false });
+    { ...(project ? { project } : {}), ...(query ? { query } : {}), page: 1, pageSize: 1 }, signal), enabled, retry: false });
   const status = useQuery({ queryKey: [...key, "status"], queryFn: ({ signal }) => brain.read<BrainStatus>(company, selectedVault, "knowledge_status", {}, signal), enabled, retry: false, refetchInterval: 30_000 });
+  const usage = useQuery({ queryKey: [...key, "usage"], queryFn: () => brain.usage(company, selectedVault), enabled, retry: false });
+  const companyProjects = useQuery({ queryKey: ["knowledge-company-projects", company], queryFn: () => projectsApi.list(company), enabled: enabled && view === "library", retry: false });
+  const canGenerate = status.data?.generationEnabled === true && !status.error;
   const [selectedEvidence, setSelectedEvidence] = useState<string | null>(null);
   const [question, setQuestion] = useState(""), [submitted, setSubmitted] = useState("");
   const [answer, setAnswer] = useState<BrainAnswer | null>(null), [answerError, setAnswerError] = useState<string | null>(null), [answering, setAnswering] = useState(false);
   const request = useRef<AbortController | null>(null), generation = useRef(0);
+  useEffect(() => { if (!canGenerate) { generation.current++; request.current?.abort(); setAnswer(null); setAnswerError(null); setAnswering(false); } }, [canGenerate]);
   const recalled = useQuery({ queryKey: [...key, "recall", project, submitted], queryFn: async ({ signal }) => {
     const deadline = AbortSignal.timeout(20_000);
     try { return await brain.read<BrainRecall>(company, selectedVault, "memory_recall", { query: submitted, ...(project ? { project } : {}) }, AbortSignal.any([signal, deadline])); }
@@ -50,6 +58,7 @@ export function KnowledgeWorkspace() {
     generation.current++; request.current?.abort();
     setAnswer(null); setAnswerError(null); setAnswering(false);
   }, [recalled.dataUpdatedAt, recalled.error]);
+  useEffect(() => { if (recalled.dataUpdatedAt) void cache.invalidateQueries({ queryKey: ["brain-knowledge", company, selectedVault, "usage"] }); }, [recalled.dataUpdatedAt, cache, company, selectedVault]);
   const update = useCallback((values: Record<string, string>, reset = false) => {
     setParams(previous => { const next = new URLSearchParams(previous); next.set("vault", selectedVault);
       if (reset) for (const key of ["doc", "id", "tab", "page"]) next.delete(key);
@@ -70,7 +79,7 @@ export function KnowledgeWorkspace() {
     else setSubmitted(value.trim());
   }
   async function generateAnswer() {
-    if (!submitted || !recalled.data?.items.length || recalled.error || recalled.isFetching) return;
+    if (!canGenerate || !submitted || !recalled.data?.items.length || recalled.error || recalled.isFetching) return;
     request.current?.abort(); const controller = new AbortController(), current = ++generation.current; request.current = controller;
     const deadline = AbortSignal.timeout(30_000);
     setAnswer(null); setAnswerError(null); setAnswering(true);
@@ -87,12 +96,12 @@ export function KnowledgeWorkspace() {
   const scopeControls = useMemo(() => <div className="knowledge-scope-controls">
     <label><span className="sr-only">Vault</span><select aria-label="Vault" className={selectClass} value={selectedVault} onChange={e => setParams(new URLSearchParams({ vault: e.target.value }))}>
       {!vaults.data?.length && <option value="personal-brain">Personal Brain</option>}
-      {vaults.data?.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}<option value="paperclip">Paperclip Knowledge</option>
+      {vaultChoices.map(v => <option key={v.id} value={v.id}>{v.vaultId ? "Personal Brain" : v.name} · {v.actions?.length ? "Can edit" : "Read only"}</option>)}<option value="paperclip">Paperclip Knowledge · Company archive</option>
     </select></label>
     {!paperclip && view !== "library" && <label><span className="sr-only">Project</span><select aria-label="Project" className={selectClass} value={project} onChange={e => update({ project: e.target.value }, true)}><option value="">All projects</option>{currentProject.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {!paperclip && <Button variant="ghost" size="icon" aria-label="Refresh knowledge" onClick={refresh}><RefreshCw className="size-4" /></Button>}
-  </div>, [selectedVault, vaults.data, setParams, paperclip, view, project, update, currentProject, refresh]);
-  useEffect(() => { setBreadcrumbToolbar(scopeControls); return () => setBreadcrumbToolbar(null); }, [scopeControls, setBreadcrumbToolbar]);
+  </div>, [selectedVault, vaults.data, vaultChoices, setParams, paperclip, view, project, update, currentProject, refresh]);
+  useEffect(() => { setBreadcrumbToolbar(<div className="hidden md:block">{scopeControls}</div>); return () => setBreadcrumbToolbar(null); }, [scopeControls, setBreadcrumbToolbar]);
   const selectedFact = recalled.data?.items.find(item => item.id === selectedEvidence) ?? recalled.data?.items[0];
   return <section className="knowledge-workspace relative min-w-0 space-y-4" aria-label="Knowledge">
     <header className="flex min-w-0 flex-wrap items-center justify-between gap-3"><h1 className="break-words text-base font-semibold text-foreground">{currentView.label}</h1></header>
@@ -100,7 +109,19 @@ export function KnowledgeWorkspace() {
     {vaults.error && !paperclip && <div role="alert" className="knowledge-alert">{vaults.error.message}<Button variant="outline" onClick={() => vaults.refetch()}>재시도</Button></div>}
     {paperclip ? view === "ask" ? <PaperclipKnowledgeSearch company={company} project={project} onDocument={openDocument} /> : <Knowledge viewMode={view === "graph" ? "graph" : "library"} /> : vaults.isLoading ? <p className="knowledge-empty" role="status">보관함 불러오는 중</p> : !enabled ? <div className="knowledge-empty"><BookOpen className="mx-auto mb-4 size-8" /><h2>Personal Brain을 연결해 주세요.</h2><p>본인 계정의 Apps 연결을 선택하면 저장한 자료를 볼 수 있습니다.</p><Button asChild className="mt-5"><Link to="/apps">연결 설정 열기</Link></Button></div> : <>
       {(library.error || status.error) && <div role="alert" className="knowledge-alert"><span>{library.error?.message ?? status.error?.message}</span><Button variant="outline" onClick={() => cache.invalidateQueries({ queryKey: key })}>재시도</Button></div>}
-      {view === "library" && !status.error && <KnowledgeExplorer key={`${company}:${selectedVault}:${vaults.data?.find(v => v.id === selectedVault)?.ownerId ?? "read"}`} company={company} vault={vaults.data!.find(v => v.id === selectedVault)!} documentId={doc} onDocument={id => update({ doc: id })} />}
+      {status.data && !status.error && <details className="knowledge-health">
+        <summary><span>{status.data.connected ? "Connected" : "Connection unavailable"}</span><span>{status.data.mode === "raw" ? "Source search mode · Summaries paused" : canGenerate ? "Source search and AI summaries" : "AI summaries unavailable"}</span><span>{status.data.ready == null ? "Index status unavailable" : `${status.data.ready} indexed`} · {library.isPending ? "Checking summaries…" : library.error || !library.data?.states ? "Summary status unavailable" : `${library.data.states.stale} summaries need review`}</span></summary>
+        <div className="knowledge-health-details">
+          <p>{status.data.connected ? "원문과 근거 검색을 사용할 수 있습니다." : "지식 연결을 확인해 주세요. 원문 파일과 기억 검색의 연결 상태가 다를 수 있습니다."} 자동 요약과 AI 답변은 별도 기능입니다. {status.data.paused && "현재 원문 적재가 일시 중지되어 있습니다."}</p>
+          <p>Ingestion: {status.data.queue.pending ?? 0} pending · {status.data.queue.running ?? 0} running · {status.data.queue.failed ?? 0} failed · {status.data.queue.unknown ?? 0} uncertain</p>
+          {!!status.data.deferredGeneration && <p>Deferred summaries: {status.data.deferredGeneration.pending ?? 0} pending · {status.data.deferredGeneration.failed ?? 0} failed. 이 이력은 현재 원문 적재 큐와 분리되어 있습니다.</p>}
+          {!!library.data?.states?.unassigned && <p>{library.data.states.unassigned}개 원문이 아직 일반으로 분류되어 있습니다. 문서를 열고 Projects를 지정할 수 있습니다.</p>}
+          {usage.data ? <p>이 연결의 내 검색 {usage.data.searches} · 문서 조회 {usage.data.documentReads} · 출처 복사 {usage.data.citationCopies}<br />Agent searches {usage.data.agentSearches} · document reads {usage.data.agentDocumentReads}. 에이전트 결과물의 실제 인용은 아직 집계하지 않습니다.</p> : <p>{usage.error ? "사용 기록을 불러오지 못했습니다." : "사용 기록 확인 중…"}</p>}
+          <p>화면 검색·조회·출처 복사는 이번 기능 적용 이후부터 집계합니다. 에이전트 수치는 이 연결의 성공한 도구 실행 기록을 기준으로 합니다.</p>
+          <p>Personal Brain은 개인 보관함입니다. Paperclip Knowledge는 별도의 회사 지식이며, Codex 프로젝트 기억은 자동으로 합쳐지지 않습니다.</p>
+        </div>
+      </details>}
+      {view === "library" && !status.error && <KnowledgeExplorer key={`${company}:${selectedVault}:${vaults.data?.find(v => v.id === selectedVault)?.ownerId ?? "read"}`} company={company} vault={vaults.data!.find(v => v.id === selectedVault)!} documentId={doc} onDocument={id => update({ doc: id })} generationEnabled={canGenerate} projects={[...new Set([...(companyProjects.data?.map(p => p.name) ?? []), ...(library.data?.projects.map(p => p.name) ?? [])])]} />}
       {view === "ask" && !status.error && <div className="space-y-4">
         <form onSubmit={e => { e.preventDefault(); ask(question); }} className="knowledge-search-toolbar">
           <label className="min-w-0 flex-1"><span className="sr-only">Search knowledge</span><Input aria-label="브레인에 질문" type="search" value={question} maxLength={2000} onChange={e => setQuestion(e.target.value)} placeholder="질문이나 키워드로 저장한 자료 검색" /></label>
@@ -114,12 +135,12 @@ export function KnowledgeWorkspace() {
               {recalled.isFetching && <div role="status" className="space-y-3 p-3 text-sm text-muted-foreground"><p>관련 근거를 검색하고 있습니다. 최대 20초 안에 결과를 확인합니다.</p><Button variant="outline" size="sm" onClick={() => { void cache.cancelQueries({ queryKey: [...key, "recall"] }); setSubmitted(""); }}>Cancel search</Button></div>}
               {recalled.error && <p role="alert" className="p-3 text-sm text-destructive">{recalled.error.message}</p>}
               {!submitted && <div className="space-y-3 p-3 text-sm text-muted-foreground"><p>질문이나 키워드를 입력하면 관련 근거를 목록으로 확인할 수 있습니다.</p><div className="knowledge-ask-suggestions">{["확인된 프로젝트 진행 상태를 간단히 정리하세요.", "최근 결정 사항은 무엇인가요?"].map(q => <button key={q} onClick={() => ask(q)}>{q}</button>)}</div></div>}
-              {!!submitted && !recalled.error && !recalled.isFetching && recalled.data && (!recalled.data.items.length ? <p className="p-3 text-sm text-muted-foreground">관련 근거를 찾지 못했습니다. 프로젝트나 검색어를 바꿔 보세요.</p> : recalled.data.items.map(item => <button key={item.id} className="knowledge-result-row" aria-pressed={selectedFact?.id === item.id} onClick={() => setSelectedEvidence(item.id)}><strong>{item.reference.path.split("/").at(-1)}</strong><p>{item.text}</p><small>{item.reference.project || project || "Personal Brain"}</small></button>))}
+              {!!submitted && !recalled.error && !recalled.isFetching && recalled.data && (!recalled.data.items.length ? <p className="p-3 text-sm text-muted-foreground">관련 근거를 찾지 못했습니다. 프로젝트나 검색어를 바꿔 보세요.</p> : recalled.data.items.map(item => <button key={item.id} className="knowledge-result-row" aria-pressed={selectedFact?.id === item.id} onClick={() => setSelectedEvidence(item.id)}><strong>{item.reference.path.split("/").at(-1)}</strong><p>{item.text}</p><small>{item.reference.projects?.join(", ") || item.reference.project || project || "Personal Brain"}</small></button>))}
             </div>
-            <p className="border-t border-border pt-2 text-xs text-muted-foreground">원문 근거 · {recalled.data?.incomplete ? "일부 자료 처리 중" : "AI 답변은 선택해서 생성합니다."}</p>
+            <p className="border-t border-border pt-2 text-xs text-muted-foreground">원문 근거 · {recalled.data?.incomplete ? "일부 자료 처리 중" : canGenerate ? "AI 답변은 선택해서 생성합니다." : "원문 검색 모드 · AI 답변 생성 꺼짐"}</p>
           </section>
           <aside className="knowledge-answer-evidence knowledge-search-detail" aria-label="Evidence detail">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3"><h2 className="text-sm font-semibold">Evidence</h2><Button variant="outline" size="sm" onClick={generateAnswer} disabled={answering || recalled.isFetching || !!recalled.error || !recalled.data?.items.length}><Sparkles className="mr-2 size-4" />Generate answer</Button></header>
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3"><h2 className="text-sm font-semibold">Evidence</h2>{canGenerate && <Button variant="outline" size="sm" onClick={generateAnswer} disabled={answering || recalled.isFetching || !!recalled.error || !recalled.data?.items.length}><Sparkles className="mr-2 size-4" />Generate answer</Button>}</header>
             <div className="knowledge-detail-scroll">
               {!submitted || recalled.isFetching || recalled.error || !selectedFact ? <p className="text-sm text-muted-foreground">검색 결과를 선택하면 근거와 원문을 확인할 수 있습니다.</p> : <>
                 <p className="mb-3 text-xs text-muted-foreground">원문에서 확인한 검색 결과입니다.</p>

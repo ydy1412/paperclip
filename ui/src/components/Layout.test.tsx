@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Layout } from "./Layout";
+import { Layout as ProductionLayout } from "./Layout.production";
 
 const mockHealthApi = vi.hoisted(() => ({
   get: vi.fn(),
@@ -70,6 +71,12 @@ vi.mock("./Sidebar", () => ({
     </div>
   ),
 }));
+vi.mock("./Sidebar.production", async () => import("./Sidebar"));
+vi.mock("./CompanySettingsSidebar.production", async () => import("./CompanySettingsSidebar"));
+vi.mock("./AppsSidebar.production", async () => import("./AppsSidebar"));
+vi.mock("./AppConnectionSidebar.production", async () => import("./AppConnectionSidebar"));
+vi.mock("./BreadcrumbBar.production", async () => import("./BreadcrumbBar"));
+vi.mock("./SidebarAccountMenu.production", async () => import("./SidebarAccountMenu"));
 
 vi.mock("./CompanySettingsSidebar", () => ({
   CompanySettingsSidebar: () => <div>Company settings sidebar</div>,
@@ -376,16 +383,17 @@ describe("Layout", () => {
     });
   });
 
-  it.each([[false, "sourcing", "Commerce"], [true, "sourcing", "Commerce"], [false, "knowledge/ask", "Knowledge"], [true, "knowledge/graph", "Knowledge"]] as const)("keeps the primary rail beside Commerce and other domain navigation (streamlined=%s, route=%s)", async (streamlined, route, label) => {
+  it.each([[false, "sourcing", "Commerce"], [true, "sourcing", "Commerce"], [false, "knowledge/ask", "Knowledge"], [true, "knowledge/graph", "Knowledge"]] as const)("keeps expanded global navigation beside domain navigation (streamlined=%s, route=%s)", async (streamlined, route, label) => {
     currentPathname = `/PAP/${route}`;
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableApps: true, enableStreamlinedUi: streamlined });
     const root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    await act(async () => root.render(<QueryClientProvider client={queryClient}><Layout /></QueryClientProvider>));
+    const DomainLayout = streamlined ? Layout : ProductionLayout;
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><DomainLayout /></QueryClientProvider>));
     await flushReact();
     await flushReact();
     expect(container.textContent).toContain("Main company nav");
-    expect(mockSetForceCollapsed).toHaveBeenCalledWith(true);
+    expect(mockSetForceCollapsed).toHaveBeenLastCalledWith(false);
     expect(container.querySelector(`nav[aria-label="${label}"]`)).not.toBeNull();
     expect(container.querySelectorAll("[data-secondary-sidebar]")).toHaveLength(1);
     await act(async () => root.unmount());

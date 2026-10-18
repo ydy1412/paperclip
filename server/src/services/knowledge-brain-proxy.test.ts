@@ -12,6 +12,7 @@ function fixture() {
   const db = { select: () => {
     let table: unknown;
     const chain = { from(t: unknown) { table = t; return chain; }, where() { return chain; }, limit() { return chain; },
+      groupBy() { return chain; },
       then(resolve: (value: unknown[]) => unknown, reject: (error: unknown) => unknown) {
         const rows = table === toolConnections ? [connection] : table === connectionGrants ? [grant] : table === toolCatalogEntries ? [catalog] : [];
         return Promise.resolve(rows).then(resolve, reject);
@@ -26,6 +27,17 @@ function fixture() {
   return { service, request, catalog, grant };
 }
 describe("Personal Brain management proxy", () => {
+  it("scopes usage to an owned connection and leaves unmeasured citations unknown", async () => {
+    const f = fixture(); Object.assign(f.catalog, { isReadOnly: true, isWrite: false });
+    await expect(f.service.usage("company", "connection", "owner")).resolves.toEqual({ searches: 0, documentReads: 0, citationCopies: 0, agentSearches: 0, agentDocumentReads: 0, agentCitations: null });
+    f.grant.subjectUserId = "other";
+    await expect(f.service.usage("company", "connection", "owner")).rejects.toThrow("연결");
+  });
+  it("explains disabled generation without masking its conflict status", async () => {
+    const f = fixture(); Object.assign(f.catalog, { isReadOnly: true, isWrite: false });
+    f.request.mockResolvedValueOnce(Response.json({ error: "generation_disabled" }, { status: 409 }));
+    await expect(f.service.call("company", "connection", "owner", "memory_reflect", { query: "status" })).rejects.toMatchObject({ status: 409, message: expect.stringContaining("원문 검색 모드") });
+  });
   it("keeps the read route closed to every write even with a write-capable grant", async () => {
     const f = fixture(); await expect(f.service.call("company", "connection", "owner", "knowledge_move", {})).rejects.toThrow("허용되지 않은"); expect(f.request).not.toHaveBeenCalled();
   });
