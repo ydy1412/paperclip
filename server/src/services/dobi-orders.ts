@@ -35,7 +35,13 @@ export async function createDobiCredentialVault(db: Db, companyId: string, proje
   };
 }
 
-export function dobiOrdersService(db: Db, options: { dataRoot?: string; vault?: CredentialVault } = {}) {
+export interface DobiOrdersOptions {
+  dataRoot?: string;
+  vault?: CredentialVault;
+  integrations?: { fetchImpl: typeof fetch; resolveHost: false };
+}
+
+export function dobiOrdersService(db: Db, options: DobiOrdersOptions = {}) {
   const workspaces = new Map<string, Promise<DobiWorkspace>>();
   async function assertProject(companyId: string, projectId: string) {
     const [project] = await db.select({ id: projects.id }).from(projects)
@@ -53,6 +59,7 @@ export function dobiOrdersService(db: Db, options: { dataRoot?: string; vault?: 
           const directory = path.join(options.dataRoot ?? path.join(resolvePaperclipInstanceRoot(), "dobi-orders"), companyId, projectId);
           await mkdir(directory, { recursive: true, mode: 0o700 });
           const app = await createApp({ hosted: true, dataRoot: directory, dbPath: path.join(directory, "orders.sqlite"),
+            ...options.integrations,
             vault: options.vault ?? await createDobiCredentialVault(db, companyId, projectId), bridgeBase: baseUrl,
             authorizeBridge: async ownerId => {
               const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(

@@ -99,6 +99,20 @@ describe("Dobi Orders hosted domain", () => {
   });
   it("redacts hosted credential and private import request bodies", () => {
     expect(isSecretSensitiveHttpRequest("POST", `${base}/connections`)).toBe(true);
+    expect(isSecretSensitiveHttpRequest("POST", `${base}/connections/id/wing-login`)).toBe(true);
+    expect(isSecretSensitiveHttpRequest("POST", `${base}/connections/id/seller-login`)).toBe(true);
     expect(isSecretSensitiveHttpRequest("PUT", `${base}/drafts/order-new`)).toBe(true);
+  });
+  it("scopes login status and mutations and rejects the Windows login action", async () => {
+    const created = await request(app()).post(`${base}/connections`).send({ providerId: "coupang", name: "Synthetic session account", mode: "wing", sellerId: "synthetic-wing", credentials: { password: "synthetic-password" } });
+    expect(created.status).toBe(201);
+    const login = `${base}/connections/${created.body.id}/wing-login`;
+    expect((await request(app()).get(login)).body.pending).toBe(false);
+    for (const actor of ["none", "agent", "other"]) {
+      expect((await request(app()).get(login).set("x-actor", actor)).status).toBe(403);
+      expect((await request(app()).post(login).set("x-actor", actor).send({ step: "start" })).status).toBe(403);
+    }
+    expect((await request(app()).post(login).send({ step: "native" })).status).toBe(409);
+    expect((await request(app()).post(login).send({ step: "cancel" })).body.cancelled).toBe(true);
   });
 });

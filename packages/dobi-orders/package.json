@@ -1,6 +1,6 @@
 {
   "name": "@paperclipai/dobi-orders",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -23,12 +23,17 @@
     "node": ">=24.15.0"
   },
   "dependencies": {
+    "@zip.js/zip.js": "2.23.0",
     "bcryptjs": "3.0.2",
+    "cfb": "1.2.2",
     "csv-parse": "7.0.3",
     "exceljs": "4.4.0",
     "he": "1.2.0",
     "jszip": "3.10.1",
-    "lossless-json": "4.3.1"
+    "lossless-json": "4.3.1",
+    "officecrypto-tool": "0.0.19",
+    "parse5": "8.0.1",
+    "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "files": [
     "server.mjs",
@@ -36,6 +41,8 @@
     "src",
     "frontend",
     "browser-helper",
-    "README.md"
+    "README.md",
+    "docs",
+    "THIRD-PARTY-NOTICES.txt"
   ]
 }

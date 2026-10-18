@@ -1,0 +1,19 @@
+{
+  "source": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+  "registryAlias": "xlsx@npm:@e965/xlsx@0.20.3",
+  "version": "0.20.3",
+  "verifiedIdentical": [
+    {
+      "file": "xlsx.mjs",
+      "sha256": "1a0fb062ee9781b13f6687371b202aaefc53b6ce55b530c027e01f9c087b77db"
+    },
+    {
+      "file": "xlsx.js",
+      "sha256": "fd159f1e2d694e12cd0709c1ec1b63c6e1f045d2c4ce857a346f9b965798cbfa"
+    },
+    {
+      "file": "LICENSE",
+      "sha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+    }
+  ]
+}

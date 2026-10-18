@@ -6,7 +6,8 @@
     "officialClients": 3,
     "formMappingCandidates": 176,
     "restForwarderContracts": 0,
-    "sessionClients": 1
+    "sessionClients": 1,
+    "wingClients": 1
   },
   "providers": [
     {
@@ -1814,8 +1815,8 @@
         "https://www.coupang.com",
         "https://wing.coupang.com"
       ],
-      "loginMethod": "공식 API / 브라우저",
-      "readiness": "API 구현 · 실계정 확인 필요",
+      "loginMethod": "윙 아이디·비밀번호 · 문자/이메일 추가 인증 · WebView2 로그인창",
+      "readiness": "윙 로그인·세션 주문 수집 구현 · 실계정 검증 필요",
       "capabilities": {
         "collectApi": true,
         "browserImport": true,
@@ -2260,7 +2261,8 @@
         "Required account credentials/keys, which were not read",
         "Pagination, error semantics, rate limits, exact response contract",
         "Actual connection/order/shipping execution"
-      ]
+      ],
+      "wingLogin": true
     },
     {
       "id": "wemakeprice1",

@@ -1,0 +1,17 @@
+도비 오더스 외부 구성요소 안내
+
+샵마인의 실행 파일·DLL·복원 소스·상표 자산은 포함하지 않습니다. 샵마인은 제3자의 제품이며 이 프로그램은 제휴 제품이 아닙니다.
+
+Node.js 24.19.0: 공식 오픈소스 런타임. runtime/NODE-LICENSE.txt 및 https://github.com/nodejs/node/blob/v24.19.0/LICENSE
+ExcelJS 4.4.0: MIT. node_modules/exceljs/LICENSE
+CSV Parse 7.0.3: MIT. node_modules/csv-parse/LICENSE
+전이 의존성: 각 node_modules 패키지의 LICENSE/NOTICE 파일을 보존했습니다. 버전은 package-lock.json에 고정했습니다.
+
+새 실행 파일은 사용자 요청으로 작성된 로컬 런처입니다. 데이터는 외부 서버에 자동 업로드하지 않습니다.
+Version 0.2.0 additions: bcryptjs 3.0.2 (BSD-3-Clause), lossless-json 4.3.1 (MIT), JSZip 3.10.1 (MIT or GPL-3.0 dual license; used under MIT), CSV Parse 7.0.3 (MIT). Corresponding license files are included in node_modules. The browser helper consists of newly written project code and does not bundle vendor scripts or binaries.
+
+Version 0.3.0 addition: he 1.2.0 (MIT), used to decode HTML entities in ESM order text. License: node_modules/he/LICENSE-MIT.txt.
+
+Version 0.4.0 additions: parse5 8.0.1 and entities 8.1.0 (MIT), used for HTML parsing. Their LICENSE files are preserved in node_modules. Microsoft.Web.WebView2 1.0.4258.31 is downloaded from the official NuGet registry and verified against its pinned SHA-512 by scripts/build-wing-login.mjs. The Windows release includes the official Core/WinForms assemblies and x64 WebView2Loader with runtime/wing-login/WEBVIEW2-LICENSE.txt and WEBVIEW2-NOTICE.txt. The new CoupangLogin.exe is project source built from native/wing-login/CoupangLogin.cs; no ShopMine binaries are bundled. The system WebView2 Runtime is not installed or redistributed by this build.
+
+Version 0.5.0 additions: @zip.js/zip.js 2.23.0 (BSD-3-Clause), SheetJS CE 0.20.3 (Apache-2.0), cfb 1.2.2 (Apache-2.0), officecrypto-tool 0.0.19 (MIT). Package lock pins all dependencies; their licenses are preserved in node_modules. ZIP and Office passwords are generated per export, not copied from a third-party program. SheetJS is installed through the registry alias xlsx@npm:@e965/xlsx@0.20.3 because direct tarball installation is disabled in this environment. Its executable xlsx.js and xlsx.mjs and LICENSE were compared byte for byte with the official https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz; verification hashes are in docs/SHEETJS-SOURCE.json. This comparison is a source-integrity check, not an endorsement of the registry publisher. officecrypto-tool uses the locked transitive cfb, crypto-js and xml2js packages; corresponding licenses are preserved.
