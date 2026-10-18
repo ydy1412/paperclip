@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
-import { connectionGrants, toolConnections, toolCatalogEntries, type Db } from "@paperclipai/db";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { activityLog, connectionGrants, toolConnections, toolCatalogEntries, toolInvocations, type Db } from "@paperclipai/db";
 import { badRequest, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { toolAccessService } from "./tool-access.js";
 import { resolveConnectionGrantSecret } from "./connection-credentials.js";
@@ -14,6 +14,8 @@ export function assertBrainWriteEntry(entry: Pick<CatalogEntry, "status" | "isRe
   if (!entry || entry.status !== "active" || entry.isReadOnly || (!entry.isWrite && !entry.isDestructive)) throw forbidden("쓰기 권한이 있는 Personal Brain 연결이 필요합니다. Apps에서 연결을 확인해 주세요.");
 }
 const brainErrors: Record<string, string> = {
+  generation_disabled: "현재 원문 검색 모드에서는 AI 답변과 자동 요약이 꺼져 있습니다. 검색 근거와 원문을 확인해 주세요.",
+  image_generation_unavailable: "현재 이미지 해석이 꺼져 있습니다. 원본 파일은 보관되어 있습니다.",
   source_changed: "다른 곳에서 수정되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.",
   name_conflict: "같은 이름이 있습니다. 다른 이름이나 위치를 선택해 주세요.",
   restore_parent_required: "원래 폴더가 없습니다. 복원할 폴더를 선택해 주세요.",
@@ -91,10 +93,37 @@ export function knowledgeBrainService(db: Db, options: {
           const actions = await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, companyId), eq(toolCatalogEntries.connectionId, row.connection.id)));
           visible.push({ id: row.connection.id, name: row.connection.name, kind: "personal-brain" as const,
             actions: actions.filter(a => BRAIN_WRITE_TOOLS.has(a.toolName) && a.status === "active" && (a.isWrite || a.isDestructive) && !a.isReadOnly).map(a => a.toolName),
-            ownerId: userId });
+            ownerId: userId, vaultId: null as string | null });
         } catch (error) { if (!(error instanceof HttpError && error.status === 404)) throw error; }
       }
-      return visible;
+      return Promise.all(visible.map(async vault => {
+        try {
+          const status = await this.call(companyId, vault.id, userId, "knowledge_status", {}, AbortSignal.timeout(2500)) as { vaultId?: unknown };
+          if (typeof status?.vaultId === "string" && status.vaultId.length > 0 && status.vaultId.length <= 300) {
+            const connection = rows.find(row => row.connection.id === vault.id)!.connection;
+            const config = { ...connection.config, ...connection.transportConfig };
+            const endpoint = parseRemoteHttpEndpoint(config.url ?? config.endpoint ?? config.remoteUrl, (message, code) => badRequest(message, { code }));
+            vault.vaultId = createHash("sha256").update(endpoint.origin + "\0" + status.vaultId).digest("hex");
+          }
+        } catch { /* A failed identity lookup must not merge unrelated vaults. */ }
+        return vault;
+      }));
+    },
+    async usage(companyId: string, connectionId: string, userId: string) {
+      await owned(companyId, connectionId, userId);
+      const [activity, agent] = await Promise.all([
+        db.select({ action: activityLog.action, total: count() }).from(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "tool_connection"), eq(activityLog.entityId, connectionId), eq(activityLog.actorType, "user"), eq(activityLog.actorId, userId),
+          inArray(activityLog.action, ["knowledge.searched", "knowledge.document_read", "knowledge.citation_copied"]))).groupBy(activityLog.action),
+        db.select({ tool: toolInvocations.upstreamToolName, total: count() }).from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
+          eq(toolInvocations.connectionId, connectionId), eq(toolInvocations.actorType, "agent"), eq(toolInvocations.status, "succeeded"),
+          inArray(toolInvocations.upstreamToolName, ["memory_recall", "knowledge_document"]))).groupBy(toolInvocations.upstreamToolName),
+      ]);
+      await owned(companyId, connectionId, userId);
+      const total = (action: string) => Number(activity.find(r => r.action === action)?.total ?? 0);
+      return { searches: total("knowledge.searched"), documentReads: total("knowledge.document_read"), citationCopies: total("knowledge.citation_copied"),
+        agentSearches: Number(agent.find(r => r.tool === "memory_recall")?.total ?? 0),
+        agentDocumentReads: Number(agent.find(r => r.tool === "knowledge_document")?.total ?? 0), agentCitations: null };
     },
     async call(companyId: string, connectionId: string, userId: string, tool: string, args: Record<string, unknown>, signal?: AbortSignal, mutation = false) {
       if (!(mutation ? BRAIN_WRITE_TOOLS : BRAIN_READ_TOOLS).has(tool)) throw forbidden("허용되지 않은 지식 조회입니다.");
@@ -115,7 +144,7 @@ export function knowledgeBrainService(db: Db, options: {
             method: "tools/call", params: { name: tool, arguments: args } }) });
         if (!response.ok) {
           const failure = await response.json().catch(() => ({})) as { error?: string };
-          throw new HttpError([400, 401, 403, 404, 409, 413, 415].includes(response.status) ? response.status : 502,
+          throw new HttpError([400, 401, 403, 404, 409, 413, 415, 422].includes(response.status) ? response.status : 502,
             brainErrors[failure.error ?? ""] ?? (response.status === 401 || response.status === 403 ? "Personal Brain 인증을 확인해 주세요." : "Personal Brain 요청에 실패했습니다."));
         }
         const result = await readMcpHttpResponse(response, requestId, { maxBytes: tool === "knowledge_file" ? 72 * 1024 * 1024 : 8 * 1024 * 1024 }) as {
@@ -124,7 +153,7 @@ export function knowledgeBrainService(db: Db, options: {
         if (result.result.isError) {
           let failure: { error?: string; status?: number } = {};
           try { failure = JSON.parse(result.result.content?.[0]?.text ?? "{}"); } catch { /* Generic error below. */ }
-          throw new HttpError([400, 401, 403, 404, 409, 413, 415].includes(failure.status ?? 0) ? failure.status! : 502,
+          throw new HttpError([400, 401, 403, 404, 409, 413, 415, 422].includes(failure.status ?? 0) ? failure.status! : 502,
             brainErrors[failure.error ?? ""] ?? "Personal Brain이 요청을 완료하지 못했습니다.");
         }
         const data = result.result.structuredContent ?? JSON.parse(result.result.content?.[0]?.text ?? "null");

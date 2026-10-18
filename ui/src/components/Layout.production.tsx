@@ -267,7 +267,7 @@ export function Layout() {
   // is active, but does NOT mutate the persisted preference. Clearing the force
   // on cleanup restores the user's expanded/collapsed choice when navigating
   // off the takeover route (PAP-10694).
-  const forceRailCollapsed = hasSecondarySidebar || isSkillsRoute;
+  const forceRailCollapsed = !compactWorkspace && (hasSecondarySidebar || isSkillsRoute);
   useLayoutEffect(() => {
     setForceCollapsed(forceRailCollapsed);
     return () => setForceCollapsed(false);
@@ -691,10 +691,9 @@ export function Layout() {
             </div>
           ) : (
             <SidebarShell
-              className={isKnowledgeRoute ? "knowledge-rail" : isSourcingRoute ? "commerce-rail" : undefined}
               open={sidebarOpen}
-              collapsed={compactWorkspace ? true : collapsed}
-              peeking={compactWorkspace ? false : peeking}
+              collapsed={collapsed}
+              peeking={peeking}
               resizable
               onPanelMouseEnter={compactWorkspace ? undefined : handlePanelPointerEnter}
               onPanelMouseLeave={compactWorkspace ? undefined : handlePanelPointerLeave}

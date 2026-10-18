@@ -21,12 +21,33 @@ export function knowledgeBrainRoutes(db: Db) {
     res.setHeader("Cache-Control", "no-store"); next();
   });
   router.get(`${base}/vaults`, async (req, res) => res.json(await service.list(req.params.companyId as string, req.actor.userId ?? "")));
+  router.get(`${base}/:connectionId/usage`, async (req, res) => {
+    if (!z.string().uuid().safeParse(req.params.connectionId).success) throw badRequest("보관함을 선택해 주세요.");
+    res.json(await service.usage(req.params.companyId as string, req.params.connectionId as string, req.actor.userId ?? ""));
+  });
+  router.post(`${base}/:connectionId/citation`, validate(z.object({ id: z.string().min(1).max(300), revision: z.string().min(1).max(300) }).strict()), async (req, res) => {
+    if (!z.string().uuid().safeParse(req.params.connectionId).success) throw badRequest("보관함을 선택해 주세요.");
+    const doc = await service.call(req.params.companyId as string, req.params.connectionId as string, req.actor.userId ?? "", "knowledge_document", { id: req.body.id }) as { revision: string; state: string };
+    if (doc.revision !== req.body.revision || doc.state === "stale") throw new HttpError(409, "원문 버전이 변경되었습니다. 최신 내용을 확인해 주세요.");
+    await logActivity(db, { companyId: req.params.companyId as string, actorType: "user", actorId: req.actor.userId!,
+      action: "knowledge.citation_copied", entityType: "tool_connection", entityId: req.params.connectionId as string,
+      details: { documentId: req.body.id, revision: req.body.revision } });
+    res.json({ recorded: true });
+  });
   router.post(`${base}/:connectionId/read`, validate(z.object({ tool: z.string().max(100), arguments: z.record(z.string(), z.unknown()) }).strict()), async (req, res) => {
     if (!z.string().uuid().safeParse(req.params.connectionId).success) throw badRequest("보관함을 선택해 주세요.");
     const controller = new AbortController();
     const abort = () => { if (!res.writableEnded) controller.abort(); };
     res.once("close", abort);
-    try { res.json(await service.call(req.params.companyId as string, req.params.connectionId as string, req.actor.userId ?? "", req.body.tool, req.body.arguments, controller.signal)); }
+    try {
+      const data = await service.call(req.params.companyId as string, req.params.connectionId as string, req.actor.userId ?? "", req.body.tool, req.body.arguments, controller.signal);
+      if (req.body.tool === "memory_recall" || req.body.tool === "knowledge_document") await logActivity(db, {
+        companyId: req.params.companyId as string, actorType: "user", actorId: req.actor.userId!,
+        action: req.body.tool === "memory_recall" ? "knowledge.searched" : "knowledge.document_read", entityType: "tool_connection", entityId: req.params.connectionId as string,
+        details: req.body.tool === "knowledge_document" ? { documentId: req.body.arguments.id } : {},
+      });
+      res.json(data);
+    }
     finally { res.off("close", abort); }
   });
   async function mutate(req: import("express").Request, tool: string, args: Record<string, unknown>) {

@@ -1,15 +1,15 @@
 import { api } from "./client";
 
-export interface BrainVault { id: string; name: string; kind: "personal-brain"; actions?: string[]; ownerId?: string }
+export interface BrainVault { id: string; name: string; kind: "personal-brain"; actions?: string[]; ownerId?: string; vaultId?: string | null }
 export interface BrainDocument {
-  id: string; title: string; path: string; project: string; kind: "source" | "generated";
+  id: string; title: string; path: string; project: string; projects?: string[]; kind: "source" | "generated";
   updatedAt: string | null; revision: string; summary: string; content?: string;
   state: string; partial: boolean; contentType: string; byteSize: number;
   references?: BrainReference[];
 }
-export interface BrainReference { sourceId: string; docId: string; path: string; revision: string; project?: string; locator?: string | null }
+export interface BrainReference { sourceId: string; docId: string; path: string; revision: string; project?: string; projects?: string[]; locator?: string | null }
 export interface BrainLibrary { items: BrainDocument[]; total: number; page: number; pageSize: number;
-  projects: { id: string; name: string }[]; counts: { all: number; source: number; generated: number }; complete: boolean }
+  projects: { id: string; name: string }[]; counts: { all: number; source: number; generated: number }; states?: { stale: number; unassigned: number }; complete: boolean }
 export interface BrainAnswer { markdown: string; references: BrainReference[]; incomplete: boolean; generated: boolean }
 export interface BrainRecall { items: { id: string; text: string; reference: BrainReference }[]; incomplete: boolean }
 export interface BrainGraphData {
@@ -19,9 +19,13 @@ export interface BrainGraphData {
 }
 export interface BrainGraphDetail { title: string; kind: string; facts: { id: string; text: string; documentId: string }[]; documents: BrainDocument[]; partial: boolean }
 export interface BrainStatus { connected: boolean; enabled: boolean; paused: boolean; complete: boolean; lastScan: number | null;
-  sources: number; generatedNotes: number; partial: number; queue: Record<string, number>; error: string | null }
+  sources: number; ready?: number; generatedNotes: number; partial: number; queue: Record<string, number>; error: string | null;
+  mode?: "raw" | "full"; generationEnabled?: boolean; deferredGeneration?: Record<string, number> | null }
+export interface BrainUsage { searches: number; documentReads: number; citationCopies: number; agentSearches: number; agentDocumentReads: number; agentCitations: null }
 const root = (company: string) => `/companies/${encodeURIComponent(company)}/knowledge`;
 export const knowledgeWorkspaceApi = {
+  usage: (company: string, vault: string) => api.get<BrainUsage>(`${root(company)}/${encodeURIComponent(vault)}/usage`),
+  citation: (company: string, vault: string, id: string, revision: string) => api.post(`${root(company)}/${encodeURIComponent(vault)}/citation`, { id, revision }),
   write: <T>(company: string, vault: string, tool: string, args: Record<string, unknown>) =>
     api.post<T>(`${root(company)}/${encodeURIComponent(vault)}/write`, { tool, arguments: args }),
   upload: (company: string, vault: string, file: File, parentId: string, operationId: string) => {

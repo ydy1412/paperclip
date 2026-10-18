@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { KnowledgeWorkspace } from "./KnowledgeWorkspace";
-const mock = vi.hoisted(() => ({ vaults: vi.fn(), read: vi.fn(), crumbs: vi.fn(), toolbar: vi.fn() }));
+const mock = vi.hoisted(() => ({ vaults: vi.fn(), read: vi.fn(), crumbs: vi.fn(), toolbar: vi.fn(), usage: vi.fn() }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company", selectedCompany: null }) }));
 vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mock.crumbs, setBreadcrumbToolbar: mock.toolbar }) }));
-vi.mock("../api/knowledgeWorkspace", () => ({ knowledgeWorkspaceApi: { vaults: mock.vaults, read: mock.read, file: () => "/file" } }));
+vi.mock("../api/knowledgeWorkspace", () => ({ knowledgeWorkspaceApi: { vaults: mock.vaults, read: mock.read, usage: mock.usage, file: () => "/file" } }));
+vi.mock("../api/projects", () => ({ projectsApi: { list: async () => [] } }));
 vi.mock("../api/plugins", () => ({ pluginsApi: { list: async () => [] } }));
 vi.mock("./Knowledge", () => ({ Knowledge: () => <div>기존 Paperclip 보관함</div> }));
 vi.mock("../components/BrainKnowledgeGraph", () => ({ BrainKnowledgeGraph: ({ project }: { project: string }) => <div>그래프 범위 {project}</div> }));
@@ -26,6 +27,7 @@ function render(path = "/knowledge") { const client = new QueryClient({ defaultO
 beforeEach(() => { vi.clearAllMocks(); container = document.createElement("div"); document.body.append(container);
   localStorage.clear();
   mock.vaults.mockResolvedValue([{ id: "brain", name: "Personal Brain", kind: "personal-brain" }]);
+  mock.usage.mockResolvedValue({ searches: 0, documentReads: 0, citationCopies: 0, agentSearches: 0, agentDocumentReads: 0, agentCitations: null });
   mock.read.mockImplementation(async (_company, _vault, tool, args) => {
     if (tool === "knowledge_tree") return { items: [
       { id: "in", name: "Inbox", path: "Inbox", parentId: null, type: "folder", canCreate: true },
@@ -34,7 +36,7 @@ beforeEach(() => { vi.clearAllMocks(); container = document.createElement("div")
       { id: "summary", name: "summary.md", path: "Processed/summary.md", parentId: "processed", type: "note" },
     ], complete: true };
     if (tool === "knowledge_library") return { items: [summary, original], total: 2, page: 1, pageSize: 30, counts: { all: 2, source: 1, generated: 1 }, projects: [{ id: "Alpha", name: "Alpha" }] };
-    if (tool === "knowledge_status") return { connected: true, enabled: true, queue: {}, complete: true };
+    if (tool === "knowledge_status") return { connected: true, enabled: true, generationEnabled: true, mode: "full", queue: {}, complete: true };
     if (tool === "knowledge_document") return args.id === "original" ? original : summary;
     if (tool === "memory_recall") return { items: [{ id: "fact", text: "근거", reference: summary.references[0] }], incomplete: false };
     if (tool === "memory_reflect") return { markdown: "검증된 답변", references: summary.references, incomplete: false, generated: true };
@@ -42,6 +44,18 @@ beforeEach(() => { vi.clearAllMocks(); container = document.createElement("div")
 });
 afterEach(() => { if (root) flushSync(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 describe("Knowledge workspace", () => {
+  it("keeps raw-mode evidence available without offering disabled generation", async () => {
+    const normal = mock.read.getMockImplementation()!;
+    mock.read.mockImplementation(async (...args) => args[2] === "knowledge_status" ? { connected: true, enabled: true, mode: "raw", generationEnabled: false, ready: 19, queue: {}, deferredGeneration: { pending: 37, failed: 21 } } : normal(...args));
+    render("/knowledge/ask?vault=brain");
+    await wait(() => expect(container.querySelector('.knowledge-ask-suggestions button')).not.toBeNull());
+    flushSync(() => (container.querySelector('.knowledge-ask-suggestions button') as HTMLButtonElement).click());
+    await wait(() => expect(container.querySelectorAll('.knowledge-result-row')).toHaveLength(1));
+    expect(container.textContent).toContain("AI 답변 생성 꺼짐");
+    expect(container.textContent).toContain("37 pending");
+    expect([...container.querySelectorAll("button")].some(b => b.textContent === "Generate answer")).toBe(false);
+    expect(mock.read.mock.calls.some(call => call[2] === "memory_reflect")).toBe(false);
+  });
   it("defaults to the personal vault and opens source-backed summary and original", async () => { render(); await wait(() => expect(container.textContent).toContain("summary.md")); flushSync(() => (container.querySelector('[data-tree-id="summary"]') as HTMLButtonElement).click()); await wait(() => expect(container.textContent).toContain("근거 있는 요약")); flushSync(() => (container.querySelector('.knowledge-source-card') as HTMLButtonElement).click()); await wait(() => expect(container.textContent).toContain("현재 원문")); expect(mock.read).toHaveBeenCalledWith("company", "brain", "knowledge_document", { id: "original" }, expect.any(AbortSignal)); });
   it("clears Knowledge scope controls when leaving the workspace", async () => {
     render('/knowledge/ask?vault=brain&project=Alpha');

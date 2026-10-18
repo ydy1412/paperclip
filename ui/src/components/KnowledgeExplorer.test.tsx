@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeExplorer, explorerRows } from "./KnowledgeExplorer";
 import type { BrainTreeItem } from "../api/knowledgeWorkspace";
 
-const mock = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn(), upload: vi.fn() }));
+const mock = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn(), upload: vi.fn(), citation: vi.fn() }));
 vi.mock("../api/knowledgeWorkspace", () => ({ knowledgeWorkspaceApi: { ...mock, file: () => "/fixture-file" } }));
 vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("./ui/resizable-panels", () => ({ ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, ResizablePanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, ResizableHandle: () => <div /> }));
@@ -45,6 +45,30 @@ beforeEach(() => {
 });
 afterEach(() => { flushSync(() => root?.unmount()); container.remove(); });
 describe("Knowledge file explorer", () => {
+  it("saves explicit project labels with the current revision and original body", async () => {
+    render(); await wait(() => expect(container.querySelector('[aria-label="Document projects"]')).not.toBeNull());
+    input(container.querySelector('[aria-label="Document projects"]')!, "Alpha, Beta");
+    flushSync(() => [...container.querySelectorAll("button")].find(b => b.textContent === "Save")!.click());
+    await wait(() => expect(mock.write).toHaveBeenCalled());
+    expect(mock.write).toHaveBeenCalledWith("company", "vault", "knowledge_save_document", expect.objectContaining({ id: "a", expectedRevision: "r1", content: '---\nprojects: ["Alpha","Beta"]\n---\n# Original' }));
+  });
+  it("does not describe a stale raw-mode summary as being regenerated", async () => {
+    const normal = mock.read.getMockImplementation()!;
+    mock.read.mockImplementation(async (...args) => args[2] === "knowledge_document" ? { ...await normal(...args), state: "stale" } : normal(...args));
+    render({ doc: "g" }); await wait(() => expect(container.textContent).toContain("갱신되지 않습니다"));
+    expect(container.textContent).not.toContain("갱신하고 있습니다");
+    expect([...container.querySelectorAll("button")].find(b => b.textContent === "Copy citation")!.disabled).toBe(true);
+  });
+  it("records a citation copy only after the clipboard accepted current source evidence", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    mock.citation.mockResolvedValue({ recorded: true });
+    render(); await wait(() => expect(container.textContent).toContain("# Original"));
+    flushSync(() => [...container.querySelectorAll("button")].find(b => b.textContent === "Copy citation")!.click());
+    await wait(() => expect(mock.citation).toHaveBeenCalledWith("company", "vault", "a", "r1"));
+    expect(writeText.mock.calls[0][0]).toContain("Revision: r1");
+    expect(writeText.mock.calls[0][0]).toContain("Source: Inbox/a.md");
+  });
   it("opens an actual tree including empty folders and separate document tabs", async () => {
     render(); await wait(() => expect(container.textContent).toContain("# Original"));
     expect(container.querySelector('[data-tree-id="empty"]')).not.toBeNull();

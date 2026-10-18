@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ContextMenu } from "radix-ui";
-import { ChevronDown, ChevronRight, File, FilePlus2, Folder, FolderPlus, PanelLeft, RefreshCw, Save, Search, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, File, FilePlus2, Folder, FolderPlus, PanelLeft, RefreshCw, Save, Search, Trash2, Upload, X } from "lucide-react";
 import { knowledgeWorkspaceApi as brain, type BrainDocument, type BrainTree, type BrainTreeItem, type BrainTrashItem, type BrainVault } from "../api/knowledgeWorkspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -11,9 +11,10 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resiz
 import { MarkdownBody } from "./MarkdownBody";
 import { clearDraft, DRAFT_DEBOUNCE_MS, loadDraft, saveDraft } from "../lib/composer-draft";
 import { cn } from "../lib/utils";
+import { documentProjects, withDocumentProjects } from "../lib/knowledge-documents";
 
 type Mode = "edit" | "preview" | "split";
-type Buffer = { content: string; revision: string; dirty: boolean; mode: Mode };
+type Buffer = { content: string; revision: string; dirty: boolean; mode: Mode; projectsDraft?: string; projectsError?: string };
 type Action = "folder" | "note" | "rename" | "move" | "trash" | "restore" | "copy" | "latest";
 const labels: Record<Action, string> = { folder: "New folder", note: "New file", rename: "Rename", move: "Move", trash: "Move to Trash", restore: "Restore", copy: "Create editable copy", latest: "Review latest source" };
 const errorText = (error: unknown) => error instanceof Error ? error.message : "요청을 완료하지 못했습니다. 다시 시도해 주세요.";
@@ -38,8 +39,8 @@ export function explorerRows(items: BrainTreeItem[], expanded: Set<string>, quer
   walk(null, 0); return result;
 }
 
-export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
-  company: string; vault: BrainVault; documentId: string; onDocument: (id: string) => void;
+export function KnowledgeExplorer({ company, vault, documentId, onDocument, generationEnabled = false, projects = [] }: {
+  company: string; vault: BrainVault; documentId: string; onDocument: (id: string) => void; generationEnabled?: boolean; projects?: string[];
 }) {
   const cache = useQueryClient(), key = ["brain-knowledge", company, vault.id];
   const scope = `paperclip:knowledge:${vault.ownerId ?? "read-only"}:${company}:${vault.id}`;
@@ -55,6 +56,7 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
   const tree = useQuery({ queryKey: [...key, "tree"], queryFn: ({ signal }) => brain.read<BrainTree>(company, vault.id, "knowledge_tree", {}, signal), retry: false });
   const trash = useQuery({ queryKey: [...key, "trash"], queryFn: ({ signal }) => brain.read<{ items: BrainTrashItem[] }>(company, vault.id, "knowledge_trash", {}, signal), enabled: showTrash, retry: false });
   const detail = useQuery({ queryKey: [...key, "document", documentId], queryFn: ({ signal }) => brain.read<BrainDocument>(company, vault.id, "knowledge_document", { id: documentId }, signal), enabled: !!documentId && !showTrash, retry: false });
+  useEffect(() => { if (detail.dataUpdatedAt) void cache.invalidateQueries({ queryKey: ["brain-knowledge", company, vault.id, "usage"] }); }, [detail.dataUpdatedAt, cache, company, vault.id]);
   const items = tree.error ? [] : tree.data?.items ?? [], current = items.find(i => i.id === documentId), selectedItem = items.find(i => i.id === selected);
   const folders = items.filter(i => i.type === "folder" && i.canCreate);
   const rows = useMemo(() => explorerRows(items, expanded, query), [items, expanded, query]);
@@ -115,7 +117,7 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
   });
   async function refresh() { await cache.invalidateQueries({ queryKey: key }); }
   async function save(id: string) {
-    const value = buffersRef.current[id]; if (!value?.dirty || !can("save_document")) return false;
+    const value = buffersRef.current[id]; if (!value?.dirty || value.projectsError || !can("save_document")) return false;
     setBusy(true); setError("");
     try {
       const result = await brain.write<{ revision: string }>(company, vault.id, "knowledge_save_document", { id, content: value.content, expectedRevision: value.revision, operationId: operationId() });
@@ -127,6 +129,16 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
     finally { setBusy(false); }
   }
   function open(id: string) { setShowTrash(false); onDocument(id); }
+  async function copyCitation() {
+    if (!doc || buffer?.dirty || doc.state === "stale") return;
+    const link = new URL(window.location.href); link.searchParams.set("doc", doc.id); link.searchParams.set("vault", vault.id);
+    try {
+      await navigator.clipboard.writeText(`[${doc.title}](${link.href})\nSource: ${doc.path}\nRevision: ${doc.revision}`);
+      setMessage("출처와 원문 버전을 복사했습니다. 링크는 최신 원문을 엽니다.");
+      try { await brain.citation(company, vault.id, doc.id, doc.revision); await cache.invalidateQueries({ queryKey: [...key, "usage"] }); }
+      catch { setMessage("출처를 복사했습니다. 사용 기록은 저장하지 못했습니다."); }
+    } catch { setError("클립보드에 복사할 수 없습니다. 브라우저 권한을 확인해 주세요."); }
+  }
   function removeTab(id: string) {
     const next = tabs.filter(x => x !== id); setTabs(next);
     if (documentId === id) onDocument(next.at(-1) ?? "");
@@ -234,17 +246,28 @@ export function KnowledgeExplorer({ company, vault, documentId, onDocument }: {
       : tree.error || detail.error ? <div role="alert" className="p-5">{errorText(tree.error ?? detail.error)}<Button variant="outline" onClick={() => void refresh()}>Retry</Button></div>
         : !documentId ? <div className="kb-editor-empty"><Folder className="size-8" /><h2>Library</h2><p>왼쪽에서 폴더를 펼치고 파일을 열어 보세요.</p><Button variant="outline" disabled={!can("create_document")} onClick={() => action("note")}>New file</Button></div>
           : detail.isLoading ? <p role="status" className="p-5">문서 불러오는 중</p> : doc && <>
-            <div className="kb-editor-toolbar"><span className="truncate" title={doc.path}>{current?.path ?? doc.path}</span><div className="flex flex-wrap items-center gap-1">
+            <div className="kb-editor-toolbar"><span className="truncate" title={doc.path}>{doc.title}</span><div className="flex flex-wrap items-center gap-1">
               {isText && buffer && ["edit", "preview", "split"].map(mode => <Button key={mode} variant={buffer.mode === mode ? "secondary" : "ghost"} size="sm" disabled={!editable && mode !== "preview"} onClick={() => putBuffer(documentId, { ...buffer, mode: mode as Mode })}>{mode === "edit" ? "Edit" : mode === "preview" ? "Preview" : "Split"}</Button>)}
-              {editable && <Button size="sm" disabled={busy || !buffer?.dirty || conflict} onClick={() => void save(documentId)}><Save className="size-3" />Save</Button>}
-              {doc.kind === "generated" && <Button size="sm" variant="outline" disabled={!can("create_document") || busy} onClick={() => action("copy")}>Create editable copy</Button>}
+              <Button size="sm" variant="ghost" disabled={busy || !!buffer?.dirty || doc.state === "stale"} onClick={() => void copyCitation()}><Copy className="size-3" />Copy citation</Button>
+              {editable && <Button size="sm" disabled={busy || !buffer?.dirty || conflict || !!buffer?.projectsError} onClick={() => void save(documentId)}><Save className="size-3" />Save</Button>}
+              {doc.kind === "generated" && <Button size="sm" variant="outline" disabled={!can("create_document") || busy || doc.state === "stale"} onClick={() => action("copy")}>Create editable copy</Button>}
             </div></div>
             {conflict && <div role="alert" className="kb-conflict">다른 곳에서 수정되었습니다. 임시 입력은 보관 중입니다.<Button size="sm" variant="outline" onClick={() => action("latest")}>Review latest source</Button></div>}
+            {isText && editable && buffer && <div className="kb-document-meta">
+              <label><span>Projects</span><Input aria-label="Document projects" list="knowledge-project-options" placeholder="Dovix, Auto Sourcing" value={buffer.projectsDraft ?? documentProjects(buffer.content).join(", ")} onChange={e => {
+                const projectsDraft = e.target.value;
+                try { putBuffer(documentId, { ...buffer, projectsDraft, projectsError: undefined, content: withDocumentProjects(buffer.content, projectsDraft), dirty: true }); }
+                catch (error) { putBuffer(documentId, { ...buffer, projectsDraft, projectsError: errorText(error), dirty: true }); }
+              }} /></label>
+              <datalist id="knowledge-project-options">{projects.map(p => <option key={p} value={p} />)}</datalist>
+              <p className="text-xs text-muted-foreground">쉼표로 여러 프로젝트를 지정하고 Save를 누르세요. {doc.path.startsWith("Inbox/") ? "원문 적재가 완료되면 각 프로젝트 검색에 반영됩니다." : "의미 검색은 Inbox 원문을 대상으로 합니다."}</p>
+              {buffer.projectsError && <p role="alert" className="text-xs text-destructive">{buffer.projectsError}</p>}
+            </div>}
             <div className={cn("kb-editor-body", editable && buffer?.mode === "split" && "kb-editor-split")}>
-              {isText && editable && buffer && buffer.mode !== "preview" && <Textarea aria-label="문서 Markdown 편집" className="kb-source-editor" value={buffer.content} onChange={e => { putBuffer(documentId, { ...buffer, content: e.target.value, dirty: true }); setMessage("브라우저 임시 입력 · 서버 미저장"); }} />}
+              {isText && editable && buffer && buffer.mode !== "preview" && <Textarea aria-label="문서 Markdown 편집" className="kb-source-editor" value={buffer.content} onChange={e => { putBuffer(documentId, { ...buffer, content: e.target.value, projectsDraft: undefined, projectsError: undefined, dirty: true }); setMessage("브라우저 임시 입력 · 서버 미저장"); }} />}
               {(!editable || buffer?.mode !== "edit") && <div className="kb-reader-content">
                 {doc.kind === "generated" && <p className="knowledge-generated-note">자동 정리된 원본입니다. 수정본을 만들어 편집할 수 있습니다.</p>}
-                {doc.state === "stale" ? <p role="status">원본이 변경되어 정리 내용을 갱신하고 있습니다.</p> : isText ? <MarkdownBody>{editable && buffer ? buffer.content : doc.content ?? ""}</MarkdownBody>
+                {doc.state === "stale" ? <p role="status">원문이 변경되어 이 요약은 최신 상태가 아닙니다. {generationEnabled ? "새 요약이 완료되기 전까지 원문을 확인해 주세요." : "현재 자동 요약이 꺼져 있어 갱신되지 않습니다. Inbox의 최신 원문을 확인해 주세요."}</p> : isText ? <MarkdownBody>{editable && buffer ? buffer.content : doc.content ?? ""}</MarkdownBody>
                   : <>{doc.contentType.startsWith("image/") ? <img className="knowledge-original-image" src={brain.file(company, vault.id, doc)} alt={doc.title} /> : doc.contentType === "application/pdf" ? <iframe className="knowledge-original-pdf" title={doc.title} src={brain.file(company, vault.id, doc)} /> : <p>이 형식은 원본 파일로 확인해 주세요.</p>}<Button variant="outline" asChild><a href={brain.file(company, vault.id, doc, true)}>Download original</a></Button></>}
                 {!!doc.references?.length && <div className="knowledge-inline-sources"><h3>이 지식의 근거</h3>{doc.references.map(ref => <button key={ref.sourceId} className="knowledge-source-card" onClick={() => open(ref.docId)}><strong>{ref.path.split("/").at(-1)}</strong><small>{ref.locator ?? ref.path}</small></button>)}</div>}
               </div>}
