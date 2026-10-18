@@ -44,7 +44,7 @@ function assertNoLeak(h){const visible=h.output.concat(h.consoleOutput).join('\n
 
 test('ESM 쿠키 권한은 선택 권한이며 기존 기본 권한을 유지한다',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../browser-helper/manifest.json',import.meta.url),'utf8'));
-  assert.equal(manifest.version,'0.2.0');assert.deepEqual(manifest.permissions,['activeTab','scripting','storage']);assert.deepEqual(manifest.host_permissions,[BASE+'/*']);assert.deepEqual(manifest.optional_permissions,['cookies']);assert.deepEqual(manifest.optional_host_permissions,['https://*.esmplus.com/*']);
+  assert.equal(manifest.version,'0.3.0');assert.deepEqual(manifest.permissions,['activeTab','scripting','storage']);assert.deepEqual(manifest.host_permissions,[BASE+'/*']);assert.deepEqual(manifest.optional_permissions,['cookies']);assert.deepEqual(manifest.optional_host_permissions,['https://*.esmplus.com/*','https://*.coupang.com/*']);
 });
 
 test('명시적인 동의 없이는 권한·쿠키 API를 호출하지 않는다',async()=>{

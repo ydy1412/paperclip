@@ -12,7 +12,7 @@
   </section>
   <main id="connectedPanel" hidden>
     <div class="session"><span id="tabHost">현재 탭을 확인해주세요.</span><button id="unpair" type="button">연결 해제</button></div>
-    <nav aria-label="작업 선택"><button id="orderMode" type="button" class="active">주문 표 수집</button><button id="draftMode" type="button">배송 초안 입력</button><button id="esmMode" type="button">ESM 세션 연결</button></nav>
+    <nav aria-label="작업 선택"><button id="orderMode" type="button" class="active">주문 표 수집</button><button id="draftMode" type="button">배송 초안 입력</button><button id="esmMode" type="button">ESM 세션 연결</button><button id="wingMode" type="button">쿠팡 Wing 재연결</button></nav>
     <section id="esmPanel" hidden>
       <h1>지마켓·옥션 세션 연결</h1>
       <p>ESM에서 직접 로그인해주세요. 도비 오더스 앱에서 이 계정의 세션 연결을 승인한 뒤 진행합니다.</p>
@@ -22,6 +22,16 @@
       <label class="check"><input id="confirmEsm" type="checkbox"> 이 ESM 탭의 로그인 쿠키를 선택한 판매자 계정의 로컬 주문 수집에 사용하도록 동의합니다.</label>
       <button id="connectEsm" type="button" disabled>지마켓·옥션 세션 연결</button>
       <p class="hint">선택한 탭의 쿠키 저장소에서 ESM 쿠키만 읽어 이 PC의 도비 오더스로 보냅니다. 프로그램은 판매자 계정을 대조하고 Windows 암호화 저장을 사용합니다. 쿠키값은 팝업·로그·확장 저장소에 남기지 않으며, 선택 권한은 작업 후 해제합니다.</p>
+    </section>
+    <section id="wingPanel" hidden>
+      <h1>쿠팡 Wing 세션 재연결</h1>
+      <p>쿠팡 Wing에서 직접 로그인을 완료해주세요. 앱에서 쿠팡 판매자 아이디를 확인하고 세션 재연결 승인을 발급한 뒤 진행합니다.</p>
+      <label>앱에서 승인한 쿠팡 판매자 계정<select id="wingConnectionSelect"></select></label>
+      <button id="prepareWing" type="button">현재 Wing 탭과 승인 확인</button>
+      <p id="wingPreparedInfo" class="hint">앱의 승인은 5분 동안 한 번만 사용할 수 있습니다.</p>
+      <label class="check"><input id="confirmWing" type="checkbox"> 이 Wing 탭의 정상 로그인을 완료했으며, 로그인 쿠키를 선택한 판매자 계정의 로컬 주문 수집에 사용하도록 동의합니다.</label>
+      <button id="connectWing" type="button" disabled>쿠팡 Wing 세션 재연결</button>
+      <p class="hint">https://wing.coupang.com 탭에서만 사용합니다. 이 탭의 저장소에서 Wing에 적용되는 쿠키를 읽어 이 PC의 도비 오더스로 보냅니다. 프로그램이 실제 판매자 계정을 대조하고 Windows 암호화 저장을 사용합니다. 도우미는 아이디·비밀번호를 읽지 않으며 쿠키값을 화면·로그·확장 저장소에 남기지 않습니다. 선택 권한은 작업 후 해제합니다.</p>
     </section>
     <section id="ordersPanel">
       <h1>현재 페이지 주문 표</h1>
@@ -52,6 +62,6 @@
       </div>
     </section>
   </main>
-  <footer>표 수집·배송 초안은 인증정보를 읽지 않습니다. ESM 세션 연결만 별도 동의 후 ESM 쿠키를 이 PC의 도비 오더스로 보냅니다. 배송 신청은 자동 제출하지 않습니다.</footer>
+  <footer>표 수집·배송 초안은 인증정보를 읽지 않습니다. ESM·쿠팡 Wing 세션 연결은 별도 동의 후 해당 로그인 쿠키를 이 PC의 도비 오더스로 보냅니다. 배송 신청은 자동 제출하지 않습니다.</footer>
   <script src="popup.js"></script>
 </body></html>

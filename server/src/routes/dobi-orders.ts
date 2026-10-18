@@ -1,9 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import type { CredentialVault } from "@paperclipai/dobi-orders";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
-import { dobiOrdersService } from "../services/dobi-orders.js";
+import { dobiOrdersService, type DobiOrdersOptions } from "../services/dobi-orders.js";
 import { logActivity } from "../services/activity-log.js";
 import { badRequest, forbidden } from "../errors.js";
 
@@ -11,7 +10,7 @@ export const DOBI_ORDERS_PATH = "/companies/:companyId/sourcing/projects/:projec
 const scopeSchema = z.object({ companyId: z.string().uuid(), projectId: z.string().uuid() });
 const extensionOrigin = /^chrome-extension:\/\/[a-p]{32}$/;
 
-export function dobiOrderRoutes(db: Db, options: { dataRoot?: string; vault?: CredentialVault } = {}) {
+export function dobiOrderRoutes(db: Db, options: DobiOrdersOptions = {}) {
   const service = dobiOrdersService(db, options);
   const router = Router(), bridge = Router();
   async function dispatch(req: Request, res: Response) {

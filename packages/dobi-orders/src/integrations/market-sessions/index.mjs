@@ -1,0 +1,30 @@
+import {createSellerSession} from '../seller-session.mjs';
+import {createAblyClient} from './ably.mjs';
+import {createAlwayzClient} from './alwayz.mjs';
+import {createSellerHubClient} from './sellerhub.mjs';
+import {createSmelchiClient} from './smelchi.mjs';
+import {createOwnerClanClient} from './ownerclan.mjs';
+import {create11stClient} from './11st.mjs';
+import {createLotteonClient} from './lotteon.mjs';
+import {createSsgClient} from './ssg.mjs';
+import {createOhouseClient} from './ohouse.mjs';
+import {createImwebClient} from './imweb.mjs';
+import {createTossmallClient} from './tossmall.mjs';
+import {createGodo5Client} from './godo5.mjs';
+import {createZigzagClient} from './zigzag.mjs';
+import {createKakaoClient} from './kakao.mjs';
+import {createKakaoApiClient} from './kakaoapi.mjs';
+import {createNhmarketClient} from './nhmarket.mjs';
+import {createNaverpayClient} from './naverpay.mjs';
+import {createDomeggookClient} from './domeggook.mjs';
+import {createInterparkClient} from './interpark.mjs';
+import {createWemakeprice1Client} from './wemakeprice1.mjs';
+import {createWemakeprice2Client} from './wemakeprice2.mjs';
+import {createTmonClient} from './tmon.mjs';
+import {MarketSessionError} from './common.mjs';
+const CLIENTS={'11st':create11stClient,ably:createAblyClient,alwayz:createAlwayzClient,sellerhub:createSellerHubClient,smelchi:createSmelchiClient,ownerclan:createOwnerClanClient,lotteon:createLotteonClient,ssg:createSsgClient,ohouse:createOhouseClient,imweb:createImwebClient,tossmall:createTossmallClient,godo5:createGodo5Client,zigzag:createZigzagClient,kakao:createKakaoClient,kakaoapi:createKakaoApiClient,nhmarket:createNhmarketClient,naverpay:createNaverpayClient,domeggook:createDomeggookClient,interpark:createInterparkClient,wemakeprice1:createWemakeprice1Client,wemakeprice2:createWemakeprice2Client,tmon:createTmonClient};
+export const MARKET_SESSION_PROVIDERS=Object.freeze(Object.keys(CLIENTS));
+export function createMarketSessionClient(options){
+  const create=CLIENTS[options.providerId];if(!create)throw new MarketSessionError('이 판매처의 전용 세션 연결은 아직 구현되어 있지 않습니다.','UNSUPPORTED_PROVIDER',400);
+  return create({...options,session:options.session??createSellerSession(options)});
+}

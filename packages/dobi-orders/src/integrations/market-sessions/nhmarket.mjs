@@ -1,0 +1,38 @@
+import {attr,bad,baseOrder,browserRequired,fail,html,id,identity,integer,loginForm,mergeOrders,nodes,nodeText,range,scalar,text} from './common.mjs';
+const OLD='https://old.72time.kr',SELL='https://seller.72time.kr',EXCEL=SELL+'/mallinmall/order/order_list.excel.asp';
+const PROFILES=[['confirm','102','신규','없음'],['confirm','103','배송완료','없음'],['confirm','105','구매확정','없음'],['cancel','102','취소','취소요청'],...['refund','refund_part','refund_check','refund_part_check','refund_finish','refund_part_finish'].map(menu=>[menu,'102',menu.endsWith('finish')?'취소':'배송완료','반품요청']),...['change','change_part','change_finish','change_part_finish'].map(menu=>[menu,'102',menu.endsWith('finish')?'배송완료':'발송대기','교환요청'])];
+const REQUIRED=['주문번호','고유번호','상품명','수량','판매가격','총판매가격','주문일'];
+function records(raw){
+  if(raw.includes('잘못된 접근입니다.'))fail('NH마켓 주문 조회 권한을 확인해주세요.','SESSION_REQUIRED',401);
+  const doc=html(raw);if(loginForm(doc))fail('NH마켓 로그인이 만료되었습니다.','SESSION_REQUIRED',401);
+  if(raw.includes('검색된 주문내역이 없습니다.'))return [];
+  const candidates=[];
+  for(const table of nodes(doc)){if(table.tagName!=='table')continue;const rows=[];function visit(n){for(const c of n.childNodes??[]){if(c.tagName==='table')continue;if(c.tagName==='tr')rows.push(c);else visit(c);}}visit(table);if(rows.length>10030)bad();
+    const matrix=Array.from({length:rows.length},()=>[]);
+    for(let r=0;r<rows.length;r++){let col=0;for(const cell of (rows[r].childNodes??[]).filter(x=>['td','th'].includes(x.tagName))){while(matrix[r][col]!==undefined)col++;const rs=Number(attr(cell,'rowspan')??'1'),cs=Number(attr(cell,'colspan')??'1');if(!Number.isInteger(rs)||rs<1||rs>10000||r+rs>rows.length||!Number.isInteger(cs)||cs<1||cs>200||col+cs>200)bad();const value=text(nodeText(cell)).replace(/^="([\s\S]*)"$/,'$1');for(let a=r;a<r+rs;a++)for(let b=col;b<col+cs;b++){if(matrix[a][b]!==undefined)bad();matrix[a][b]=b===col?value:'';}col+=cs;}}
+    const headers=matrix.slice(0,20).map((v,i)=>({v,i})).filter(({v})=>REQUIRED.every(s=>v.includes(s)));if(headers.length>1)bad();if(headers.length)candidates.push({matrix,...headers[0]});
+  }
+  if(candidates.length!==1)bad();const {matrix,v:header,i:at}=candidates[0],seen=new Set();for(const h of header){if(!h)continue;if(seen.has(h))bad();seen.add(h);}const result=[];
+  for(const cells of matrix.slice(at+1)){if(!cells.some(Boolean))continue;if(cells.length>header.length)bad();const row=Object.fromEntries(header.map((key,n)=>[key,cells[n]??'']).filter(([key])=>key));if(REQUIRED.every(key=>!row[key]))continue;if(REQUIRED.some(key=>!row[key]))bad();result.push(row);}return result;
+}
+
+// NHMarket selected IL 0x060011b7/b9/8f/91/95/97/85/87/89/9b/9d.
+export function createNhmarketClient({credentials={},session,now=()=>new Date()}){
+  let submitted=false;
+  async function request(url,options={}){let r;try{r=await session.request(url,options);}catch(e){if(['SESSION_REQUIRED','CANCELLED'].includes(e?.code))throw e;fail('NH마켓 연결에 실패했습니다.','NETWORK_ERROR');}if([401,403].includes(r.status)||r.status>=300&&r.status<400)fail('NH마켓 추가 로그인이 필요합니다.','SESSION_REQUIRED',401);if(!r.ok)fail('NH마켓 주문 조회가 실패했습니다.','REMOTE_ERROR');let bytes;try{bytes=new Uint8Array(await r.arrayBuffer());}catch{bad();}if(bytes.length>32*1024*1024)bad();const prefix=Buffer.from(bytes.subarray(0,4096)).toString('ascii'),charset=/charset\s*=\s*["']?([\w-]+)/i.exec((r.headers.get('Content-Type')??'')+' '+prefix)?.[1]??'euc-kr';try{return new TextDecoder(charset,{fatal:true}).decode(bytes);}catch{bad();}}
+  async function verifyIdentity(){const raw=await request(OLD+'/mallinmall/',{followRedirects:true});if(loginForm(html(raw))||!raw.includes('seller.72time.kr'))fail('NH마켓 판매자 로그인을 확인할 수 없습니다.','SESSION_REQUIRED',401);return identity(credentials,'login:'+id(credentials.sellerId),credentials.sellerId+' (판매자 화면 확인)',submitted?'credential-login':'user-confirmation');}
+  async function login(){
+    if(!credentials.password)return browserRequired('NH마켓 정상 로그인창에서 로그인해주세요.');
+    const raw=await request(OLD+'/login.asp'),doc=html(raw),tokens=[...nodes(doc)].filter(n=>n.tagName==='input'&&attr(n,'name')==='token');if(tokens.length!==1)bad();const token=scalar(attr(tokens[0],'value'),{max:2000});if(!token)bad();
+    await request(OLD+'/dormancy.asp',{method:'POST',body:new URLSearchParams({id:credentials.sellerId,pass:credentials.password}).toString(),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+    const login=await request(OLD+'/loginOk.asp',{method:'POST',body:new URLSearchParams({top_memu_url:'',top_memu_distinction:'',group_code:'',cate1:'',dormancy:'',token,redirect:'',id:credentials.sellerId,pass:credentials.password,_:String(new Date(now()).getTime())}).toString(),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+    const match=/\burl\s*=\s*'([^']+)'/.exec(login);if(match){let u;try{u=new URL(match[1],OLD);}catch{bad();}if(u.protocol!=='https:'||![new URL(OLD).hostname,new URL(SELL).hostname].includes(u.hostname)||u.username||u.password||u.port)bad();u.hash='';await request(u.href,{followRedirects:true});}
+    submitted=true;return verifyIdentity();
+  }
+  function body(menu,state,page,from,to){const params=`menu=${menu}^skey=ordname^sword=^ssdate=${from}^sedate=${to}^listsize=100^sdealer=^order=^cancel_requestor=^view_type=all^sstate=${state}^page=${page}`;return new URLSearchParams({menu,mode:'',uid:'',suid:'',page:String(page),listsize:'100',order:'',cancel_requestor:'',view_type:'all',params,sstate:state,sordstate:state,ssdate:from,sedate:to,skey:'ordname',sword:'',slistsize:'100',...(menu==='confirm'?{}:{list_cancel_requestor:'all',list_order:'reg_date'})}).toString();}
+  function normalize(row,profile){const [menu,,status,claimType]=profile,quantity=integer(row['수량'],{positive:true}),amount=integer(row['총판매가격']);const o=baseOrder('NH마켓',credentials.account||credentials.sellerId,{providerId:'nhmarket',orderNo:id(row['주문번호']),lineId:id(row['고유번호']),orderedAt:row['주문일'],product:row['상품명'],option:row['옵션']??'',sku:row['판매자상품코드']||row['바코드']||'',quantity,amount,buyer:row['주문자']??'',recipient:row['수령인']??'',phone:row['핸드폰']||row['전화번호']||'',postcode:row['우편번호']??'',address:row['주소']??'',deliveryMemo:row['주문시요구사항']??'',carrier:row['택배업체']??'',tracking:row['택배번호']??'',status,sourceStatus:menu,claimType,sourceIds:{queryMenu:menu,...(row['상품코드']?{goodsId:id(row['상품코드'])}:{})}});
+    if(menu==='confirm'&&profile[1]==='102'){o.sourceIds.fulfillableQty=0;o.sourceIds.needsReview=true;o.sourceIds.confirmationUnverified=true;}return o;
+  }
+  async function collectOrders(input){const {from,to}=range(input),before=await verifyIdentity(),orders=new Map();for(const profile of PROFILES){const seen=new Set();let finished=false;for(let page=1;page<=100;page++){const rows=records(await request(EXCEL,{method:'POST',body:body(profile[0],profile[1],page,from,to),headers:{'Content-Type':'application/x-www-form-urlencoded'}}));if(rows.length>100)bad();for(const row of rows){const key=id(row['주문번호'])+'\0'+id(row['고유번호']);if(seen.has(key))bad();seen.add(key);mergeOrders(orders,normalize(row,profile));}if(rows.length<100){finished=true;break;}}if(!finished)fail('NH마켓 전체 페이지 조회 한도에 도달했습니다. 기간을 나누어주세요.','LIMIT_EXCEEDED',400);}const after=await verifyIdentity();if(before.identityId!==after.identityId)bad();return {complete:true,orders:[...orders.values()],notes:['원본 배송중 수집 미지원','샵마인 전용 발주확인 API를 복사하지 않아 102 상태의 발송 가능 수량은 0'],summary:{message:'NH마켓 원본 지원 상태 전체 조회 완료. 배송중과 샵마인 발주확인 기록 구분은 원본 계약의 제한이 있습니다.',count:orders.size}};}
+  return {login,verifyIdentity,testConnection:verifyIdentity,collectOrders,getSessionCookies:()=>session.getSessionCookies(),getSessionState:()=>({cookies:session.getSessionCookies(),sessionData:{}}),cancel:()=>session.cancel?.()};
+}
