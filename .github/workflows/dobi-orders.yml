@@ -1,0 +1,35 @@
+name: Dobi Orders
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - packages/dobi-orders/**
+      - server/src/**/dobi-orders*
+      - ui/src/components/DobiOrders*
+      - pnpm-lock.yaml
+      - .github/workflows/dobi-orders.yml
+  push:
+    branches: [dev]
+    paths:
+      - packages/dobi-orders/**
+      - pnpm-lock.yaml
+      - .github/workflows/dobi-orders.yml
+
+permissions:
+  contents: read
+
+jobs:
+  domain:
+    name: Dobi session domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install locked domain dependencies
+        run: npx --yes pnpm@9.15.4 install --frozen-lockfile --ignore-scripts --filter @paperclipai/dobi-orders
+      - name: Test imported clients and hosted session behavior
+        run: npx --yes pnpm@9.15.4 --filter @paperclipai/dobi-orders test
