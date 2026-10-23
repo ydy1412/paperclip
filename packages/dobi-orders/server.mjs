@@ -12,6 +12,7 @@ import { integrationCatalog,mergeIntegrationCatalog } from './src/integrations/c
 import { RECIPE_EXAMPLE,FORWARDER_EXAMPLE,validateRecipe } from './src/integrations/recipe.mjs';
 import { createStore,AppError,STATUSES,WORK_STATES,CLAIMS,CHANNELS,CARRIERS } from './src/store.mjs';
 import { parseFile,mapRows,exportOrders,FIELDS } from './src/files.mjs';
+import { parseNext1688File } from './src/forwarder-files.mjs';
 
 export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,officialFactory,esmFactory,wingFactory,wingSessionFactory,nativeLogin,sellerFactory,nativeSellerLogin,resolveHost=true,hosted=false,dataRoot,bridgeBase,authorizeBridge=async()=>true}={}) {
   const root=path.dirname(fileURLToPath(import.meta.url));
@@ -73,6 +74,17 @@ export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,off
       if(connectionMatch&&req.method==='POST'){const data=await body(req);return json(res,await integrations[connectionMatch[2]](connectionMatch[1],data));}
       if(pathname==='/api/integration-runs'&&req.method==='GET')return json(res,integrations.runs());
       if(pathname==='/api/forwarding'&&req.method==='GET')return json(res,store.forwarding());
+      if(pathname==='/api/forwarder-shipments/import'&&req.method==='POST'){
+        const data=await body(req);
+        if(typeof data.content!=='string'||data.content.length>14*1024*1024||data.content.length%4||!data.content.length||!/^[A-Za-z0-9+/]+={0,2}$/.test(data.content))throw new AppError('엑셀 원본 전송 형식을 확인해주세요.');
+        const bytes=Buffer.from(data.content,'base64'),name=typeof data.name==='string'?data.name:'';
+        const file=parseNext1688File(name,bytes,data.expectedCount);
+        return json(res,store.importForwarderShipments(data.source,{...file,name,bytes}),201);
+      }
+      if(pathname==='/api/forwarder-shipments'&&req.method==='GET')return json(res,store.forwarderShipments(params));
+      if(pathname==='/api/forwarder-shipments/imports'&&req.method==='GET')return json(res,store.forwarderImports());
+      const shipmentMatch=pathname.match(/^\/api\/forwarder-shipments\/([a-f0-9-]+)$/);
+      if(shipmentMatch&&req.method==='GET'){const shipment=store.forwarderShipment(shipmentMatch[1]);if(!shipment)throw new AppError('입출고 내역을 찾을 수 없습니다.',404);return json(res,shipment);}
       if(pathname==='/api/forwarding'&&req.method==='POST'){const data=await body(req);return json(res,store.createForward(data.connectionId,data.orderIds,data),201);}
       const forwardMatch=pathname.match(/^\/api\/forwarding\/([a-f0-9-]+)(?:\/(submit|receipt|export|archive))?$/);
       if(forwardMatch){const draft=store.forward(forwardMatch[1]);if(!draft)throw new AppError('배송신청 초안을 찾을 수 없습니다.',404);if(req.method==='GET'){if(forwardMatch[2]==='export')return download(res,{mime:'text/csv; charset=utf-8',extension:'csv',bytes:forwardCsv(draft)},'배송대행_신청_'+draft.id.slice(0,8));return json(res,draft);}if(req.method==='PATCH'&&!forwardMatch[2]){if(draft.state!=='작성중')throw new AppError('전송한 배송신청 초안은 변경할 수 없습니다.',409);const data=await body(req),patch=Object.fromEntries(['customsCode','warehouse','memo'].filter(k=>data[k]!==undefined).map(k=>[k,String(data[k]).trim().slice(0,2000)]));return json(res,store.updateForward(draft.id,patch,data.expectedVersion));}if(req.method==='POST'&&forwardMatch[2]==='archive'){if(draft.state!=='작성중')throw new AppError('작성중인 초안만 보관할 수 있습니다.',409);const data=await body(req);return json(res,store.updateForward(draft.id,{state:'보관됨'},data.expectedVersion));}if(req.method==='POST'&&['submit','receipt'].includes(forwardMatch[2]))return json(res,await integrations[forwardMatch[2]](draft.id,await body(req)));}
