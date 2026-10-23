@@ -39,6 +39,7 @@
     "server.mjs",
     "index.d.mts",
     "src",
+    "shipping-model",
     "frontend",
     "browser-helper",
     "README.md",

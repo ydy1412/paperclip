@@ -157,9 +157,10 @@ export function createStore(filename, backupDir) {
     const sourceHash=createHash('sha256').update(file.bytes).digest('hex');
     return transaction(()=>{
       const previous=db.prepare('SELECT id,counts FROM forwarder_imports WHERE forwarder_id=? AND source_hash=?').get(source.forwarderId,sourceHash);
-      if(previous)return {...JSON.parse(previous.counts),importId:previous.id,sourceHash,alreadyImported:true};
-      const id=randomUUID(),timestamp=now(),counts={total:file.rows.length,itemCount:file.itemCount,inserted:0,updated:0,unchanged:0,statusAvailable:file.statusAvailable};
-      db.prepare('INSERT INTO forwarder_imports VALUES(?,?,?,?,?,?,?,?,?)').run(id,source.forwarderId,source.providerId,text(source.accountName,200),path.basename(file.name).slice(0,200),sourceHash,file.bytes,'{}',timestamp);
+      const parserVersion=file.parserVersion||1;
+      if(previous&&(JSON.parse(previous.counts).parserVersion||1)>=parserVersion)return {...JSON.parse(previous.counts),importId:previous.id,sourceHash,alreadyImported:true};
+      const id=previous?.id||randomUUID(),timestamp=now(),counts={total:file.rows.length,itemCount:file.itemCount,inserted:0,updated:0,unchanged:0,statusAvailable:file.statusAvailable,parserVersion};
+      if(!previous)db.prepare('INSERT INTO forwarder_imports VALUES(?,?,?,?,?,?,?,?,?)').run(id,source.forwarderId,source.providerId,text(source.accountName,200),path.basename(file.name).slice(0,200),sourceHash,file.bytes,'{}',timestamp);
       const seen=new Set();
       for(const row of file.rows){
         if(!/^[A-Za-z0-9_-]{1,80}$/.test(row.applicationNo||'')||seen.has(row.applicationNo)||!Array.isArray(row.items)||!row.raw)throw new AppError('입출고 접수번호와 상품 정보를 확인해주세요.');
