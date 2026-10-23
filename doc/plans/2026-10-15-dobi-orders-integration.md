@@ -1,5 +1,17 @@
 # Dobi Orders domain integration
 
+## Next1688 historical shipments — 2026-10-23
+
+The user requested all 2,666 inbound/outbound applications, not only the 2,084 completed applications, imported into Dovix's forwarding data. Use the existing authenticated Aside account and normal Excel export. Preserve original files privately; never commit customer data or credentials. Reconcile unique application numbers against the requested total before any operating import.
+
+The observed Next1688 `.xls` is an HTML workbook with one row per application and repeated numbered product columns. Its main `주문번호` identifies the forwarding application; numbered `오픈마켓 주문번호` identifies a marketplace order. Keep these histories separate from sale orders and from shipping-application drafts. Preserve every source value, identifiers as text, and original file bytes. Leave fields absent from an export unknown rather than inferring delivery status from a tracking number.
+
+Keep the history in the existing company/project Dobi SQLite workspace, bound to the existing Dovix forwarder registration; do not create a second account or use the old Auto Sourcing shipment logic. Add only scoped import/list/detail APIs, with native forwarder ownership/provider validation at the host boundary. Import atomically, validate the expected total, retain source hashes, deduplicate by forwarder/application, and preserve history/originals in backup/restore. No marketplace shipping mutations and no new screen are part of this request. Validate synthetic data, an isolated DB copy and the actual downloaded source before the scoped dev PR and operating import. Record actual source/import counts and remaining field limitations.
+
+Source reconciliation on 2026-10-23: the site's current all-status counts sum to **2,934 applications**, including 2,664 completed and 270 in other states. The all-period export (2000-01-01 through 2026-10-23, status 0) contains exactly 2,934 unique application numbers and 3,060 product items. The date shortcut left a three-month filter active and produced only 194 applications; that partial file was not imported into the operating database. The approved scope is all records, so use the verified current total rather than truncate it to the earlier 2,666 estimate. The source workbook omits per-application status and dates; those fields remain unknown. The original workbook is 2,331,730 bytes and is retained privately with a SHA-256 digest.
+
+Validation: the complete source imported into an isolated copy of the operating Dobi database. All 2,934 records and original file bytes matched; repeated import did not duplicate records. Existing sale orders, forwarding drafts and workspace drafts were unchanged. Focused host tests passed 8 cases; the domain suite passed 384 with three Windows-only skips. Server TypeScript passed. Deployment and the operating import must be verified separately and recorded in the private rollout receipt; no operating import is claimed by these isolated results.
+
 Approved on 2026-10-15. Source: ydy1412/dobi-orders dev@d8aaccb.
 
 ## Contract

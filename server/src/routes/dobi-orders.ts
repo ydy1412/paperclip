@@ -1,10 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import type { Db } from "@paperclipai/db";
+import { sourcingForwarders, sourcingForwarderProviders, type Db } from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { dobiOrdersService, type DobiOrdersOptions } from "../services/dobi-orders.js";
 import { logActivity } from "../services/activity-log.js";
-import { badRequest, forbidden } from "../errors.js";
+import { badRequest, forbidden, notFound } from "../errors.js";
 
 export const DOBI_ORDERS_PATH = "/companies/:companyId/sourcing/projects/:projectId/order-management";
 const scopeSchema = z.object({ companyId: z.string().uuid(), projectId: z.string().uuid() });
@@ -15,6 +16,15 @@ export function dobiOrderRoutes(db: Db, options: DobiOrdersOptions = {}) {
   const router = Router(), bridge = Router();
   async function dispatch(req: Request, res: Response) {
     const { companyId, projectId } = scopeSchema.parse(req.params);
+    if (req.method === "POST" && req.path === "/forwarder-shipments/import") {
+      const forwarderId = z.string().uuid().parse(req.body?.source?.forwarderId);
+      const [source] = await db.select({ forwarderId: sourcingForwarders.id, accountName: sourcingForwarders.name, providerId: sourcingForwarderProviders.key })
+        .from(sourcingForwarders).innerJoin(sourcingForwarderProviders, eq(sourcingForwarderProviders.id, sourcingForwarders.providerId))
+        .where(and(eq(sourcingForwarders.companyId, companyId), eq(sourcingForwarders.projectId, projectId), eq(sourcingForwarders.id, forwarderId)));
+      if (!source) throw notFound("이 프로젝트의 배송대행지를 찾을 수 없습니다.");
+      if (source.providerId !== "next1688") throw badRequest("넥스트배송 원본을 연결할 계정을 선택해주세요.");
+      req.body = { ...req.body, source };
+    }
     const base = `/api/companies/${companyId}/sourcing/projects/${projectId}/order-management`;
     const workspace = await service.workspace(companyId, projectId, `${req.protocol}://${req.get("host")}${base}`);
     const scopedRequest = Object.create(req) as Request & { dobiOwnerId: string };

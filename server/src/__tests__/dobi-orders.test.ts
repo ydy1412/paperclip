@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import express from "express";
 import request from "supertest";
-import { companies, projects, companyMemberships, activityLog, createDb } from "@paperclipai/db";
+import { companies, projects, companyMemberships, companySecrets, sourcingForwarders, sourcingForwarderProviders, activityLog, createDb } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { dobiOrderRoutes } from "../routes/dobi-orders.js";
@@ -43,6 +43,29 @@ beforeAll(async () => {
 afterAll(async () => { await routes?.close(); await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 
 describe("Dobi Orders hosted domain", () => {
+  it("binds shipment history imports to a native forwarder in the same company/project", async () => {
+    const provider = (await db.select().from(sourcingForwarderProviders).where(eq(sourcingForwarderProviders.key, "next1688")))[0];
+    expect(provider).toBeTruthy();
+    const vault = await createDobiCredentialVault(db, companyId, projectId);
+    await vault.set("native-forwarder-fixture", { password: "SYNTHETIC-NEXT-SECRET" });
+    const secret = (await db.select().from(companySecrets).where(eq(companySecrets.name, `dobi-orders-${projectId}-native-forwarder-fixture`)))[0];
+    const [forwarder] = await db.insert(sourcingForwarders).values({ companyId, projectId, providerId: provider.id, name: "합성 넥스트배송", homepageUrl: provider.homepageUrl, loginUrl: provider.loginUrl, credentialSecretId: secret.id }).returning();
+    const xml = "<table><tr><td>주문번호</td><td>운송장번호</td><td>받는사람</td><td>품목명</td></tr><tr><td>00000123456</td><td>00000876543</td><td>합성 수령인</td><td>합성 상품</td></tr></table>";
+    const payload = { source: { forwarderId: forwarder.id, providerId: "spoofed", accountName: "spoofed" }, name: "fixture.xls", content: Buffer.from(xml).toString("base64"), expectedCount: 1 };
+    for (const actor of ["none", "agent", "other"]) expect((await request(app()).post(`${base}/forwarder-shipments/import`).set("x-actor", actor).send(payload)).status).toBe(403);
+    expect((await request(app()).post(`${base}/forwarder-shipments/import`).send({ ...payload, source: { forwarderId: randomUUID() } })).status).toBe(404);
+    const otherOwnedProject = (await db.insert(projects).values({ companyId, name: "Other forwarding scope" }).returning())[0];
+    const mismatchedScope = base.replace(projectId, otherOwnedProject.id);
+    expect((await request(app()).post(`${mismatchedScope}/forwarder-shipments/import`).send(payload)).status).toBe(404);
+    expect((await request(app()).post(`${base}/forwarder-shipments/import`).send(payload)).status).toBe(201);
+    const rows = (await request(app()).get(`${base}/forwarder-shipments?forwarderId=${forwarder.id}`)).body;
+    expect(rows.total).toBe(1);expect(rows.shipments[0].applicationNo).toBe("00000123456");
+    const imports = (await request(app()).get(`${base}/forwarder-shipments/imports`)).body;
+    expect(imports[0]).toMatchObject({ forwarderId: forwarder.id, accountName: forwarder.name, providerId: "next1688" });
+    expect(JSON.stringify(imports)).not.toContain("SYNTHETIC-NEXT-SECRET");
+    const separate = (await db.insert(projects).values({ companyId, name: "Separate forwarding history" }).returning())[0];
+    expect((await request(app()).get(base.replace(projectId, separate.id) + "/forwarder-shipments")).body.total).toBe(0);
+  });
   it("requires board membership and rejects another company's project", async () => {
     expect((await request(app()).get(`${base}/bootstrap`).set("x-actor", "none")).status).toBe(403);
     expect((await request(app()).get(`${base}/orders`).set("x-actor", "agent")).status).toBe(403);
