@@ -1,4 +1,5 @@
 import XLSX from 'xlsx';
+import {parse as parseHtml} from 'parse5';
 import {AppError} from './store.mjs';
 
 const clean=value=>String(value??'').trim();
@@ -12,11 +13,11 @@ const number=value=>{
 export function parseNext1688File(name,bytes,expectedCount){
   if(!/\.(xls|xlsx)$/i.test(name)||!Buffer.isBuffer(bytes)||!bytes.length||bytes.length>10*1024*1024)throw new AppError('넥스트배송 XLS/XLSX 원본은 10MB 이하이어야 합니다.');
   if(!Number.isSafeInteger(expectedCount)||expectedCount<1||expectedCount>10000)throw new AppError('사이트에서 확인한 전체 접수 건수를 입력해주세요.');
-  let book;
+  let book,html;
   try{
     if(bytes[0]===0x50&&bytes[1]===0x4b||bytes[0]===0xd0&&bytes[1]===0xcf)book=XLSX.read(bytes,{type:'buffer',raw:true});
     else{
-      let html;try{html=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{html=new TextDecoder('euc-kr').decode(bytes);}
+      try{html=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{html=new TextDecoder('euc-kr').decode(bytes);}
       book=XLSX.read(html,{type:'string',raw:true});
     }
   }catch{throw new AppError('넥스트배송 엑셀 원본을 읽지 못했습니다.');}
@@ -24,6 +25,15 @@ export function parseNext1688File(name,bytes,expectedCount){
   const sheet=book.Sheets[book.SheetNames[0]],range=sheet['!ref']&&XLSX.utils.decode_range(sheet['!ref']);
   if(!range||range.e.r>10020||range.e.c>=512)throw new AppError('엑셀은 10,000건·512열 이하이어야 합니다.');
   const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:''});
+  // XLS text readers omit image tags. Recover their URLs without loading them.
+  if(html){
+    const trs=[];const visit=node=>{if(node.tagName==='tr')trs.push(node);for(const child of node.childNodes||[])visit(child);};visit(parseHtml(html));
+    for(const [r,tr]of trs.entries())for(const [c,td]of tr.childNodes.filter(n=>['td','th'].includes(n.tagName)).entries()){
+      const images=[];const scan=node=>{if(node.tagName==='img')images.push(node);for(const child of node.childNodes||[])scan(child);};scan(td);
+      const src=images[0]?.attrs?.find(a=>a.name==='src')?.value?.trim();
+      if(src&&/^https?:\/\//i.test(src)&&matrix[r]&&!clean(matrix[r][c]))matrix[r][c]=src;
+    }
+  }
   const headerIndex=matrix.slice(0,20).findIndex(row=>['주문번호','운송장번호','받는사람','품목명'].every(label=>row.some(cell=>key(cell)===label)));
   if(headerIndex<0)throw new AppError('넥스트배송 입출고 엑셀의 열을 확인해주세요.');
   const headers=matrix[headerIndex].map(clean),keys=headers.map(key);
@@ -51,5 +61,5 @@ export function parseNext1688File(name,bytes,expectedCount){
     rows.push({applicationNo,status,tracking:get('운송장번호'),jdTracking:get('JD송장번호'),kdTracking:get('경동송장번호'),recipient:get('받는사람'),address:get('받는분주소'),englishName:get('영문이름'),englishAddress:get('영문주소'),product:get('품목명'),quantity:number(get('수량')),hsCode:get('HSCODE'),weight:number(get('Weight')),volume:number(get('Volume')),value:number(get('Value')),phone:get('받는분전화'),customsCode:get('개인통관부호'),postcode:get('받는분우편번호'),commerceUrl:get('전자상거래주소'),shippingFee:number(get('배송비')),collectFreight:number(get('착불운임')),items,raw,sourceRow:index+headerIndex+2});
   }
   if(rows.length!==expectedCount)throw new AppError(`전체 ${expectedCount}건을 요청했지만 엑셀에는 ${rows.length}건이 있습니다. 기간·상태·내보내기 범위를 확인해주세요.`,409);
-  return {rows,headers,itemCount:rows.reduce((sum,row)=>sum+row.items.length,0),statusAvailable:rows.every(row=>row.status!==null)};
+  return {rows,headers,itemCount:rows.reduce((sum,row)=>sum+row.items.length,0),statusAvailable:rows.every(row=>row.status!==null),parserVersion:2};
 }

@@ -71,6 +71,12 @@ describe("Dobi Orders hosted domain", () => {
     expect((await request(app()).get(`${base}/orders`).set("x-actor", "agent")).status).toBe(403);
     expect((await request(app()).get(`${base}/orders`).set("x-actor", "other")).status).toBe(403);
     expect((await request(app()).get(base.replace(projectId, otherProjectId) + "/orders")).status).toBe(404);
+    expect((await request(app()).get(`${base}/shipping-model`)).body.available).toBe(false);
+    for (const actor of ["none", "agent", "other"]) {
+      expect((await request(app()).get(`${base}/shipping-model`).set("x-actor", actor)).status).toBe(403);
+      expect((await request(app()).post(`${base}/shipping-estimate`).set("x-actor", actor).send({ items: [{ title: "synthetic cup" }] })).status).toBe(403);
+    }
+    expect((await request(app()).get(base.replace(projectId, otherProjectId) + "/shipping-model")).status).toBe(404);
   });
   it("persists real SQLite orders and preserves versions, local work and export", async () => {
     const created = await request(app()).post(`${base}/orders`).send({ channel: "쿠팡", account: "테스트", orderNo: "SYNTHETIC-1", lineId: "A", product: "합성 테스트 상품", quantity: 1, unitPrice: 10000 });

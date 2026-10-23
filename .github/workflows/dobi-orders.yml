@@ -33,3 +33,10 @@ jobs:
         run: npx --yes pnpm@9.15.4 install --frozen-lockfile --ignore-scripts --filter @paperclipai/dobi-orders
       - name: Test imported clients and hosted session behavior
         run: npx --yes pnpm@9.15.4 --filter @paperclipai/dobi-orders test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install small model-test dependencies
+        run: python -m pip install numpy==2.2.6 Pillow==11.3.0
+      - name: Verify product split, undersampling and surcharge
+        run: python -m unittest discover -s packages/dobi-orders/shipping-model -p 'test_model.py'

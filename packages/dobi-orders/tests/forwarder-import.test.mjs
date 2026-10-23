@@ -14,6 +14,15 @@ const data=['00001234567','00004567890','합성 수령인','Test product','01000
 const html=(rows=[data])=>Buffer.from('<table>'+[headers,...rows].map(row=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table>','utf8');
 const file=(rows=[data])=>{const bytes=html(rows);return {...parseNext1688File('original.xls',bytes,rows.length),name:'original.xls',bytes};};
 
+test('같은 원본을 재분석해 XLS 이미지 태그를 복구하며 접수·원본 ID는 유지한다',()=>{
+  const bytes=Buffer.from('<table><tr><td>주문번호</td><td>운송장번호</td><td>받는사람</td><td>품목명</td><td>품목1</td><td>상품이미지1</td></tr><tr><td>0001</td><td>0002</td><td>합성</td><td>cup</td><td>cup</td><td><img src="https://img.alicdn.com/test.jpg?a=1&amp;b=2"></td></tr></table>');
+  const f={...parseNext1688File('images.xls',bytes,1),name:'images.xls',bytes};assert.equal(f.rows[0].items[0].imageUrl,'https://img.alicdn.com/test.jpg?a=1&b=2');
+  const legacy=structuredClone(f.rows);legacy[0].items[0].imageUrl='';delete legacy[0].raw['상품이미지1'];const s=createStore(':memory:');try{
+    const first=s.importForwarderShipments(source,{...f,rows:legacy,parserVersion:1}),id=s.forwarderShipments().shipments[0].id;const repaired=s.importForwarderShipments(source,f);
+    assert.equal(repaired.importId,first.importId);assert.equal(repaired.updated,1);assert.equal(s.forwarderShipment(id).items[0].imageUrl,f.rows[0].items[0].imageUrl);assert.equal(s.forwarderImports().length,1);assert.equal(s.importForwarderShipments(source,f).alreadyImported,true);
+  }finally{s.close();}
+});
+
 test('HTML XLS의 접수번호·긴 마켓번호·우편번호와 여러 품목을 원문 그대로 보존한다',()=>{
   const f=file(),row=f.rows[0];assert.equal(row.applicationNo,data[0]);assert.equal(row.tracking,data[1]);assert.equal(row.postcode,'01234');assert.equal(row.items[0].marketOrderNo,data[11]);assert.equal(row.items[0].quantity,2);assert.equal(row.shippingFee,6500);assert.equal(row.raw['개인통관부호'],'SYNTHETIC-CUSTOMS');assert.equal(f.itemCount,2);assert.equal(row.status,null);assert.equal(f.statusAvailable,false);
   assert.throws(()=>parseNext1688File('partial.xls',f.bytes,2666),/2666.*1건/);
