@@ -10,7 +10,8 @@ import resource
 import sys
 import time
 from model import category_vector, digest, image_bytes, metrics, product_groups, ridge_values, row_features, split_groups, text_vector, undersample, unit
-from size_routing import CLASSES, DEFAULT_POLICY, calibrated_bands, calibration_entry, descriptive_price_bands, route_size, routed_raw
+from size_routing import DEFAULT_POLICY, calibrated_bands, calibration_entry, route_size, routed_raw
+from physical_routing import load_policy, physical_route, reference_physical_route, physical_raw, fit_calibration, physical_bands, price_bands, weight_candidates
 import numpy as np
 
 VISION_MODEL = 'gpt-6-luna'
@@ -24,9 +25,11 @@ LIMITATIONS = [
     'HS codes are customs categories. 80/90% are marginal prediction coverage targets, not per-product confidence guarantees.',
     'Small independent product samples and absent shipment dates limit generalization and future-time validation.',
     'The label is the recorded forwarding fee, excluding separately recorded collect freight and taxes.',
-    'Size classes are heuristic routes inferred from photos, not verified packed-size labels or carrier tariffs.',
-    'Per-size price bands describe training history. They are not fixed price caps or calibrated prediction intervals.',
-    'Global calibration fallback has marginal coverage targets, not size-conditional coverage guarantees.',
+    'Parcel-size and weight bands use a dated provider policy; visual scale is not measured package size.',
+    'Photo weight ranges are uncalibrated physical priors. Product mass is only a lower bound for packed weight.',
+    'Historical Weight is an offline label with a legacy kg assumption; unverified Volume units are excluded.',
+    'Grade price bands describe training history. They are not fixed price caps or prediction intervals.',
+    'Unknown dimensions and freight conditions require review. This is not a current route/member tariff quote.',
 ]
 
 
@@ -153,10 +156,12 @@ def train(args):
     values=[semantic_features(r,[by_url[i['imageUrl']] for i in r['items']]) if eligible[j] else (np.zeros(176),np.zeros(256),np.zeros(96),sum(i.get('quantity',1) for i in r['items'])) for j,r in enumerate(records)]
     features=tuple(np.array([v[j] for v in values],dtype=np.float32) for j in range(4));labels=np.array([r['shippingFee'] for r in records]);take=lambda ix:tuple(f[ix] for f in features)
     selected=undersample(train_all,groups,features[3]);reference=take(selected);settings=[]
-    routes=[route_size(r,[by_url[i['imageUrl']] for i in r['items']]) if eligible[j] else None for j,r in enumerate(records)]
-    sizes=np.array([r['primary'] if r else 'special' for r in routes])
-    routed=lambda ix,k,w,level:routed_raw(take(ix),reference,labels[selected],groups[selected],k,w,level,
-                                         [routes[i] for i in ix],sizes[selected],predict_raw)
+    policy=load_policy()
+    routes=[physical_route(r,[by_url[i['imageUrl']] for i in r['items']],policy) if eligible[j] else None for j,r in enumerate(records)]
+    reference_routes=[reference_physical_route(records[i],[by_url[it['imageUrl']] for it in records[i]['items']],policy) for i in selected]
+    keys=np.array([r['primary'] for r in reference_routes])
+    routed=lambda ix,k,w,level:physical_raw(take(ix),reference,labels[selected],groups[selected],k,w,level,
+                                         [routes[i] for i in ix],keys,predict_raw,policy)
     for weight in [.35,.60]:
         for k in [3,7,15]:
             losses=[]
@@ -166,23 +171,15 @@ def train(args):
                 losses.append(np.mean([loss[groups[validation]==g].mean() for g in np.unique(groups[validation])]))
             settings.append((float(np.mean(losses)),k,weight))
     validation_score,k,weight=min(settings);radii={};absolute_radii={};evaluation={};raw_test={};test_bands={}
-    hierarchy_calibration={'global':{},'bySize':{}}
-    for size in CLASSES:
-        count=len(np.unique(groups[calibration][sizes[calibration]==size]))
-        hierarchy_calibration['bySize'][size]={'groups':count,'mode':'size-conditional' if size!='special' and count>=DEFAULT_POLICY['minimumCalibrationGroups'] else 'global-fallback','levels':{}}
+    hierarchy_calibration={}
     for level in LEVELS:
         raw_cal,_=routed(calibration,k,weight,level)
         radii[str(level)]=radius(group_scores(labels[calibration],raw_cal,groups[calibration]),level)
         errors=np.abs(labels[calibration]-raw_cal[:,0])
         absolute_radii[str(level)]=radius([float(errors[groups[calibration]==g].max()) for g in np.unique(groups[calibration])],level)
-        hierarchy_calibration['global'][str(level)]={'relative':radii[str(level)] if math.isfinite(radii[str(level)]) else None,
-                                                    'absoluteKrw':absolute_radii[str(level)] if math.isfinite(absolute_radii[str(level)]) else None}
-        for size,local in hierarchy_calibration['bySize'].items():
-            mask=sizes[calibration]==size
-            if local['mode']=='size-conditional':
-                local['levels'][str(level)]=calibration_entry(labels[calibration][mask],raw_cal[mask],groups[calibration][mask],level,radius,group_scores)
+        hierarchy_calibration[str(level)]=fit_calibration(labels[calibration],raw_cal,groups[calibration],[routes[i] for i in calibration],level,policy,calibration_entry,radius,group_scores)
         raw_test[str(level)],_=routed(test,k,weight,level)
-        test_bands[str(level)],_=calibrated_bands(raw_test[str(level)],[routes[i] for i in test],hierarchy_calibration,level,guarded_intervals)
+        test_bands[str(level)],_=physical_bands(raw_test[str(level)],[routes[i] for i in test],hierarchy_calibration,level,guarded_intervals)
     test_bands['0.9']=enclosing(test_bands['0.9'],test_bands['0.8'])
     for level in LEVELS:evaluation[str(level)]=interval_report(labels[test],test_bands[str(level)],groups[test])
     base=Path(args.baseline);bm=json.loads((base/'manifest.json').read_text())
@@ -194,29 +191,46 @@ def train(args):
     point=raw_test['0.9'][:,0];baseline_radius=bm['intervalRadiusKrw']
     evaluation['pairedOriginal']=metrics(labels[test],old_pred,groups[test]);evaluation['pairedOriginal90']=interval_report(labels[test],[[max(0,p-baseline_radius),p+baseline_radius] for p in old_pred],groups[test])
     evaluation['multimodal']=metrics(labels[test],point,groups[test]);evaluation['medianBaseline']=metrics(labels[test],np.full(len(test),np.median(labels[original_splits[0]])),groups[test])
-    evaluation['byInferredSize']={}
-    for size in CLASSES:
-        mask=sizes[test]==size
+    evaluation['byPredictedWeight']={}
+    for grade in [*policy['weightBands']['names'],'unknown']:
+        mask=np.array([routes[i]['weight']['grade']==grade for i in test])
         if mask.any():
-            evaluation['byInferredSize'][size]={'point':metrics(labels[test][mask],point[mask],groups[test][mask]),
+            evaluation['byPredictedWeight'][grade]={'point':metrics(labels[test][mask],point[mask],groups[test][mask]),
                 'intervals':{str(level):interval_report(labels[test][mask],[b for b,m in zip(test_bands[str(level)],mask) if m],groups[test][mask]) for level in LEVELS}}
-    np.savez_compressed(directory/'model.npz',images=reference[0],titles=reference[1],categories=reference[2],quantities=reference[3],labels=labels[selected],groups=groups[selected],sizes=sizes[selected])
-    report={'schemaVersion':2,'createdAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'pythonExecutable':sys.executable,
-            'model':'vision-language+inferred-size-routing+group-balanced-quantile-neighbours','vision':{'model':VISION_MODEL,'version':VISION_VERSION,'images':len(cached['entries']),'priceLabelsInPrompt':False},
+    # Evaluate photo-derived grades against historical Weight labels without using those labels to route queries.
+    weight_checks=[]
+    for i in test:
+        actual=records[i].get('physicalLabels',{}).get('recordedWeightKg')
+        if actual is not None and actual>0:
+            lo,hi=routes[i]['weight']['rangeKg'];observed=weight_candidates(actual,actual,policy)[0]
+            weight_checks.append({'gradeCovered':observed in routes[i]['weight']['candidates'],'priorCovered':(lo is None or lo<=actual) and (hi is None or actual<=hi),'boundedPrior':hi is not None})
+    evaluation['weightAxis']={'records':len(weight_checks),'gradeCandidateCoverage':float(np.mean([v['gradeCovered'] for v in weight_checks])) if weight_checks else None,
+                              'boundedPriors':sum(v['boundedPrior'] for v in weight_checks),'priorRangeCoverage':float(np.mean([v['priorCovered'] for v in weight_checks])) if weight_checks else None,
+                              'volumeGroundTruthAvailable':False,'weightLabelContract':source.get('physicalLabelContract')}
+    evaluation['handlingReview']={'records':len(test),'missingPackedDimensions':sum(routes[i]['volume']['dimensionsCm'] is None for i in test),
+                                  'manualQuoteRequired':sum(routes[i]['handling']['freightPossible'] or test_bands['0.9'][j][1] is None for j,i in enumerate(test)),
+                                  'actualDispatchDecisionsAvailable':False}
+    training_weights=[records[i]['physicalLabels']['recordedWeightKg'] for i in selected if records[i].get('physicalLabels',{}).get('recordedWeightKg') is not None]
+    np.savez_compressed(directory/'model.npz',images=reference[0],titles=reference[1],categories=reference[2],quantities=reference[3],labels=labels[selected],groups=groups[selected],physicalKeys=keys)
+    report={'schemaVersion':3,'createdAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'pythonExecutable':sys.executable,
+            'model':'vision-language+separate-parcel-weight-axes+group-balanced-quantile-neighbours','vision':{'model':VISION_MODEL,'version':VISION_VERSION,'images':len(cached['entries']),'priceLabelsInPrompt':False},
             'categorySystem':'HS','target':source['target'],'remoteSurchargeKrw':5000,'coverageLevels':list(LEVELS),'source':source['sourceSummary'],
             'featureCoverage':{'eligibleRecords':int(eligible.sum()),'excludedMissingAttributes':int((~eligible).sum())},'groupOverlap':overlap,
             'splits':{name:{'records':len(ix),'groups':len(np.unique(groups[ix]))} for name,ix in zip(['training','validation','calibration','test'],splits)},
             'originalSplitRecords':[len(ix) for ix in original_splits],'settings':{'neighbors':k,'imageWeight':weight},'selection':'Validation macro-product interval score only; fixed original held-out fee groups.',
             'validationIntervalScore':round(validation_score,2),'undersampling':{'capPerProduct':12,'trainingBefore':len(train_all),'trainingAfter':len(selected),'largestGroupBefore':max(collections.Counter(groups[train_all]).values()),'largestGroupAfter':max(collections.Counter(groups[selected]).values())},
             'calibration':{'method':'group-maximum-CQR-union-absolute-residual','groups':len(np.unique(groups[calibration])),'radii':{l:r if math.isfinite(r) else None for l,r in radii.items()},'absoluteRadiiKrw':{l:r if math.isfinite(r) else None for l,r in absolute_radii.items()}},
-            'sizeHierarchy':{'policy':DEFAULT_POLICY,'labelsAreInferred':True,'priceBandsAreDescriptive':True,
-                'priceBands':descriptive_price_bands(labels[selected],groups[selected],sizes[selected],weighted_quantile),
-                'calibration':hierarchy_calibration,
-                'splits':{name:{size:{'records':int(sum(sizes[ix]==size)),'groups':len(np.unique(groups[ix][sizes[ix]==size]))} for size in CLASSES} for name,ix in zip(['training','validation','calibration','test'],splits)}},
+            'physicalHierarchy':{'policy':policy,'priceBandsAreDescriptive':True,'queryOutcomesUsed':False,
+                'calibratedInputMode':'photo-context-only; reported parcel measurements are an unvalidated input mode',
+                'weightSupportKg':[min(training_weights),max(training_weights)] if training_weights else None,
+                'priceBands':price_bands(labels[selected],groups[selected],keys,weighted_quantile),'calibration':hierarchy_calibration,
+                'labelCoverage':{'trainingWeightLabels':sum(records[i].get('physicalLabels',{}).get('recordedWeightKg') is not None for i in selected),
+                    'volumeUnitUnverified':sum(bool(r.get('physicalLabels',{}).get('recordedVolume')) for r in records),
+                    'packageDimensionsFromVision':sum(routes[i]['volume']['dimensionsCm'] is not None for i in train_all),'verifiedPackageDimensionLabels':0}},
             'evaluation':evaluation,'categoryCodes':sorted({records[i]['category'] for i in selected}),
             'evaluationProtocol':'Previously inspected historical fee groups. Routing policy fixed before this fit; settings selected on validation only. All comparisons are exploratory, not fresh future holdout results.',
             'quantityRange':[float(features[3][train_all].min()),float(features[3][train_all].max())],
-            'artifactSha256':digest((directory/'model.npz').read_bytes()),'limitations':LIMITATIONS,'readiness':'experimental-size-routed-fee-only',
+            'artifactSha256':digest((directory/'model.npz').read_bytes()),'limitations':LIMITATIONS,'readiness':'experimental-physical-axes-fee-only',
             'seconds':round(time.monotonic()-started,2),'peakMemoryMb':round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/(1024*1024 if sys.platform=='darwin' else 1024),1)}
     os.chmod(directory/'model.npz',0o600);tmp=directory/'manifest.next.json';tmp.write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False));os.chmod(tmp,0o600);tmp.replace(directory/'manifest.json')
     print(json.dumps(report,ensure_ascii=False,allow_nan=False))
@@ -239,13 +253,26 @@ def estimate(directory,request):
     if digest((directory/'model.npz').read_bytes())!=manifest['artifactSha256']:raise ValueError('Model checksum mismatch')
     row={'items':clean,'category':category}
     f=semantic_features(row,attributes);query=tuple(np.array([x],dtype=np.float32) for x in f);bands=[];point=None
-    hierarchy=manifest.get('sizeHierarchy');size=route_size(row,attributes,hierarchy['policy']) if hierarchy else None
+    hierarchy=manifest.get('sizeHierarchy');physical=manifest.get('physicalHierarchy')
+    size=route_size(row,attributes,hierarchy['policy']) if hierarchy else None
+    axes=physical_route(row,attributes,physical['policy'],request.get('parcel')) if physical else None
     pools=None;calibration_mode=None
     supported=manifest['quantityRange'][0]<=f[3]<=manifest['quantityRange'][1]
+    supplied_parcel=request.get('parcel') or {}
+    provided_parcel=bool(supplied_parcel.get('weightKg') or supplied_parcel.get('dimensionsCm'))
+    weight_supported=True
+    if physical and supplied_parcel.get('weightKg') is not None:
+        support=physical.get('weightSupportKg');supplied=supplied_parcel['weightKg']
+        weight_supported=support is not None and support[0]<=supplied<=support[1]
     with np.load(directory/'model.npz',allow_pickle=False) as saved:
         ref=tuple(saved[k] for k in ['images','titles','categories','quantities'])
         for level in LEVELS:
-            if hierarchy:
+            if physical:
+                if physical['policy']['version']!=load_policy()['version']:raise ValueError('Unknown physical policy version')
+                raw,pools=physical_raw(query,ref,saved['labels'],saved['groups'],manifest['settings']['neighbors'],manifest['settings']['imageWeight'],level,[axes],saved['physicalKeys'],predict_raw,physical['policy'])
+                ranges,modes=physical_bands(raw,[axes],physical['calibration'],level,guarded_intervals)
+                lo,hi=ranges[0];calibration_mode=modes[0]
+            elif hierarchy:
                 if hierarchy['policy']['version']!=DEFAULT_POLICY['version']:raise ValueError('Unknown size routing version')
                 raw,pools=routed_raw(query,ref,saved['labels'],saved['groups'],manifest['settings']['neighbors'],manifest['settings']['imageWeight'],level,[size],saved['sizes'],predict_raw,hierarchy['policy'])
                 ranges,modes=calibrated_bands(raw,[size],hierarchy['calibration'],level,guarded_intervals)
@@ -254,7 +281,7 @@ def estimate(directory,request):
                 raw=predict_raw(query,ref,saved['labels'],saved['groups'],manifest['settings']['neighbors'],manifest['settings']['imageWeight'],level)
                 lo,hi=guarded_intervals(raw,manifest['calibration']['radii'][str(level)],manifest['calibration']['absoluteRadiiKrw'][str(level)])[0]
             point=max(0,round(float(raw[0,0])/100)*100)
-            if not supported:lo,hi=0,None
+            if not supported or not weight_supported:lo,hi=0,None
             bands.append({'coverageTarget':level,'lowerKrw':lo,'upperKrw':hi,'unbounded':hi is None})
     lo,hi=enclosing([[bands[1]['lowerKrw'],bands[1]['upperKrw']]],[[bands[0]['lowerKrw'],bands[0]['upperKrw']]])[0]
     bands[1].update(lowerKrw=lo,upperKrw=hi,unbounded=hi is None)
@@ -265,7 +292,16 @@ def estimate(directory,request):
         warnings.append('Quantity outside training support; no finite range is returned.')
         calibration_mode='unsupported-quantity'
     if category not in manifest['categoryCodes']:warnings.append('HS category was absent in training; coverage may not transfer.')
+    if physical and provided_parcel:
+        warnings.append('Reported parcel measurements change the input mode; historical coverage figures were evaluated with photo context only.')
+        if supported and weight_supported:calibration_mode='unvalidated-reported-parcel'
+    if not weight_supported:
+        warnings.append('Reported parcel weight is outside observed training support; no finite range is returned.')
+        calibration_mode='unsupported-weight'
     if size:warnings.extend(size['reviewReasons'])
+    if axes:warnings.extend(axes['reviewReasons'])
+    if axes and axes['volume']['grade']!='unknown' and all(p['referencePool'] not in {'joint','size-only'} for p in pools[0].values()):
+        warnings.append('No matching packed-size labels support this route; fee prediction uses weight or shared references.')
     ninety=bands[1];total=lambda b:[b['lowerKrw']+surcharge,b['upperKrw']+surcharge if b['upperKrw'] is not None else None] if surcharge is not None else None
     result={'baseFeeKrw':point,'baseIntervalKrw':[ninety['lowerKrw'],ninety['upperKrw']],'baseIntervalsKrw':bands,'remoteSurchargeKrw':surcharge,
             'totalFeeKrw':point+surcharge if surcharge is not None else None,'totalIntervalKrw':total(ninety),'attributes':attributes,'visionModel':VISION_MODEL,
@@ -275,6 +311,13 @@ def estimate(directory,request):
         result['priceCategory']={**hierarchy['priceBands'][size['primary']],'descriptiveOnly':True,'referencePools':pools[0]}
         result['intervalCalibration']={'mode':calibration_mode,'conditionalOnInferredSize':calibration_mode=='size-conditional'}
         result['requiresManualQuote']=ninety['unbounded']
+    if physical:
+        result['physicalPrediction']=axes
+        result['priceCategory']={'matchingHistoricalBand':physical['priceBands'].get(axes['primary']),
+                                 'descriptiveOnly':True,'referencePools':pools[0]}
+        result['intervalCalibration']={'mode':calibration_mode,'conditionalOnPredictedGrade':calibration_mode=='predicted-grade-conditional',
+                                       'providedMeasurementsEvaluated':False,'inputMode':'reported-parcel' if provided_parcel else 'photo-context'}
+        result['requiresManualQuote']=ninety['unbounded'] or axes['handling']['freightPossible']
     return result
 
 

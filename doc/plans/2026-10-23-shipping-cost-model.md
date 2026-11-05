@@ -1,5 +1,69 @@
 # Shipping-cost estimator
 
+## Separate parcel size and weight (2026-11-06)
+
+The user approved separate volume/parcel-size and weight axes. Supersede the
+mixed size/mass routing below. Use the provider-linked current surcharge guide:
+https://classic-radium-bbe.notion.site/2da00c6ab94280d8a2a2cb88c0399755?pvs=74
+and https://www.next1688.com/Front/Introduction/DlvrMny.asp?CTR_SEQ=2031&gMnu1=201&gMnu2=20107&sCbmYn=N
+(checked 2026-11-06). Store the policy as data, version it in the artifact, and
+do not interpret past fees as a current tariff quote or add a second surcharge.
+
+Parcel-size bands use packed edge sums at 100/120/160cm, independently of
+weight bands at 5/10/20kg. The provider separately flags freight at >=20kg,
+>=95cm longest side, or >=160cm edge sum (>=150cm for Gunsan). Upper-inclusive
+surcharge bands and inclusive freight checks have different boundary semantics.
+Keep this distinction visible. Unknown hub/packing limits the result.
+
+Add optional reported single-parcel weight/dimensions to the experimental API.
+Photo-read product mass is a lower bound, not packed mass. A visual mass prior
+remains uncertain; product dimensions and contents volume never become parcel
+dimensions. Without packed dimensions, return unknown parcel size and retain
+visual scale as a separate description. Keep the two axes independent.
+
+Use historical Weight as an offline label/reference grade only, with its legacy
+kg assumption stated. Never pass it into the image model or use a held-out
+shipment's actual weight to route that query. Export physical labels only via
+an explicit opt-in allowlist; default fee exports stay unchanged. The DB has
+85 positive Volume values with unverified units and no complete parcel
+dimensions. Do not invent volume-class ground truth from them.
+
+Use joint reference pools when supported, then weight or size pools, then the
+shared pool. Calibrate on predicted query grades. Preserve original product
+splits, sampling, v1/v2 artifact compatibility and the unchanged source DB.
+Freeze policy before fitting, compare the same historical test with prior
+models, and report finite-interval coverage as well as manual-quote rates.
+Verify heavy-small and light-large parcels, exact official boundaries, unknown
+measurements, no outcome leakage, real cached HTTP, resource use and PR state.
+No production deployment, fresh image calls, UI or automatic pricing is part
+of this experiment.
+
+### Verified independent-axis pilot
+
+- Official policy is a dated JSON data file, not the old invented3/15/50kg or
+  35/70cm thresholds. The two grades stay independent, with freight checks
+  reported separately. No current surcharge is added to old fee labels.
+- Default export privacy remains intact. The explicit physical-label export
+  preserves every original fee record and feature while adding offline Weight
+  labels and unit-unknown Volume. The sampled249 rows include248 Weight labels;
+  no complete package-dimension ground truth is available. Query paths cannot
+  read historical outcome labels. Original splits/sampling remain unchanged.
+- Validation selects k15/image weight0.60. Same historical38 rows/23 groups:
+  MAE7,200.26→5,488.42 KRW; macro product MAE5,295.43→4,517.68. The1,000KRW
+  hit rate decreases26.32%→23.68%. 80% target33/38 rows·20/23 groups;
+  90% target35/38·22/23. Median90 width23,500→23,650 KRW; mean40,084→35,984.
+  All38 intervals are finite, but all38 require manual freight review because
+  packed dimensions are missing. No fresh holdout or per-product guarantee.
+- Weight candidate grades cover32/38 recorded weights; raw photo weight priors
+  cover23/38, with36 bounded priors. Photo priors are not calibrated weight
+  intervals. Parcel-size accuracy is unmeasurable without actual package data.
+- Python23 and focused Node8 passed. Real cached-image HTTP verifies independent
+  axes, policy boundaries, missing dimensions, unsupported weights, reported
+  input-mode disclosure, explicit surcharge, privacy, worker bounds and isolated
+  order preservation. V1/V2 predictions remain unchanged. Local training about64–66MiB;
+  cached Python46MiB/0.24s and HTTP about0.10–0.21s. No new vision calls.
+  Evidence: tmp/physical-shipping/. Code/PR/CI/merge/deployment stay distinct.
+
 ## Staged size and fee experiment (2026-11-06)
 
 The user approved size routing before price estimation: small, medium, large,

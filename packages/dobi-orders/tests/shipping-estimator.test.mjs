@@ -16,7 +16,17 @@ test('학습 자료는 원본 이미지를 복구하고 개인정보·배송 후
     const f=parseNext1688File('test.xls',bytes,1);store.importForwarderShipments({forwarderId:'11111111-1111-4111-8111-111111111111',providerId:'next1688',accountName:'Synthetic'},{...f,bytes,name:'test.xls'});
     const data=exportTrainingData(database),text=JSON.stringify(data);assert.equal(data.records[0].items[0].imageUrl,'https://img.alicdn.com/cup.jpg');assert.equal(data.records[0].category,'691110');assert.ok(data.records[0].productKey);
     for(const value of ['PRIVATE-APPLICATION','PRIVATE-TRACKING','PRIVATE-RECIPIENT','9999','12345678','weight','postcode'])assert.ok(!text.includes(value));
+    const physical=exportTrainingData(database,{includePhysicalLabels:true});assert.equal(physical.records[0].physicalLabels.recordedWeightKg,9999);
+    assert.equal(physical.records[0].physicalLabels.volumeUnit,null);assert.ok(physical.physicalLabelContract.weightUnit.includes('assumed'));
+    for(const value of ['PRIVATE-APPLICATION','PRIVATE-TRACKING','PRIVATE-RECIPIENT','12345678'])assert.ok(!JSON.stringify(physical).includes(value));
   }finally{store.close();await rm(dir,{recursive:true,force:true});}
+});
+
+test('한 박스 포장 입력은 단위를 고정하고 치수·중량·출고지를 각각 검증한다',()=>{
+  const base={items:[{title:'item'}]},parcel={weightKg:20,dimensionsCm:{length:10,width:10,height:10},hub:'other'};
+  assert.deepEqual(validateEstimate({...base,parcel}).parcel,parcel);
+  assert.deepEqual(validateEstimate({...base,parcel:{weightKg:1,physicalLabels:{recordedWeightKg:500}}}).parcel,{weightKg:1});
+  for(const parcel of [{},[],{weightKg:true},{weightKg:'1kg'},{weightKg:-1},{dimensionsCm:{length:1}},{hub:'guessed'}])assert.throws(()=>validateEstimate({...base,parcel}));
 });
 
 test('예측 입력은 상품·이미지 크기·산간 boolean을 검증하며 URL·호스트 파일을 전달하지 않는다',()=>{

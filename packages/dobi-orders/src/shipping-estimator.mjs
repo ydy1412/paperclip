@@ -19,7 +19,20 @@ export function validateEstimate(input){
     return {title:title.trim(),quantity,...(imageBase64?{imageBase64}:{})};
   });
   if(imageBytes>10*1024*1024)throw new AppError('이미지 전송량을 줄여주세요.',413);
-  return {items,category,remoteArea};
+  let parcel;
+  if(input.parcel!==undefined){
+    const p=input.parcel,number=value=>typeof value==='number'&&Number.isFinite(value)&&value>0&&value<=100000;
+    if(!p||typeof p!=='object'||Array.isArray(p))throw new AppError('포장한 한 박스의 중량·치수를 확인해주세요.');
+    parcel={};
+    if(p.weightKg!==undefined){if(!number(p.weightKg))throw new AppError('포장 중량을 kg 단위로 입력해주세요.');parcel.weightKg=p.weightKg;}
+    if(p.dimensionsCm!==undefined){
+      const d=p.dimensionsCm;if(!d||typeof d!=='object'||!['length','width','height'].every(k=>number(d[k])))throw new AppError('포장 가로·세로·높이를 cm 단위로 모두 입력해주세요.');
+      parcel.dimensionsCm=Object.fromEntries(['length','width','height'].map(k=>[k,d[k]]));
+    }
+    if(p.hub!==undefined){if(!['gunsan','other',null].includes(p.hub))throw new AppError('출고 지역을 확인해주세요.');parcel.hub=p.hub;}
+    if(!Object.keys(parcel).length)throw new AppError('포장 중량이나 치수를 입력해주세요.');
+  }
+  return {items,category,remoteArea,...(parcel?{parcel}:{})};
 }
 
 export function createShippingEstimator(dataDir,{multimodal=false,visionBinary}={}){
@@ -27,7 +40,7 @@ export function createShippingEstimator(dataDir,{multimodal=false,visionBinary}=
   async function manifest(){try{return JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{throw new AppError('배송비 예측 모델을 먼저 학습해주세요.',503);}}
   return {
     async metadata(){
-      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','vision','featureCoverage','coverageLevels','calibration','quantityRange','evaluationProtocol','sizeHierarchy'].map(k=>[k,data[k]]))};}
+      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','vision','featureCoverage','coverageLevels','calibration','quantityRange','evaluationProtocol','sizeHierarchy','physicalHierarchy'].map(k=>[k,data[k]]))};}
       catch(error){if(error.status===503)return {available:false,remoteSurchargeKrw:5000};throw error;}
     },
     async predict(input,signal){

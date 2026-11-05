@@ -1,5 +1,101 @@
 # Local shipping-cost model
 
+## Independent parcel-size and weight axes (2026-11-06)
+
+The current schema-3 multimodal trainer supersedes the mixed size/mass rules
+below. It uses the two separate axes in
+`next1688-physical-policy.json`. The provider's linked
+[surcharge guide](https://classic-radium-bbe.notion.site/2da00c6ab94280d8a2a2cb88c0399755?pvs=74)
+defines packed edge-sum bands at 100/120/160cm and weight bands at 5/10/20kg.
+The [provider page](https://www.next1688.com/Front/Introduction/DlvrMny.asp?CTR_SEQ=2031&gMnu1=201&gMnu2=20107&sCbmYn=N)
+also checks freight at >=20kg, >=95cm longest side, or >=160cm edge sum
+(>=150cm for Gunsan). Both sources were checked on 2026-11-06. Surcharge
+bands include their upper endpoint; the separate freight checks include
+their lower endpoint. For example, exactly 20kg is in the 10–20kg band and
+also meets the freight check. This is a dated policy snapshot, not a live
+tariff feed. Update the versioned data and retrain when the policy changes.
+
+Small/medium/large now describe **parcel edge-sum bands only**. Heavy items
+do not increase the size grade. Weight independently reports light/medium/
+heavy/overweight. A small heavy item and a large light item keep both facts.
+Visual scale is returned separately and never becomes measured packed size.
+Quoted product mass is a lower bound, while a photo-derived mass prior stays
+uncalibrated. Contents volume, product dimensions and unitless legacy Volume
+never become package measurements. Historical records contain 85 positive
+Volume values with unverified units and no complete packed dimensions;
+therefore this pilot cannot evaluate real parcel-size classification accuracy.
+
+Default fee exports continue to exclude post-shipment measurements. An explicit
+offline-label export adds only allowlisted physical outcomes:
+
+```sh
+node shipping-model/export.mjs /private/scope/orders.sqlite /private/physical-fees.json fee-with-physical-labels
+```
+
+Train with that file using the existing multimodal train command. Recorded
+Weight is used to grade **training reference rows only**, with the legacy kg
+assumption documented. Images never receive outcomes, customer data or those
+labels. Validation, calibration and test queries use photo-context predictions;
+their actual recorded weights are used only for evaluation. Missing reference
+weights fall back to photo inference. Joint size/weight pools require eight
+independent products, then fall back to weight-only, size-only, or shared pools.
+Candidate ranges are combined. Calibration conditions on predicted query grades
+only with ten independent products; otherwise it uses global residuals.
+
+The existing opt-in estimate API accepts an optional **single reported parcel**:
+
+```json
+{
+  "items": [{"title": "item", "quantity": 1, "imageBase64": "..."}],
+  "category": "unknown",
+  "remoteArea": false,
+  "parcel": {"weightKg": 20, "dimensionsCm": {"length": 10, "width": 10, "height": 10}, "hub": "other"}
+}
+```
+
+Weight and dimensions can be supplied separately. Dimensions must be complete.
+`hub` is `gunsan`, `other`, or null/omitted. Reported and photo-read values are
+not independently verified. Responses add `physicalPrediction.volume`,
+`.weight`, `.visualScale` and `.handling`, plus the actual reference pool and
+review reasons. A missing dimension remains unknown. Freight risk requires a
+manual quote; separately recorded freight is outside the base-fee target.
+No surcharge is added on top of historical fee labels. The existing explicit
+remote +5,000 behavior is retained. A supplied weight outside training support
+returns an unbounded interval. Supplied measurements change the input mode:
+the API flags that the reported-parcel mode has not been evaluated for coverage.
+If no packed-size labels match, it explicitly reports weight/shared fallback.
+Version-1 and version-2 artifacts retain their original predictions.
+
+The original splits and sampling remain unchanged: 1,997 image-complete rows;
+train1,885→249, train/validation/calibration/test167/23/22/23 product groups,
+split overlap zero. 248 sampled rows have recorded Weight. There are no verified
+package-dimension labels. Validation selects k15 and image weight0.60. Reference
+weight bands have 110/27/22/17 training groups; groups can span bands.
+Photo-predicted light has17 calibration groups; medium4/overweight2 and absent
+grades use global fallback (22 distinct groups overall).
+
+On the previously inspected 38-row/23-product test, MAE improves from mixed
+routing KRW7,200.26 to **5,488.42**, macro product MAE5,295.43→4,517.68.
+The KRW1,000 hit rate drops26.32%→23.68%. 80% targets cover33/38 rows and
+20/23 whole groups. 90% targets cover35/38 rows and22/23 groups. Median90%
+width rises23,500→23,650, while mean width falls40,084→35,984. All38 intervals
+are finite; all38 also require manual freight review because packed dimensions
+are missing. The fee aid still returns a base estimate; it does not approve
+dispatch or a complete shipping quote. Weight candidate bands
+include recorded Weight in32/38 cases (84.21%); the raw photo weight prior
+contains it in23/38 (60.53%, including two unbounded priors). Do not call those
+priors calibrated weight intervals. These are exploratory comparisons on
+historical data, not fresh holdout, future or automatic-quote validation.
+
+Local Python23 and focused Node8 tests passed. Real cached-photo HTTP verified
+independent axes, provider boundaries, missing dimensions, malformed parcel400,
+unsupported weight, reported-mode disclosure, private metadata, surcharge,
+single worker, unchanged isolated orders and v1/v2 compatibility. No new image
+calls or downloads were needed. Training peak about64–66MiB, cached Python about46MiB/
+0.24s, cached HTTP examples0.10–0.21s; cold remote vision is separate. Private
+evidence is under `tmp/physical-shipping/`. PR submission, CI and deployment
+remain separate; no operating service, UI, source DB or automatic prices changed.
+
 ## Size-first fee model (2026-11-06, experimental)
 
 The current multimodal trainer uses three stages: infer a shipment-size route,
