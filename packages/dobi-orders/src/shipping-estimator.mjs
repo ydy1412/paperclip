@@ -3,6 +3,7 @@ import {spawn} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {AppError} from './store.mjs';
+import {extractVision} from '../shipping-model/vision.mjs';
 
 let workerActive=false;
 export function validateEstimate(input){
@@ -21,19 +22,27 @@ export function validateEstimate(input){
   return {items,category,remoteArea};
 }
 
-export function createShippingEstimator(dataDir){
-  const directory=path.join(dataDir,'shipping-model'),worker=fileURLToPath(new URL('../shipping-model/model.py',import.meta.url));let child=null;
+export function createShippingEstimator(dataDir,{multimodal=false,visionBinary}={}){
+  const directory=path.join(dataDir,multimodal?'shipping-multimodal-model':'shipping-model'),worker=fileURLToPath(new URL(multimodal?'../shipping-model/multimodal_model.py':'../shipping-model/model.py',import.meta.url));let child=null,visionController=null;
   async function manifest(){try{return JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{throw new AppError('배송비 예측 모델을 먼저 학습해주세요.',503);}}
   return {
     async metadata(){
-      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness'].map(k=>[k,data[k]]))};}
+      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','vision','featureCoverage','coverageLevels','calibration','quantityRange','evaluationProtocol'].map(k=>[k,data[k]]))};}
       catch(error){if(error.status===503)return {available:false,remoteSurchargeKrw:5000};throw error;}
     },
     async predict(input,signal){
       const request=validateEstimate(input),data=await manifest();
+      if(multimodal&&request.items.some(i=>!i.imageBase64))throw new AppError('멀티모달 예측에는 각 상품의 사진이 필요합니다.');
       if(typeof data.pythonExecutable!=='string'||!data.pythonExecutable||data.pythonExecutable.includes('\0'))throw new AppError('예측 모델의 Python 실행 환경을 확인해주세요.',503);
       if(workerActive)throw new AppError('다른 배송비를 계산 중입니다. 잠시 후 다시 시도해주세요.',409);
       workerActive=true;
+      if(multimodal){
+        visionController=new AbortController();const combined=signal?AbortSignal.any([signal,visionController.signal]):visionController.signal;
+        try{request.vision=await extractVision(request.items.map(i=>({image:Buffer.from(i.imageBase64,'base64'),title:i.title,category:request.category})),{cacheDir:path.join(dataDir,'shipping-vision-cache'),binary:visionBinary,signal:combined});}
+        catch(error){workerActive=false;throw new AppError(error.message==='invalid_vision_input'?'상품 이미지와 입력값을 확인해주세요.':'상품 사진 해석에 실패했습니다. 이미지 모델 로그인과 실행 환경을 확인해주세요.',error.message==='invalid_vision_input'?400:503);}
+        finally{visionController=null;}
+        if(combined.aborted){workerActive=false;throw new AppError('사진 해석이 취소되었습니다.',503);}
+      }
       return new Promise((resolve,reject)=>{
         let output='',errors='',overLimit=false,timedOut=false;
         const environment=Object.fromEntries(['PATH','LANG','LC_ALL','TMPDIR','SystemRoot'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
@@ -55,6 +64,6 @@ export function createShippingEstimator(dataDir){
         child.stdin.end(JSON.stringify(request));
       });
     },
-    close(){child?.kill('SIGKILL');},
+    close(){visionController?.abort();child?.kill('SIGKILL');},
   };
 }

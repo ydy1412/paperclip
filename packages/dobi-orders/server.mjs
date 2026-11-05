@@ -15,12 +15,13 @@ import { parseFile,mapRows,exportOrders,FIELDS } from './src/files.mjs';
 import { parseNext1688File } from './src/forwarder-files.mjs';
 import {createShippingEstimator} from './src/shipping-estimator.mjs';
 
-export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,officialFactory,esmFactory,wingFactory,wingSessionFactory,nativeLogin,sellerFactory,nativeSellerLogin,resolveHost=true,hosted=false,dataRoot,bridgeBase,authorizeBridge=async()=>true}={}) {
+export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,officialFactory,esmFactory,wingFactory,wingSessionFactory,nativeLogin,sellerFactory,nativeSellerLogin,resolveHost=true,hosted=false,dataRoot,bridgeBase,authorizeBridge=async()=>true,visionBinary}={}) {
   const root=path.dirname(fileURLToPath(import.meta.url));
   const version=JSON.parse(await readFile(path.join(root,'package.json'),'utf8')).version;
   const dataDir=dataRoot||path.join(root,'data');await mkdir(dataDir,{recursive:true});
   const store=createStore(dbPath||process.env.DOBI_DB||path.join(dataDir,'orders.sqlite'),path.join(dataDir,'backups'));
   const shipping=createShippingEstimator(dataDir);
+  const multimodalShipping=createShippingEstimator(dataDir,{multimodal:true,visionBinary});
   const vault=providedVault||(dbPath===':memory:'?memoryVault():await createVault(path.join(dbPath?path.dirname(dbPath):dataDir,'credentials.dpapi.json')));
   const catalog=mergeIntegrationCatalog(store.reference('catalog',integrationCatalog));
   store.saveReference('catalog',catalog);
@@ -77,9 +78,10 @@ export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,off
       if(pathname==='/api/integration-runs'&&req.method==='GET')return json(res,integrations.runs());
       if(pathname==='/api/forwarding'&&req.method==='GET')return json(res,store.forwarding());
       if(pathname==='/api/shipping-model'&&req.method==='GET')return json(res,await shipping.metadata());
-      if(pathname==='/api/shipping-estimate'&&req.method==='POST'){
+      if(pathname==='/api/shipping-multimodal-model'&&req.method==='GET')return json(res,await multimodalShipping.metadata());
+      if(['/api/shipping-estimate','/api/shipping-multimodal-estimate'].includes(pathname)&&req.method==='POST'){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{return json(res,await shipping.predict(await body(req),controller.signal));}finally{res.removeListener('close',abort);}
+        try{return json(res,await (pathname==='/api/shipping-multimodal-estimate'?multimodalShipping:shipping).predict(await body(req),controller.signal));}finally{res.removeListener('close',abort);}
       }
       if(pathname==='/api/forwarder-shipments/import'&&req.method==='POST'){
         const data=await body(req);
@@ -156,10 +158,10 @@ export async function createApp({dbPath,port=0,vault:providedVault,fetchImpl,off
       const bytes=await readFile(path.join(root,'public',files[pathname])),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'}[path.extname(files[pathname])];res.writeHead(200,{'Content-Type':mime,'Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:bytes);
     }catch(e){if(!res.headersSent)json(res,{error:e instanceof AppError?e.message:'처리하지 못했습니다. 입력 파일이나 실행 로그를 확인해주세요.'},e.status||500);else res.end();if(!(e instanceof AppError))console.error(e.stack);}
   };
-  if(hosted)return {handler,store,token,integrations,close:async()=>{shipping.close();integrations.dispose();store.close();}};
+  if(hosted)return {handler,store,token,integrations,close:async()=>{shipping.close();multimodalShipping.close();integrations.dispose();store.close();}};
   const server=http.createServer(handler);
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
-  return {handler,server,store,token,integrations,url:`http://127.0.0.1:${server.address().port}`,close:async()=>{shipping.close();integrations.dispose();await new Promise(r=>server.close(r));store.close();}};
+  return {handler,server,store,token,integrations,url:`http://127.0.0.1:${server.address().port}`,close:async()=>{shipping.close();multimodalShipping.close();integrations.dispose();await new Promise(r=>server.close(r));store.close();}};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const app=await createApp({port:Number(process.env.DOBI_PORT)||4317});console.log('도비 오더스 '+app.url);
