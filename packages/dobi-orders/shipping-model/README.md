@@ -1,5 +1,25 @@
 # Local shipping-cost model
 
+## Weight range experiment (2026-11-05)
+
+The sibling **weight model** returns 80% and 90% target prediction intervals in kg, not an exact mass or a parameter confidence interval. It is a shipment-total model for **one product line and its quantity**; mixed-item parcels are rejected. `Weight` is interpreted as kg using [Next1688's published kg policy](https://www.next1688.com/Front/Introduction/DlvrMny.asp?CTR_SEQ=2031&gMnu1=201&gMnu2=20107&sCbmYn=N). The export does not establish whether every stored value is scale-measured, packaged or billable weight. Shipping fees, volume and private customer fields are excluded.
+
+```sh
+node shipping-model/export.mjs /private/scope/orders.sqlite /private/weight-data.json weight
+python shipping-model/weight_model.py train \
+  --data /private/weight-data.json --model-dir /private/candidate/weight-model \
+  --encoder /private/existing/encoder.onnx --image-cache /private/existing/image-cache
+printf '%s' '{"items":[{"title":"cup","quantity":1}],"category":"691110"}' |
+  python shipping-model/weight_model.py predict --model-dir /private/candidate/weight-model
+python -m unittest discover -s shipping-model -p 'test_*.py'
+```
+
+This experiment reads existing image descriptors only: no image downloads, supplier browsing, external inference or new Python dependencies. It shares frozen features/grouping with the fee model but has separate labels, artifacts and calibration. Independent product groups are split before the twelve-record training cap. Validation macro-product log error selects ridge/nearest-neighbor settings. Calibration uses a maximum absolute log residual per product, across both normal and missing-image representations. The finite-sample order statistic is `ceil((groups+1)*coverage)`; too few groups produce an unbounded result instead of a fake finite band. Endpoints are rounded outward to 0.01 kg. Quantity outside the observed data support also returns an unbounded interval.
+
+Copy reviewed private artifacts to the existing company/project data folder's `weight-model/` to use `GET /weight-model` and `POST /weight-estimate` under the authenticated `order-management` API. Request items/image limits, single global worker, timeout, checksum validation and shutdown handling reuse the fee service. Responses expose intervals, target coverage, width through the bounds, experimental status and limitations. This does not calculate fees or change source products/orders. No UI or schedule is added.
+
+**Current experiment is too imprecise for automated quotations.** On 2,617 single-item shipment labels, training 2,524 → 257 after undersampling; calibration and test each have 23 product groups / 32 rows. Held-out record coverage is 93.75% for the 80% target, and 100% for the 90% target. Median interval widths are respectively **21.52 kg and 51.035 kg**. Wide bands explain the high coverage; this is not proof of useful precision. A median-only baseline's 90% band is narrower (27 kg) at the same pilot coverage. There are only 23 test groups; the 90% model's group-coverage Wilson 95% interval is approximately 85.7–100%, under independent product-group assumptions. This is a pilot, not an independent future-time guarantee. Cached images cover 288/390 unique source URLs. Training peak about 80 MiB. Private evidence lives in `tmp/weight-model/`; exact hardware/time and HTTP inference are recorded separately. Keep this model separate from automatic pricing.
+
 This is an experimental quote aid. It does not set order prices, dispatch parcels or train on a schedule. The worker loads only for a prediction, uses one CPU thread and exits. No customer data is sent to an AI provider.
 
 Inputs are product images, customs product names, **HS categories** and quantities. HS codes are not Coupang or Naver category IDs. The source has no separately labeled remote charge: the recorded shipping fee is assumed to be base. `remoteArea: true` adds exactly KRW 5,000, `false` adds zero, and an omitted/null flag leaves the total unknown. The response includes both base and total components, prediction intervals and warnings. Without an image or a supported category, reliability is lower.
