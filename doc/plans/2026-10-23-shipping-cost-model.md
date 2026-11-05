@@ -1,5 +1,54 @@
 # Shipping-cost estimator
 
+## Staged size and fee experiment (2026-11-06)
+
+The user approved size routing before price estimation: small, medium, large,
+and special/unknown. Reuse PR54 and its image cache. No new vision calls or
+resident models are needed. Keep the current operating estimator unchanged.
+
+Use a shared nearest-product estimator with size-restricted reference pools;
+borrow the shared pool when a size has fewer than eight training groups.
+Learn descriptive price bands from training groups only, with equal total
+weight per product. Do not hard-code a small-item price ceiling. Ambiguous
+sizes must use the union of candidate ranges. Unknown/special sizes and
+unsupported quantities must not return a finite promised range.
+
+Size labels are **inferred routing labels**, not measured packaging classes.
+No complete package dimensions are available in the pilot. Version the
+editable routing policy, keep product/package measurements distinct, and
+report review reasons. Verify category calibration only with at least ten
+independent groups; otherwise label the global fallback and its marginal-only
+coverage limitation. Preserve original splits and training undersampling.
+
+Before fitting, freeze the routing/selection procedure and retain the previous
+multimodal artifact for comparison. Select settings with validation only.
+Report point error, 80/90 coverage, width, and performance per inferred size
+on the same historical test groups. These groups were already inspected;
+this is exploratory comparison, not fresh validation. Verify routing boundary
+cases, sparse fallback, mixed-size unions, actual cached-image HTTP output,
+privacy, unchanged orders, time and memory. Submit the update to PR54; do not
+merge, deploy, or connect automatic pricing as part of this experiment.
+
+### Verified staged pilot
+
+- Reused all existing attributes; no new image inference or source fetch.
+  Original splits and 1,885→249 training sampling remain unchanged. Training
+  references have small39/medium50/large69/special13 groups; some groups span
+  classes. Price bands come only from these training rows, with equal total
+  weight per product. Package-size labels remain inferred, not ground truth.
+- Validation selects k15/image weight0.35. Calibration has small6/medium10/
+  large6/special1 groups (22 distinct overall). Only medium supports category
+  calibration; ambiguous candidates also retain any global fallback guard.
+- On the same historical 38 rows/23 groups: MAE8,186.05→7,200.26 KRW;
+  macro product MAE6,337.03→5,295.43. 80% target32/38 rows,20/23 groups;
+  90% target35/38 rows,21/23 groups. Median90 width23,600→23,500 KRW,
+  but mean width37,071→40,084 KRW. No fresh holdout or general accuracy claim.
+  Medium/large remain weak. No special-size primary routes occur in this test.
+- Local training peak64.4MiB. Cached actual fan/chair/shampoo HTTP returned
+  medium/large/small, descriptive price bands, candidate pools, fallback mode,
+  nested intervals, explicit remote surcharge and unchanged isolated orders.
+  These examples are functional demonstrations, not extra accuracy samples.
+
 ## Semantic multimodal fee experiment (2026-11-05)
 
 The user requested a multimodal **shipping-fee** model after the weight-only interval experiment proved too wide. Use the original fee target and untouched source DB. The previous CNN image descriptor already made the model technically multimodal, but it did not explicitly read printed capacity/dimensions or product type. Add a bounded vision-language extraction stage using the existing authenticated Codex runtime, followed by local fee fitting. Do not install or start a resident local LLM. Product images/title/HS are the only remote input; never include labels, customer data, identifiers or shipping history in extraction prompts.

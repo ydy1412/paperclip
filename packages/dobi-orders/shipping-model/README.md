@@ -1,5 +1,57 @@
 # Local shipping-cost model
 
+## Size-first fee model (2026-11-06, experimental)
+
+The current multimodal trainer uses three stages: infer a shipment-size route,
+compare products in that route, then calibrate the fee range. The routes are
+**small, medium, large, special/unknown**. This is a shared estimator with
+size-restricted neighbors, not four separately trained large models.
+
+`size_routing.py` supplies the initial, versioned routing policy, saved in the
+private manifest. Visual scale, quoted mass, and complete package dimensions
+can affect routing. The mass/length limits are engineering rules, not carrier
+tariffs. Product dimensions never become package dimensions. The available
+pilot has no complete package-dimension labels, so routing accuracy against
+true packed size cannot be measured. Inferred weight can widen candidate
+sizes but is not a measured weight label. Quantities with unknown units and
+uncertain packing produce review reasons. The policy is editable in the
+artifact; change its version and retrain when routing semantics change.
+
+Each size must have eight independent training products to use its own
+reference pool. Otherwise it borrows the shared pool. Training price bands
+are group-balanced 10th–90th percentiles, not price caps or prediction
+intervals. On this pilot they are small KRW 5,500–8,600 (39 groups), medium
+5,700–15,600 (50), large 6,900–53,100 (69). Groups may span size classes.
+Ambiguous sizes use the union of their raw fee ranges and the largest
+candidate calibration guard. Special/unknown sizes and unsupported quantities
+return an unbounded interval and `requiresManualQuote: true`.
+
+Per-size residual calibration requires ten independent calibration products.
+Only medium has ten in this pilot; small/large have six each and use global
+fallback. The API identifies that fallback and does not claim per-size coverage.
+Responses add `sizePrediction`, `priceCategory`, `intervalCalibration`, and
+`requiresManualQuote`. Metadata adds `sizeHierarchy`. The existing request,
+scoped endpoint, original fee model and order state stay compatible. Version-1
+multimodal artifacts remain readable; retrain to enable the hierarchy.
+
+Original splits, images and twelve-record sampling are retained. Validation
+selects 15 neighbors and image weight 0.35. On the **previously inspected**
+23-product/38-row historical test, MAE changes from the pre-routing multimodal
+KRW 8,186.05 to **7,200.26**; macro product MAE 6,337.03 to **5,295.43**.
+80% targets cover 32/38 rows and 20/23 whole groups. 90% targets cover 35/38
+rows and 21/23 groups. Median 90% width is 23,500, but mean width rises from
+37,071 to **40,084**. Per-size MAE is about 502/9,022/7,630 for small/medium/large
+on only 5/9/9 groups. Small results are encouraging, but medium/large remain
+poor. These are exploratory comparisons, not new independent validation or
+approval for automatic prices. No test rows have special-size primary routes.
+
+Private evidence: `tmp/hierarchical-shipping/` (candidate, prior manifest,
+HTTP proof, tests, resource measurements). No new image-model calls, model
+downloads, operating data changes or deployment were needed. Training used
+about 64 MiB. Cached real-image HTTP examples took about 0.12–0.25 seconds;
+cold image interpretation remains separate. Code is submitted through PR54,
+not enabled in the operating service.
+
 ## Semantic multimodal fee model (2026-11-05)
 
 The opt-in model reads product photos and text through the existing authenticated **Codex `gpt-6-luna` vision runtime**, then predicts recorded forwarding fees with a small local model. This is a vision-language attribute stage plus a locally fitted estimator, **not a newly fine-tuned vision-language foundation model**. The baseline CNN descriptor model remains available. No local resident LLM, new model download, UI, order change or automatic price calculation is added. A cold image uses the configured Codex account's inference quota; exact image/context/model/prompt matches reuse a private cache. [Codex image and structured-output interface](https://learn.chatgpt.com/docs/cli/reference).

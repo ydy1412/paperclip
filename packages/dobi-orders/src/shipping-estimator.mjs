@@ -27,7 +27,7 @@ export function createShippingEstimator(dataDir,{multimodal=false,visionBinary}=
   async function manifest(){try{return JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{throw new AppError('배송비 예측 모델을 먼저 학습해주세요.',503);}}
   return {
     async metadata(){
-      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','vision','featureCoverage','coverageLevels','calibration','quantityRange','evaluationProtocol'].map(k=>[k,data[k]]))};}
+      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','vision','featureCoverage','coverageLevels','calibration','quantityRange','evaluationProtocol','sizeHierarchy'].map(k=>[k,data[k]]))};}
       catch(error){if(error.status===503)return {available:false,remoteSurchargeKrw:5000};throw error;}
     },
     async predict(input,signal){
