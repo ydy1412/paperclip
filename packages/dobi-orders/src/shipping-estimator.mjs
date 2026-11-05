@@ -21,18 +21,21 @@ export function validateEstimate(input){
   return {items,category,remoteArea};
 }
 
-export function createShippingEstimator(dataDir){
-  const directory=path.join(dataDir,'shipping-model'),worker=fileURLToPath(new URL('../shipping-model/model.py',import.meta.url));let child=null;
-  async function manifest(){try{return JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{throw new AppError('배송비 예측 모델을 먼저 학습해주세요.',503);}}
+export function createShippingEstimator(dataDir,{target='fee'}={}){
+  if(!['fee','weight'].includes(target))throw Error('Unknown model target');
+  const weight=target==='weight',label=weight?'배송 무게':'배송비';
+  const directory=path.join(dataDir,weight?'weight-model':'shipping-model'),worker=fileURLToPath(new URL(weight?'../shipping-model/weight_model.py':'../shipping-model/model.py',import.meta.url));let child=null;
+  async function manifest(){try{return JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{throw new AppError(`${label} 예측 모델을 먼저 학습해주세요.`,503);}}
   return {
     async metadata(){
-      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness'].map(k=>[k,data[k]]))};}
-      catch(error){if(error.status===503)return {available:false,remoteSurchargeKrw:5000};throw error;}
+      try{const data=await manifest();return {available:true,...Object.fromEntries(['model','createdAt','categorySystem','target','remoteSurchargeKrw','images','source','undersampling','splits','evaluation','intervalRadiusKrw','intervalRadiiByHs2','limitations','peakMemoryMb','readiness','unit','coverageLevels','calibration','quantityRange'].map(k=>[k,data[k]]))};}
+      catch(error){if(error.status===503)return {available:false,...weight?{unit:'kg',coverageLevels:[.8,.9]}:{remoteSurchargeKrw:5000}};throw error;}
     },
     async predict(input,signal){
       const request=validateEstimate(input),data=await manifest();
+      if(weight&&(request.items.length!==1||!Number.isInteger(request.items[0].quantity)))throw new AppError('무게 예측은 한 품목과 정수 수량만 지원합니다.');
       if(typeof data.pythonExecutable!=='string'||!data.pythonExecutable||data.pythonExecutable.includes('\0'))throw new AppError('예측 모델의 Python 실행 환경을 확인해주세요.',503);
-      if(workerActive)throw new AppError('다른 배송비를 계산 중입니다. 잠시 후 다시 시도해주세요.',409);
+      if(workerActive)throw new AppError('다른 배송 예측을 계산 중입니다. 잠시 후 다시 시도해주세요.',409);
       workerActive=true;
       return new Promise((resolve,reject)=>{
         let output='',errors='',overLimit=false,timedOut=false;
@@ -48,9 +51,13 @@ export function createShippingEstimator(dataDir){
           clearTimeout(timer);signal?.removeEventListener('abort',abort);child=null;workerActive=false;
           if(spawnError||timedOut||overLimit||code!==0){
             const inputError=/"error":\s*"(ValueError|UnidentifiedImageError|DecompressionBombError|JSONDecodeError)"/.test(errors);
-            reject(new AppError(inputError?'상품 이미지와 입력값을 확인해주세요.':'배송비 예측 실행에 실패했습니다. 모델과 실행 환경을 확인해주세요.',inputError?400:503));return;
+            reject(new AppError(inputError?'상품 이미지와 입력값을 확인해주세요.':`${label} 예측 실행에 실패했습니다. 모델과 실행 환경을 확인해주세요.`,inputError?400:503));return;
           }
-          try{const value=JSON.parse(output);if(!Number.isFinite(value.baseFeeKrw)||!Array.isArray(value.baseIntervalKrw))throw Error();resolve(value);}catch{reject(new AppError('배송비 예측 결과를 확인해주세요.',503));}
+          try{const value=JSON.parse(output);
+            if(weight){if(value.unit!=='kg'||!Array.isArray(value.intervals)||value.intervals.length!==2||value.intervals.some((v,i)=>v.coverageTarget!==[.8,.9][i]||!Number.isFinite(v.lowerKg)||v.lowerKg<0||!(v.upperKg===null&&v.unbounded||Number.isFinite(v.upperKg)&&v.upperKg>=v.lowerKg)))throw Error();}
+            else if(!Number.isFinite(value.baseFeeKrw)||!Array.isArray(value.baseIntervalKrw))throw Error();
+            resolve(value);
+          }catch{reject(new AppError(`${label} 예측 결과를 확인해주세요.`,503));}
         });
         child.stdin.end(JSON.stringify(request));
       });

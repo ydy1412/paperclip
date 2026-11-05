@@ -257,11 +257,13 @@ def predict_values(query, reference, labels, k, image_weight):
     return np.array(predictions), np.array(distances)
 
 
+def feature_matrix(features, image_weight):
+    image, title, category, quantity = features
+    return np.concatenate([image*math.sqrt(image_weight),title*.5,category*math.sqrt(.75-image_weight),np.log1p(quantity)[:,None]*.2],axis=1)
+
+
 def ridge_values(query, reference, labels, image_weight, alpha, dual=None):
-    def matrix(features):
-        image, title, category, quantity = features
-        return np.concatenate([image*math.sqrt(image_weight),title*.5,category*math.sqrt(.75-image_weight),np.log1p(quantity)[:,None]*.2],axis=1)
-    train_x, query_x = matrix(reference), matrix(query)
+    train_x, query_x = feature_matrix(reference, image_weight), feature_matrix(query, image_weight)
     target = np.log1p(labels.astype(np.float64))
     mean = float(target.mean())
     if dual is None:
