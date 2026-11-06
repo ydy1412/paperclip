@@ -53,6 +53,8 @@ def metrics(actual, predicted, groups, ranges=None, band_spec=COARSE):
     result = {'records': len(actual), 'productGroups': len(np.unique(groups)),
               'macroPartialCredit': macro(credit(distance)),
               'macroExact': macro(distance == 0), 'macroWithinOneBand': macro(distance <= 1),
+              'macroWithinTwoBands': macro(distance <= 2),
+              'macroMoreThanTwoBandsOff': macro(distance > 2),
               'macroTwoOrMoreBandsOff': macro(distance >= 2),
               'macroSevereUnderestimate': macro(actual-predicted >= 2),
               'macroMeanBandDistance': macro(distance),

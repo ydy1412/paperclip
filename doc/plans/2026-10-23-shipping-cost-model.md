@@ -1,5 +1,116 @@
 # Shipping-cost estimator
 
+## Active target: at least80% within two tariff classes (2026-11-06)
+
+The user requests continued improvement until the single predicted VIP0.5kg
+class is within two classes of the actual class for at least80% of products.
+Primary metric is the mean, over independent products, of the within-product
+mean of `abs(predictedClass-actualClass)<=2`. Retain the full2,673 eligible
+rows/237 products, price/quantity availability contracts and product-disjoint
+validation. Row-weighted93.19% is dominated by a repeated product and is not
+success. The present equal-product baseline is57.695%.
+
+Keep the tariff grid and endpoint semantics unchanged. Do not meet the target
+by widening output ranges, dropping hard items, pooling classes, using measured
+weights as features or selecting on outer-fold labels. Select candidates on
+within-two accuracy in inner training folds, with partial credit as a tie-break.
+Compare tolerance-aware classification/decision rules, quantity-normalized
+physical models, declared-CNY input ablations, learned neighborhood densities
+and upgraded tool-free image attributes. Snapshot candidate definitions and
+data/code hashes. Any image upgrade is label-blind and cache-versioned. Keep
+resource limits and no resident AI. An old, repeatedly viewed split is not a
+fresh holdout. Audit source ambiguity and feature-equivalence limits first;
+retain failure evidence and statistical uncertainty.
+
+### Retrieval-conditioned predictor pilot
+
+Treat few-shot image inference as a separate supervised predictor, not as
+label-blind photo attributes. Preselect24 development products using seed8063
+without inspecting their outcomes. One representative per product is selected
+by query quantity only. Supply at most3 nearest independent training products
+from that development fold, their photos, quantity and recorded weight.
+Query inputs are photo/title/HS/quantity and declared-CNY price; no query weight,
+fee, customer data or product identifier enters the prompt. Cache by the complete
+prompt, reference labels, photos, model and fold training signature. Tools,
+search, plugins and persistent state remain disabled. Keep the60 reserved
+products untouched. A pilot score alone is not the full-product target.
+
+### Public reference data experiment
+
+ABO (Amazon Berkeley Objects) is a public product-image/metadata dataset with
+item_weight and dimensions. The current official registry and bucket license
+are CC BY4.0 (updated from NC in2023). Retain Amazon.com/dataset-creator
+attribution, source URLs, access date and download digests. Start with metadata
+only, then a bounded reference subset; never fetch the full image archives.
+No customer data or historical labels are transmitted to the public source.
+Public item mass is a separate auxiliary domain, not ground-truth packed
+forwarding weight. Deduplicate reference product/image variants and validate
+any domain adjustment only on training products. Reference construction uses
+development inputs only; the reserved60 product outcomes remain untouched.
+
+### Current research checkpoint — target not achieved
+
+Keep60 of237 products reserved. Select on fixed product-disjoint development
+folds over the other177 products. The historical data was seen in earlier
+research, so this is not a fresh prospective test. The60 reserved outcomes
+were not evaluated by the current selection. All2,673 eligible rows remain;
+training caps each product at12 rows with quantity diversity and uses equal
+product weights. CNY-price ablations remain separate.
+
+| Development experiment | Product folds | Best within two classes |
+| --- | --- | --- |
+| v1 photo features, tolerance-aware shared CDF / mass comparisons | 2 | 63.020% |
+| Completed v2 high-effort photo features | 2 | 60.874% |
+| Frozen CLIP features with CDF, v1 / v2 | 2 | 61.329% / 62.028% |
+| Independent-product CLIP neighbors, v1 / v2 | 2 | 60.609% / 59.155% |
+| Log-mass-axis ordinal classification | 2 | 59.946% |
+| v1+v2 attributes, CLIP, CDF / tolerance-reward forests | 5 | 62.445% |
+| Public ABO8,000 title/material/weight auxiliaries | 2 | 61.738% |
+| ABO8,000 text plus1,024 public-image auxiliaries | 2 | 62.596% |
+
+These are exploratory selected-development scores, not confirmed improvements.
+The strongest63.020% candidate uses declared-CNY inputs and depth6 shared CDF
+classification. The photo-prior control on the same products scores61.340%.
+The exploratory product-bootstrap95% interval is55.88–70.05%; the paired
+difference interval is-3.18–6.66 percentage points. A gain is not established.
+Do not compare this177-product result directly with the earlier237-product
+57.695% within-two result as a measured improvement.
+
+The24-product representative few-shot pilot scores50% with gpt-6-luna high.
+The first12 of the same fixed pilot score58.33% with gpt-6-astra high (7/12,
+versus6/12 for Luna). These small pilots do not establish a model difference
+or full-product accuracy. Query outcomes were excluded from prompts; only
+fold-training references carried weight labels. No tools were invoked.
+
+The present strongest candidate scores87.82% on products represented below
+or at2.5kg,65.91% over2.5–5kg,28.02% over5–10kg,15.79% over10–20kg,
+and6.33% over20kg. These are outcome-stratum diagnostics, not deployable
+query filters. Products can appear in multiple strata when quantity changes.
+Do not discard the difficult strata to reach80%.
+
+Observed errors include working capacity read as machine mass, photos for
+multiple selectable dimensions, and ambiguous panel/set quantities. The source
+customs export has no purchased option/dimensions/set-size fields; unit fields
+are empty. Public item mass also differs from a packed forwarding label. The
+current algorithms and auxiliary data have not established80%. The next useful
+input is a source of actual purchased variants and supplier packed specifications.
+A question asking for its location is pending. The goal remains incomplete.
+
+Private reproducibility evidence is under tmp/vip80/: research-report.json,
+locked-plan.json, uncertainty.json, source/code snapshots, run logs, predictions,
+and abo/ source/license/digest manifests. Public metadata was83.4MiB and the
+1,024 small images total6.74MiB; no image archive was fetched. Local workers
+peaked below600MiB RSS and exited. The added within-two metric and its boundary
+check pass the focused9-test ordinal suite. These tests validate reporting,
+not prediction quality. No UI, API, source DB, automatic pricing, service,
+artifact contract or operating model was changed by this checkpoint.
+
+ABO source and attribution: Amazon.com and the dataset creators listed in the
+[official registry](https://registry.opendata.aws/amazon-berkeley-objects/).
+The frozen CLIP encoder is Xenova/clip-vit-base-patch32 at revision
+6b7c523703ae26e39be4b03774966f8571c7f523; source and preprocessing digests are
+in tmp/vip80/clip/source.json. Both new encoders and research files stay private.
+
 ## VIP tariff-step weight classification (2026-11-06, current contract)
 
 The user clarified that the weight model itself must use the VIP tariff's

@@ -104,6 +104,9 @@ class OrdinalModelTests(unittest.TestCase):
         result = metrics(actual, np.zeros(102, dtype=int), groups)
         self.assertAlmostEqual(result['macroPartialCredit'], 1/3)
         self.assertGreater(result['rowExact'], .98)
+        boundary = metrics(np.array([0, 0, 0]), np.array([1, 2, 3]), np.arange(3), band_spec=vip_contract())
+        self.assertAlmostEqual(boundary['macroWithinTwoBands'], 2/3)
+        self.assertAlmostEqual(boundary['macroMoreThanTwoBandsOff'], 1/3)
 
     def test_calibration_keeps_whole_products_and_exposes_unbounded_ranges(self):
         scores = np.tile([1., .5, .3, 0., 0.], (20, 1))
