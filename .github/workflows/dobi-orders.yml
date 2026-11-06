@@ -38,5 +38,25 @@ jobs:
           python-version: '3.12'
       - name: Install small model-test dependencies
         run: python -m pip install numpy==2.2.6 Pillow==11.3.0
-      - name: Verify product split, undersampling and surcharge
-        run: python -m unittest discover -s packages/dobi-orders/shipping-model -p 'test_model.py'
+      - name: Verify product split, sampling, fee and multimodal intervals
+        run: python -m unittest discover -s packages/dobi-orders/shipping-model -p 'test_*.py'
+
+  weight-classification:
+    name: Partial-credit weight classification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: packages/dobi-orders/shipping-model/requirements-research.txt
+      - name: Install isolated classification dependencies
+        run: python -m pip install -r packages/dobi-orders/shipping-model/requirements-research.txt
+      - name: Check gradients, boundaries, product isolation and private artifact readback
+        run: python -m unittest discover -s packages/dobi-orders/shipping-model -p 'test_*.py'

@@ -1,0 +1,20 @@
+{
+  "version": "next1688-independent-physical-axes-2026-11-06",
+  "provider": "next1688",
+  "checkedOn": "2026-11-06",
+  "sources": [
+    "https://classic-radium-bbe.notion.site/2da00c6ab94280d8a2a2cb88c0399755?pvs=74",
+    "https://www.next1688.com/Front/Introduction/DlvrMny.asp?CTR_SEQ=2031&gMnu1=201&gMnu2=20107&sCbmYn=N"
+  ],
+  "sizeBands": {"metric": "packed-edge-sum-cm", "upperInclusive": [100, 120, 160], "names": ["small", "medium", "large", "oversize"]},
+  "weightBands": {"metric": "packed-weight-kg", "upperInclusive": [5, 10, 20], "names": ["light", "medium", "heavy", "overweight"]},
+  "freightChecks": {"weightAtLeastKg": 20, "longestSideAtLeastCm": 95, "edgeSumAtLeastCm": {"gunsan": 150, "other": 160}},
+  "minimumTrainingGroups": 8,
+  "minimumCalibrationGroups": 10,
+  "limitations": [
+    "Parcel-size surcharge bands use edge sums, not cubic volume or product size.",
+    "Freight checks include their boundary; surcharge bands include their upper endpoint.",
+    "One regular parcel only; irregular shapes, multiple boxes and later carrier decisions are not assessed.",
+    "Historical recorded fees are not current route/member tariff quotes. No new surcharge is added to those labels."
+  ]
+}

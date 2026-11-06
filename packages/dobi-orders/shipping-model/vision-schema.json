@@ -1,0 +1,173 @@
+{
+  "type": "object",
+  "properties": {
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sizeClass": {
+            "type": "string",
+            "enum": [
+              "handheld",
+              "tabletop",
+              "floor_standing",
+              "large_furniture",
+              "unknown"
+            ]
+          },
+          "visibleText": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "volume",
+                    "mass",
+                    "length",
+                    "width",
+                    "height",
+                    "count"
+                  ]
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "quote": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "product",
+                    "package",
+                    "unspecified"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "value",
+                "unit",
+                "quote",
+                "scope"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "weightPriorKg": {
+            "type": "object",
+            "properties": {
+              "lower": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "upper": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "explicit_mass",
+                  "visible_capacity_plus_packaging",
+                  "visual_inference",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "lower",
+              "upper",
+              "basis"
+            ],
+            "additionalProperties": false
+          },
+          "bulky": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "fragile": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "typeGroup": {
+            "type": "string",
+            "enum": [
+              "cosmetics",
+              "food",
+              "apparel",
+              "textile",
+              "furniture",
+              "electronics",
+              "tools",
+              "lighting",
+              "decor",
+              "fitness",
+              "toys",
+              "household",
+              "battery",
+              "other",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "kind",
+          "description",
+          "materials",
+          "sizeClass",
+          "visibleText",
+          "evidence",
+          "weightPriorKg",
+          "bulky",
+          "fragile",
+          "typeGroup"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "products"
+  ],
+  "additionalProperties": false
+}

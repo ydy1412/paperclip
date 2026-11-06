@@ -1,5 +1,343 @@
 # Local shipping-cost model
 
+## Current: VIP tariff-step weight classification (2026-11-06)
+
+The user corrected the target: retrain weight classification on the VIP tariff
+steps, rather than retaining the five coarse classes and only converting fees.
+`next1688-vip-tariff.json` is the official dated snapshot. `weight_bands.py`
+derives labels from its0.5kg upper-inclusive rows: `(0,0.5]`, `(0.5,1]`,
+`(1,1.5]`, and so on.1.2kg is the1.5kg tariff class; exactly5kg stays in the5kg
+class. The two sea tables end at449.5kg and air at150kg. The common weight
+grid uses the union (899 rows) plus an explicit above-table class. No route is
+chosen for the user, and same-price adjacent rows remain distinct weight labels.
+
+The CLI defaults to `--bands vip`. Add `--bands coarse` only to reproduce the
+older experiment below. The model is relabeled and retrained, not just renamed.
+Credit remains1/.5/.3/0 for exact/one/two/farther steps; one step is now0.5kg.
+Scores are not comparable with the earlier5kg task.
+
+```sh
+python shipping-model/ordinal_benchmark.py --bands vip \
+  --data /private/training.json \
+  --attributes /private/attributes.normalized.json \
+  --image-cache /private/image-cache \
+  --encoder /private/encoder.onnx \
+  --output /private/vip-weight-run
+
+python shipping-model/ordinal_model.py predict \
+  --model-dir /private/vip-weight-run/candidate < /private/request.json
+```
+
+A shared cumulative-logistic location model trains classification likelihood
+plus expected partial-credit loss. Parameters are shared across all900 classes.
+The stable first/last class probabilities retain tail mass. Compare bounded
+reward forests and photo-prior controls inside grouped selection. Empty classes
+remain in the output contract; they are not dropped. Actual recorded weights
+remain labels only. Calibration uses product-max tariff-step errors, scaled by
+label-free photo-prior width. These ranges are conservative and often too wide.
+An unbounded upper range is never reported as a finite kg width.
+
+On2,673 rows/237 products, five outer/two inner folds and separate calibration:
+
+| Equal-product metric | VIP-step model | Matched hard loss | Photo prior only |
+| --- | ---: | ---: | ---: |
+| Partial-credit score | 0.3823 | 0.3697 | 0.3950 |
+| Exact tariff class | 22.4% | 22.6% | 24.5% |
+| Within one0.5kg class | 48.7% | 42.1% | 49.6% |
+| Mean rounded-class distance | 3.48kg | 3.54kg | 3.47kg |
+
+The new loss does not establish improvement over the simpler photo prior.
+The product-bootstrap95% score interval is0.3340–0.4315. The nominal90% range
+contains94.37% with equal-product row weighting, but ranges are very wide;
+inspect width and unbounded rates in `report.json`. For example, recorded13.4kg
+was predicted in `(0.5,1]kg` with range `(0,5]kg` and still missed the range.
+An18.4kg functional example has a range up to119kg. Do not present these as
+precise or operationally qualified predictions. This experimental artifact is
+marked `needs-review` and is not enabled in the UI or API.
+
+The actual data occupies only part of the tariff grid and ends at96kg. Future
+or other-forwarder accuracy, actual-versus-chargeable Weight semantics, packing
+and volumetric weight remain unverified. Separate freight/remote charges are
+not targets. VIP is the label-grid source, not a fee input feature or a new
+claim that the whole historical dataset used VIP prices.
+
+Private evidence: `tmp/vip-weight/ordered/` contains source snapshots, plan,
+OOF predictions, report, independent recomputation, original-photo examples
+and a trained candidate. `tmp/vip-weight/run/` retains the earlier truncated
+distribution comparison. Python peak RSS is about394MiB; peak process footprint
+about621MiB, with one thread and no resident model or new remote vision call.
+Coarse schema1 artifacts still return their original band/range endpoints.
+
+## Earlier coarse partial-credit experiment (superseded bands)
+
+The current experiment predicts ordered weight bands, not an exact kg value:
+`[0,5)`, `[5,10)`, `[10,15)`, `[15,20)`, `[20,infinity)` kg. These display bands
+are independent of the provider policy below. They describe the recorded whole
+application, including quantity. The source `Weight` field assumes kg; actual
+versus chargeable weight is still unverified. Transfer to another forwarder
+requires a label/packing check. No package-volume truth is invented.
+
+Training uses reward 1 for the exact band, 0.5 for one band away, 0.3 for two,
+and 0 farther away. `ordinal_model.py` fits either five reward targets with a
+forest, or softmax with cross-entropy plus expected partial-credit loss. A
+photo-prior offset lets the classifier learn corrections to the frozen image
+interpretation. The image model itself is not fine-tuned. Utilities are not
+calibrated class probabilities. A separate whole-product calibration split
+produces a contiguous prediction range; very wide ranges require review.
+
+### Train and predict privately
+
+Use the isolated optional dependencies in `requirements-research.txt`. They
+are not needed by the existing fee API. No new resident model service, image
+download or remote vision call runs in the benchmark. `regression_model.py`
+provides the shared input allowlist; `regression_benchmark.py` loads frozen
+images and product identities. Actual fees/weights, source IDs and customer
+fields never enter query features. Declared prices are excluded from this
+classifier. Keep all source data, fitted files and results out of Git.
+
+```sh
+# First create a private export with offline weight labels.
+node shipping-model/export.mjs /private/orders.sqlite /private/training.json fee-with-physical-labels
+
+# Paths refer to existing complete v1 vision attributes and frozen image cache.
+python shipping-model/ordinal_benchmark.py --bands coarse \
+  --data /private/training.json \
+  --attributes /private/attributes.normalized.json \
+  --image-cache /private/image-cache \
+  --encoder /private/encoder.onnx \
+  --output /private/ordinal-run
+
+python shipping-model/ordinal_model.py predict \
+  --model-dir /private/ordinal-run/candidate < /private/request.json
+```
+
+The request has `items` (one to five, each with `title`, `quantity`, optional
+`imageBase64`) and `category` (HS). A trusted operator can supply a matching
+`vision` array from the existing validated v1 extractor. The CLI does not
+authenticate or run that extractor. Missing images/attributes remain explicit
+fallbacks. Do not accept user-uploaded joblib files; only load locally trained
+artifacts. Their hash is checked before deserialization.
+
+The result contains `weightBand`, `predictionRange`, `classUtilities`, feature
+coverage and review reasons. Unknown upper weight is `null`. Optional
+`feeReferenceProvider: "next1688"` adds the training band's product-balanced
+historical median and 10–90 percentile fees, with sparse-band fallback clearly
+marked. This reference is not a current tariff, a calibrated fee interval, or
+another provider's quote. The existing fee APIs remain unchanged; the new
+classifier is a CLI experiment, not an enabled UI feature.
+
+### Verified historical comparison
+
+The 2,674 positive-fee records have 2,673 positive weights in 237 independent
+products. One missing-weight product is excluded explicitly. Training caps each
+product at 12 rows and assigns each product equal total weight. Evaluation
+retains all eligible rows. Five outer product folds use two inner selection
+folds and a separate 20% calibration-group partition. Transforms, sampling and
+selection fit only on training groups. Repeated old data is not future validation.
+
+| Equal-product metric | Hard-label softmax | Photo prior only | Partial-credit + prior |
+| --- | ---: | ---: | ---: |
+| Partial-credit score | 0.7816 | 0.8418 | 0.8380 |
+| Exact band | 67.9% | 72.7% | 72.3% |
+| At most one band away | 84.0% | 92.6% | 92.4% |
+| Underestimated by at least two bands | 15.0% | 4.9% | 4.9% |
+
+The matched hard-training control scores 0.8384: partial-credit training alone
+does not establish an improvement. The simpler photo prior is also slightly
+better. Keep this evidence; do not claim the new loss is superior. Its value is
+an explicit ordered decision contract and independently calibrated range.
+Product bootstrap score interval: 0.8025–0.8710 (historical sample uncertainty).
+
+The nominal 90% range covers 91.35% with equal-product row weighting, and all
+records in 89.87% of products. It averages 2.19 bands; 73.87% of predictions
+cover one/two bands, 5.53% cover all five. Exact recall in the rare 15–20kg band
+is only 10% (9 rows, 8 products), so heavy goods need review. Row accuracy of
+about 96% is dominated by one repeated product and is not the primary result.
+
+Private evidence: `tmp/ordinal-shipping/prior-correction/` holds plans, source
+snapshots, OOF predictions, report, independent recomputation and the candidate.
+Original-photo readback tests include one failure (13.4kg predicted below 5kg,
+range below 15kg); functional examples are not fresh accuracy tests. Training
+uses about 250MiB Python RSS; full photo inference peak footprint is about
+276MiB, with no resident inference process. No deployment or production write
+is performed by these commands.
+
+## Independent parcel-size and weight axes (2026-11-06)
+
+The current schema-3 multimodal trainer supersedes the mixed size/mass rules
+below. It uses the two separate axes in
+`next1688-physical-policy.json`. The provider's linked
+[surcharge guide](https://classic-radium-bbe.notion.site/2da00c6ab94280d8a2a2cb88c0399755?pvs=74)
+defines packed edge-sum bands at 100/120/160cm and weight bands at 5/10/20kg.
+The [provider page](https://www.next1688.com/Front/Introduction/DlvrMny.asp?CTR_SEQ=2031&gMnu1=201&gMnu2=20107&sCbmYn=N)
+also checks freight at >=20kg, >=95cm longest side, or >=160cm edge sum
+(>=150cm for Gunsan). Both sources were checked on 2026-11-06. Surcharge
+bands include their upper endpoint; the separate freight checks include
+their lower endpoint. For example, exactly 20kg is in the 10–20kg band and
+also meets the freight check. This is a dated policy snapshot, not a live
+tariff feed. Update the versioned data and retrain when the policy changes.
+
+Small/medium/large now describe **parcel edge-sum bands only**. Heavy items
+do not increase the size grade. Weight independently reports light/medium/
+heavy/overweight. A small heavy item and a large light item keep both facts.
+Visual scale is returned separately and never becomes measured packed size.
+Quoted product mass is a lower bound, while a photo-derived mass prior stays
+uncalibrated. Contents volume, product dimensions and unitless legacy Volume
+never become package measurements. Historical records contain 85 positive
+Volume values with unverified units and no complete packed dimensions;
+therefore this pilot cannot evaluate real parcel-size classification accuracy.
+
+Default fee exports continue to exclude post-shipment measurements. An explicit
+offline-label export adds only allowlisted physical outcomes:
+
+```sh
+node shipping-model/export.mjs /private/scope/orders.sqlite /private/physical-fees.json fee-with-physical-labels
+```
+
+Train with that file using the existing multimodal train command. Recorded
+Weight is used to grade **training reference rows only**, with the legacy kg
+assumption documented. Images never receive outcomes, customer data or those
+labels. Validation, calibration and test queries use photo-context predictions;
+their actual recorded weights are used only for evaluation. Missing reference
+weights fall back to photo inference. Joint size/weight pools require eight
+independent products, then fall back to weight-only, size-only, or shared pools.
+Candidate ranges are combined. Calibration conditions on predicted query grades
+only with ten independent products; otherwise it uses global residuals.
+
+The existing opt-in estimate API accepts an optional **single reported parcel**:
+
+```json
+{
+  "items": [{"title": "item", "quantity": 1, "imageBase64": "..."}],
+  "category": "unknown",
+  "remoteArea": false,
+  "parcel": {"weightKg": 20, "dimensionsCm": {"length": 10, "width": 10, "height": 10}, "hub": "other"}
+}
+```
+
+Weight and dimensions can be supplied separately. Dimensions must be complete.
+`hub` is `gunsan`, `other`, or null/omitted. Reported and photo-read values are
+not independently verified. Responses add `physicalPrediction.volume`,
+`.weight`, `.visualScale` and `.handling`, plus the actual reference pool and
+review reasons. A missing dimension remains unknown. Freight risk requires a
+manual quote; separately recorded freight is outside the base-fee target.
+No surcharge is added on top of historical fee labels. The existing explicit
+remote +5,000 behavior is retained. A supplied weight outside training support
+returns an unbounded interval. Supplied measurements change the input mode:
+the API flags that the reported-parcel mode has not been evaluated for coverage.
+If no packed-size labels match, it explicitly reports weight/shared fallback.
+Version-1 and version-2 artifacts retain their original predictions.
+
+The original splits and sampling remain unchanged: 1,997 image-complete rows;
+train1,885→249, train/validation/calibration/test167/23/22/23 product groups,
+split overlap zero. 248 sampled rows have recorded Weight. There are no verified
+package-dimension labels. Validation selects k15 and image weight0.60. Reference
+weight bands have 110/27/22/17 training groups; groups can span bands.
+Photo-predicted light has17 calibration groups; medium4/overweight2 and absent
+grades use global fallback (22 distinct groups overall).
+
+On the previously inspected 38-row/23-product test, MAE improves from mixed
+routing KRW7,200.26 to **5,488.42**, macro product MAE5,295.43→4,517.68.
+The KRW1,000 hit rate drops26.32%→23.68%. 80% targets cover33/38 rows and
+20/23 whole groups. 90% targets cover35/38 rows and22/23 groups. Median90%
+width rises23,500→23,650, while mean width falls40,084→35,984. All38 intervals
+are finite; all38 also require manual freight review because packed dimensions
+are missing. The fee aid still returns a base estimate; it does not approve
+dispatch or a complete shipping quote. Weight candidate bands
+include recorded Weight in32/38 cases (84.21%); the raw photo weight prior
+contains it in23/38 (60.53%, including two unbounded priors). Do not call those
+priors calibrated weight intervals. These are exploratory comparisons on
+historical data, not fresh holdout, future or automatic-quote validation.
+
+Local Python23 and focused Node8 tests passed. Real cached-photo HTTP verified
+independent axes, provider boundaries, missing dimensions, malformed parcel400,
+unsupported weight, reported-mode disclosure, private metadata, surcharge,
+single worker, unchanged isolated orders and v1/v2 compatibility. No new image
+calls or downloads were needed. Training peak about64–66MiB, cached Python about46MiB/
+0.24s, cached HTTP examples0.10–0.21s; cold remote vision is separate. Private
+evidence is under `tmp/physical-shipping/`. PR submission, CI and deployment
+remain separate; no operating service, UI, source DB or automatic prices changed.
+
+## Size-first fee model (2026-11-06, experimental)
+
+The current multimodal trainer uses three stages: infer a shipment-size route,
+compare products in that route, then calibrate the fee range. The routes are
+**small, medium, large, special/unknown**. This is a shared estimator with
+size-restricted neighbors, not four separately trained large models.
+
+`size_routing.py` supplies the initial, versioned routing policy, saved in the
+private manifest. Visual scale, quoted mass, and complete package dimensions
+can affect routing. The mass/length limits are engineering rules, not carrier
+tariffs. Product dimensions never become package dimensions. The available
+pilot has no complete package-dimension labels, so routing accuracy against
+true packed size cannot be measured. Inferred weight can widen candidate
+sizes but is not a measured weight label. Quantities with unknown units and
+uncertain packing produce review reasons. The policy is editable in the
+artifact; change its version and retrain when routing semantics change.
+
+Each size must have eight independent training products to use its own
+reference pool. Otherwise it borrows the shared pool. Training price bands
+are group-balanced 10th–90th percentiles, not price caps or prediction
+intervals. On this pilot they are small KRW 5,500–8,600 (39 groups), medium
+5,700–15,600 (50), large 6,900–53,100 (69). Groups may span size classes.
+Ambiguous sizes use the union of their raw fee ranges and the largest
+candidate calibration guard. Special/unknown sizes and unsupported quantities
+return an unbounded interval and `requiresManualQuote: true`.
+
+Per-size residual calibration requires ten independent calibration products.
+Only medium has ten in this pilot; small/large have six each and use global
+fallback. The API identifies that fallback and does not claim per-size coverage.
+Responses add `sizePrediction`, `priceCategory`, `intervalCalibration`, and
+`requiresManualQuote`. Metadata adds `sizeHierarchy`. The existing request,
+scoped endpoint, original fee model and order state stay compatible. Version-1
+multimodal artifacts remain readable; retrain to enable the hierarchy.
+
+Original splits, images and twelve-record sampling are retained. Validation
+selects 15 neighbors and image weight 0.35. On the **previously inspected**
+23-product/38-row historical test, MAE changes from the pre-routing multimodal
+KRW 8,186.05 to **7,200.26**; macro product MAE 6,337.03 to **5,295.43**.
+80% targets cover 32/38 rows and 20/23 whole groups. 90% targets cover 35/38
+rows and 21/23 groups. Median 90% width is 23,500, but mean width rises from
+37,071 to **40,084**. Per-size MAE is about 502/9,022/7,630 for small/medium/large
+on only 5/9/9 groups. Small results are encouraging, but medium/large remain
+poor. These are exploratory comparisons, not new independent validation or
+approval for automatic prices. No test rows have special-size primary routes.
+
+Private evidence: `tmp/hierarchical-shipping/` (candidate, prior manifest,
+HTTP proof, tests, resource measurements). No new image-model calls, model
+downloads, operating data changes or deployment were needed. Training used
+about 64 MiB. Cached real-image HTTP examples took about 0.12–0.25 seconds;
+cold image interpretation remains separate. Code is submitted through PR54,
+not enabled in the operating service.
+
+## Semantic multimodal fee model (2026-11-05)
+
+The opt-in model reads product photos and text through the existing authenticated **Codex `gpt-6-luna` vision runtime**, then predicts recorded forwarding fees with a small local model. This is a vision-language attribute stage plus a locally fitted estimator, **not a newly fine-tuned vision-language foundation model**. The baseline CNN descriptor model remains available. No local resident LLM, new model download, UI, order change or automatic price calculation is added. A cold image uses the configured Codex account's inference quota; exact image/context/model/prompt matches reuse a private cache. [Codex image and structured-output interface](https://learn.chatgpt.com/docs/cli/reference).
+
+`vision.mjs` accepts product photos, names and HS codes only. It runs with read-only sandboxing and disabled tools, search, MCP/plugin discovery and subagents. Images are untrusted evidence. The schema separates quoted capacity/mass/dimensions from inferred material, bulk and uncertain physical weight priors. Unit/quote checks reject fabricated dimensions and model-number digits. A volume such as 820 mL is never silently converted into measured mass. Inferred priors remain labeled as inference.
+
+```sh
+# Request contains items [{title,quantity,imageBase64}], category and optional remoteArea.
+node shipping-model/vision.mjs /private/scope/shipping-vision-cache < request.json > vision.json
+# The private training manifest has {entries:{imageHash:{model,version,imageSha256,
+# contextHash,toolCalls:0,attributes,urls:[originalSourceImageUrl]}}}.
+# Attribute extraction must never receive shipping labels or customer data.
+python shipping-model/multimodal_model.py train \
+  --data /private/fee-data.json --attributes /private/attributes.json \
+  --image-cache /private/baseline/image-cache --baseline /private/baseline \
+  --model-dir /private/candidate/shipping-multimodal-model
+# Attach the vision.json result as request.vision for direct Python inference.
+python shipping-model/multimodal_model.py predict --model-dir /private/candidate/shipping-multimodal-model < enriched-request.json
+```
+
+Copy reviewed private `manifest.json` and `model.npz` into the existing company/project data folder's `shipping-multimodal-model/`. Scoped `GET /shipping-multimodal-model` and `POST /shipping-multimodal-estimate` reuse board authorization, input bounds, the global single worker, cancellation and shutdown. The server extracts/binds attributes itself and ignores client-supplied `vision`. `shipping-vision-cache/` is scoped to the same data directory. Codex must already be installed and authenticated; missing runtime/login returns a clear failure. No credentials are read by application code or returned to clients. A cold vision pass is bounded to 120 seconds; local prediction to 30 seconds. Cached predictions do not call Codex or fetch images.
+
+Training reuses the original fee product-group split before filtering for complete image attributes and before twelve-record undersampling. Quantile neighbors select at most one row per product group, preserving quantity variety without repeated-product dominance. Validation macro-product interval score selects neighborhood settings. Independent group-maximum calibration combines normalized quantile and absolute residual bands; the 90% band encloses the 80% band. Sparse calibration or unsupported quantity yields an unbounded range. The intervals have **target marginal coverage**, not a per-item guarantee. Historical remote fees are not separated: recorded fee is assumed base; explicit remote=true adds KRW 5,000. Separately recorded collect freight and taxes are outside this target.
+
+The verified pilot processed 301 unique images (zero extraction failures and zero model tool calls). Complete attributes cover 1,997 of 2,674 fee records; 677 incomplete-image records are excluded. Training 1,885 → 249 records, largest product 1,645 → 12. Validation/calibration/test use 23/22/23 independent groups; test remains the same original 23 groups/38 rows. On those rows, MAE changes from KRW 8,784.01 to **8,186.05**; macro product MAE from KRW 7,663.83 to **6,337.03**. The 90% target covers 34/38 rows (89.47%) and 21/23 whole groups (91.30%). Median width decreases from about KRW 27,161 to **23,600**, but **mean width increases** from KRW 27,367 to **37,071**. Rare and heavy goods remain problematic. These small-sample pilot results do not establish statistical significance, future accuracy or readiness for automatic quotes.
+
+The interval guard was revised after inspecting preliminary results on the same historical test groups. The final interval metrics are exploratory remeasurements, not a fresh independent future holdout. Point-model settings remain validation-selected. Private evidence and artifacts: `tmp/multimodal-shipping/` (normalized attributes, report, cached-image HTTP proof and source images). Do not commit them. Change the vision version and retrain when the schema/prompt/feature contract changes. Local, CI, PR and operating deployment results must be reported separately.
+
 This is an experimental quote aid. It does not set order prices, dispatch parcels or train on a schedule. The worker loads only for a prediction, uses one CPU thread and exits. No customer data is sent to an AI provider.
 
 Inputs are product images, customs product names, **HS categories** and quantities. HS codes are not Coupang or Naver category IDs. The source has no separately labeled remote charge: the recorded shipping fee is assumed to be base. `remoteArea: true` adds exactly KRW 5,000, `false` adds zero, and an omitted/null flag leaves the total unknown. The response includes both base and total components, prediction intervals and warnings. Without an image or a supported category, reliability is lower.
