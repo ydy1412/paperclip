@@ -2,6 +2,82 @@
 
 ## Active target: at least80% within two tariff classes (2026-11-06)
 
+### User steering: train only single-unit shipments
+
+Use only records with exactly one item line and declared quantity1 for all
+local supervised fitting. There are1,089 such rows in206 of237 source products;
+the development partition has1,014 rows in155 products. Keep the locked product
+split. Filter training only after the group split, and retain equal-product
+weights/capping. Never divide multi-unit outcome labels to create new training
+examples, and do not reuse the old multi-quantity fitted models. Public item
+mass references with unverified bundle counts are outside this new training
+contract. Frozen label-free image/text encoders may be reused.
+
+Treat quantity1 as one declared listing unit; a physical single piece versus
+a set is unverified when the original unit/option is missing. Report unit-only
+and full evaluation separately. The80% overall objective is not silently
+replaced by a filtered evaluation score. Multi-quantity rows remain evaluation
+only. Learn the one-unit weight distribution, then assess quantity scaling;
+single-unit parcel mass includes packing, so scaling is an assumption to test.
+Use continuous latent mass/cumulative thresholds where needed to avoid rounding
+each unit to0.5kg before multiplication. Final outputs retain the VIP grid.
+
+#### Single-unit training checkpoint
+
+- Read-only original-DB audit confirms all1,089 eligible rows explicitly record
+  quantity1 on one item line. No missing quantity was silently accepted as1.
+  Keep155 development products and the60 reserved products separate. Fitting
+  the saved development candidates uses1,014 eligible rows before capping,
+  then240 rows in155 products. Every sampled original quantity is1.
+- Two-fold product-disjoint development: the strongest raw-CDF control reaches
+  68.038% on single-unit records and64.855% on all development records. Its
+  corresponding prior all-quantity-trained classifier scored67.222% on the
+  same single-unit evaluation subset. Algorithm changes prevent assigning the
+  difference solely to filtering. These selected development scores do not
+  establish80% or a confirmed gain.
+- Preserve nearby-class credit1/.5/.3 in the partial-credit candidate. Exclude
+  invalid negative-mass neighbors and renormalize the valid weights; do not
+  clip them onto the first class and count that reward more than once. The
+  corrected candidate scores65.457% on single-unit development,62.278% on all
+  development, and43.625% on multiple-unit development. Earlier clipped-boundary
+  experiments are retained privately and are not the saved corrected model.
+- A five-fold check scores65.267% single-unit for the raw control and64.971%
+  for the earlier partial-credit variant. It does not establish80%. The v2
+  photo and CLIP alternatives also do not meet the target. No reserved-product
+  accuracy was used for current selection.
+- Independent recomputation from raw quantities/outcomes verifies single-unit
+  training only, product isolation, every development record evaluated once,
+  the metric values, and zero reserved-product evaluation. Two trusted private
+  classifiers are saved with source and data hashes. Fresh-process checksum,
+  model-load and input-only inference checks pass. These are functional checks,
+  not new accuracy evidence. Local fitting peakRSS is about285MiB and exits.
+- Evidence: tmp/vip80/single-unit-report.json, strict-unit-source-audit.json,
+  single-unit-independent-validation.json, single-unit-model-valid/{partial-credit,
+  hard-control}/, per-run source snapshots and predictions. The models are
+  research-only. No production model, orders, source DB or service was changed.
+
+#### Source enrichment audit
+
+The existing Auto Sourcing graph was queried and current repository scope
+checks were compared with the source. Its live scoped catalog has244 Coupang
+and36 Taobao products. Only4 historical source IDs match directly. Of243 usable
+merchant main photos, a predeclared conservative pixel/CLIP join accepts5
+historical photos. Exact original-image URL and order-ID joins find no extra
+links. The matched sofa catalog still has110/140/170cm variants without a
+selected historical SKU. No inferred match was treated as a confirmed variant.
+
+The separate Dovix root graph rebuild did not finish; its own process was
+stopped, with no claim that a current full graph was produced. Source/DB reads
+above are the authority. Both source databases and existing user changes in
+the Auto Sourcing checkout were preserved.
+
+Aside u1 attempted a read-only Next1688 application-field audit. It reached a
+login requirement and reported a locked Vault and no matching saved credential.
+No login was submitted and no application detail was read. Purchased-option
+and packed-dimension fields remain unverified, not proven absent. User login
+was requested. Private evidence: catalog-link-audit.json, catalog/photo-joins.json,
+and next1688/field-audit.json. The80% objective remains incomplete.
+
 The user requests continued improvement until the single predicted VIP0.5kg
 class is within two classes of the actual class for at least80% of products.
 Primary metric is the mean, over independent products, of the within-product
@@ -48,7 +124,7 @@ forwarding weight. Deduplicate reference product/image variants and validate
 any domain adjustment only on training products. Reference construction uses
 development inputs only; the reserved60 product outcomes remain untouched.
 
-### Current research checkpoint — target not achieved
+### Earlier full-quantity research checkpoint — target not achieved
 
 Keep60 of237 products reserved. Select on fixed product-disjoint development
 folds over the other177 products. The historical data was seen in earlier
