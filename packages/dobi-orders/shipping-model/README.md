@@ -1,5 +1,99 @@
 # Local shipping-cost model
 
+## Partial-credit weight classification (2026-11-06)
+
+The current experiment predicts ordered weight bands, not an exact kg value:
+`[0,5)`, `[5,10)`, `[10,15)`, `[15,20)`, `[20,infinity)` kg. These display bands
+are independent of the provider policy below. They describe the recorded whole
+application, including quantity. The source `Weight` field assumes kg; actual
+versus chargeable weight is still unverified. Transfer to another forwarder
+requires a label/packing check. No package-volume truth is invented.
+
+Training uses reward 1 for the exact band, 0.5 for one band away, 0.3 for two,
+and 0 farther away. `ordinal_model.py` fits either five reward targets with a
+forest, or softmax with cross-entropy plus expected partial-credit loss. A
+photo-prior offset lets the classifier learn corrections to the frozen image
+interpretation. The image model itself is not fine-tuned. Utilities are not
+calibrated class probabilities. A separate whole-product calibration split
+produces a contiguous prediction range; very wide ranges require review.
+
+### Train and predict privately
+
+Use the isolated optional dependencies in `requirements-research.txt`. They
+are not needed by the existing fee API. No new resident model service, image
+download or remote vision call runs in the benchmark. `regression_model.py`
+provides the shared input allowlist; `regression_benchmark.py` loads frozen
+images and product identities. Actual fees/weights, source IDs and customer
+fields never enter query features. Declared prices are excluded from this
+classifier. Keep all source data, fitted files and results out of Git.
+
+```sh
+# First create a private export with offline weight labels.
+node shipping-model/export.mjs /private/orders.sqlite /private/training.json fee-with-physical-labels
+
+# Paths refer to existing complete v1 vision attributes and frozen image cache.
+python shipping-model/ordinal_benchmark.py \
+  --data /private/training.json \
+  --attributes /private/attributes.normalized.json \
+  --image-cache /private/image-cache \
+  --encoder /private/encoder.onnx \
+  --output /private/ordinal-run
+
+python shipping-model/ordinal_model.py predict \
+  --model-dir /private/ordinal-run/candidate < /private/request.json
+```
+
+The request has `items` (one to five, each with `title`, `quantity`, optional
+`imageBase64`) and `category` (HS). A trusted operator can supply a matching
+`vision` array from the existing validated v1 extractor. The CLI does not
+authenticate or run that extractor. Missing images/attributes remain explicit
+fallbacks. Do not accept user-uploaded joblib files; only load locally trained
+artifacts. Their hash is checked before deserialization.
+
+The result contains `weightBand`, `predictionRange`, `classUtilities`, feature
+coverage and review reasons. Unknown upper weight is `null`. Optional
+`feeReferenceProvider: "next1688"` adds the training band's product-balanced
+historical median and 10–90 percentile fees, with sparse-band fallback clearly
+marked. This reference is not a current tariff, a calibrated fee interval, or
+another provider's quote. The existing fee APIs remain unchanged; the new
+classifier is a CLI experiment, not an enabled UI feature.
+
+### Verified historical comparison
+
+The 2,674 positive-fee records have 2,673 positive weights in 237 independent
+products. One missing-weight product is excluded explicitly. Training caps each
+product at 12 rows and assigns each product equal total weight. Evaluation
+retains all eligible rows. Five outer product folds use two inner selection
+folds and a separate 20% calibration-group partition. Transforms, sampling and
+selection fit only on training groups. Repeated old data is not future validation.
+
+| Equal-product metric | Hard-label softmax | Photo prior only | Partial-credit + prior |
+| --- | ---: | ---: | ---: |
+| Partial-credit score | 0.7816 | 0.8418 | 0.8380 |
+| Exact band | 67.9% | 72.7% | 72.3% |
+| At most one band away | 84.0% | 92.6% | 92.4% |
+| Underestimated by at least two bands | 15.0% | 4.9% | 4.9% |
+
+The matched hard-training control scores 0.8384: partial-credit training alone
+does not establish an improvement. The simpler photo prior is also slightly
+better. Keep this evidence; do not claim the new loss is superior. Its value is
+an explicit ordered decision contract and independently calibrated range.
+Product bootstrap score interval: 0.8025–0.8710 (historical sample uncertainty).
+
+The nominal 90% range covers 91.35% with equal-product row weighting, and all
+records in 89.87% of products. It averages 2.19 bands; 73.87% of predictions
+cover one/two bands, 5.53% cover all five. Exact recall in the rare 15–20kg band
+is only 10% (9 rows, 8 products), so heavy goods need review. Row accuracy of
+about 96% is dominated by one repeated product and is not the primary result.
+
+Private evidence: `tmp/ordinal-shipping/prior-correction/` holds plans, source
+snapshots, OOF predictions, report, independent recomputation and the candidate.
+Original-photo readback tests include one failure (13.4kg predicted below 5kg,
+range below 15kg); functional examples are not fresh accuracy tests. Training
+uses about 250MiB Python RSS; full photo inference peak footprint is about
+276MiB, with no resident inference process. No deployment or production write
+is performed by these commands.
+
 ## Independent parcel-size and weight axes (2026-11-06)
 
 The current schema-3 multimodal trainer supersedes the mixed size/mass rules

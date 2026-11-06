@@ -85,3 +85,5 @@ test-results/
 
 # Local Graphify analysis cache; source and review conclusions stay tracked.
 /graphify-out/
+# Local, isolated shipping-model research runtime (never publish dependencies/data).
+var/shipping-research/

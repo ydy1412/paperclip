@@ -18,6 +18,7 @@ test('학습 자료는 원본 이미지를 복구하고 개인정보·배송 후
     for(const value of ['PRIVATE-APPLICATION','PRIVATE-TRACKING','PRIVATE-RECIPIENT','9999','12345678','weight','postcode'])assert.ok(!text.includes(value));
     const physical=exportTrainingData(database,{includePhysicalLabels:true});assert.equal(physical.records[0].physicalLabels.recordedWeightKg,9999);
     assert.equal(physical.records[0].physicalLabels.volumeUnit,null);assert.ok(physical.physicalLabelContract.weightUnit.includes('assumed'));
+    const regression=exportTrainingData(database,{includePhysicalLabels:true,includePrices:true});assert.equal(regression.priceContract.currency,'CNY');assert.equal(regression.priceContract.confirmedBy,'operator');
     for(const value of ['PRIVATE-APPLICATION','PRIVATE-TRACKING','PRIVATE-RECIPIENT','12345678'])assert.ok(!JSON.stringify(physical).includes(value));
   }finally{store.close();await rm(dir,{recursive:true,force:true});}
 });

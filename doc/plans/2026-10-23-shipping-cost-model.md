@@ -1,5 +1,127 @@
 # Shipping-cost estimator
 
+## Ordinal weight classification (2026-11-06, current contract)
+
+The user replaced the exact-fee target with coarse weight classification and
+removed the KRW 2,000 completion threshold from the active goal. Preserve the
+older experiments below as history. Predict ordered bands: [0,5), [5,10),
+[10,15), [15,20), [20,infinity) kg. These are proposed prediction display bands,
+not carrier tariff thresholds or parcel-size labels. Zero/invalid/missing
+weights are excluded as unlabeled, never assigned the first class.
+
+Use the user's partial-credit rule in training, selection and evaluation:
+exact=1, one band away=0.5, two bands away=0.3, farther=0. Freeze this matrix
+before evaluation. Compare an ordinary classifier with reward-aware softmax
+(cross-entropy plus expected partial-credit loss) and reward-vector forests.
+Do not describe an evaluation-only score as a training loss.
+
+Primary selection/evaluation gives each independent product equal total
+weight. Retain group-first splitting and within-training undersampling. Use
+nested grouped folds; keep a separate calibration partition in each outer
+training fold. Compare class-prior, hard-label and image-prior controls.
+Report exact, adjacent, partial-credit, severe underestimation, class-balanced
+metrics, confusion matrix, range coverage and range width. Wide ranges must
+remain visible; accepting every band is not a useful accurate model.
+
+Reuse the complete version-1 image cache for this experiment. Do not mix it
+with the interrupted, partial version-2 extraction. Use image, text, HS and
+quantity; declared prices are not required for prediction. Keep actual Weight
+and fee exclusively as offline targets. Weight units are a legacy kg assumption;
+whether the field is actual or chargeable weight remains unverified. Expose
+that limitation rather than claiming proven transfer to another forwarder.
+
+Provide a private trained artifact and a bounded CLI prediction path. Keep
+Next1688 historical fee references separate from common weight classification,
+and never present them as another provider's tariff. Preserve existing APIs
+and production data. Verify training-loss gradients, boundaries, missing labels,
+product isolation, fitted-artifact readback, original-photo inference and memory.
+
+### Verified ordinal pilot
+
+- Eligible: 2,673 positive-weight records, 237 product groups; one missing-weight
+  product excluded from the 2,674 fee records. Five outer group folds, two
+  inner selection folds, separate 20% calibration groups. Training caps groups
+  at 12 and gives each group equal total weight. Evaluation is not sampled.
+- Reward-aware classifier with a photo-prior offset: equal-product partial
+  credit 0.83797, exact band 72.28%, within one band 92.41%, underestimation by
+  at least two bands 4.85%. Hard-label softmax: 0.78158 / 67.93% / 83.97% / 14.98%.
+  The stronger photo-prior-only baseline is 0.84177 and the matched hard-training
+  control 0.83840. The new loss does not establish a performance advantage.
+- Nominal90 range coverage: equal-product rows91.35%, whole products89.87%.
+  Mean2.19 bands, one/two bands73.87%, all five5.53%. Rare15–20kg recall10%
+  (9 rows8 groups) remains weak. Product bootstrap credit95%:0.80246–0.87097.
+  These are reused historical comparisons, not future/other-forwarder validation.
+- Actual saved-artifact readback uses cached original photos in five calibration
+  examples: recorded0.6→<5kg,9.7→5–10kg,13.4→<5kg (range<15kg),18.4→15–20kg,
+  33.3→20+kg. Retain the error. These examples test functionality, not fresh
+  accuracy. Original photo inference uses the existing pinned ONNX encoder and
+  complete v1 attributes. The interrupted216-entry v2 cache is unchanged.
+- Private evidence: tmp/ordinal-shipping/prior-correction/{plan,report,
+  independent-validation,examples,cli-result}.json, predictions.npz,
+  validation.png, source/, candidate/{manifest.json,classifier.joblib,encoder.onnx}.
+  New CLI inference runs without a persistent service or remote model request.
+  Peak image-inference footprint about276MiB; first full photo pass about2.8s,
+  following in-process examples about0.04–0.05s. Full CLI cold start measured
+  separately. The existing scoped fee APIs and UI are unchanged.
+- Focused Python36 and Node4 tests pass. Python includes analytical-gradient,
+  partial-credit loss, boundaries, missing labels, product-balanced metrics,
+  disjoint fit/calibration/test, artifact integrity and fallback checks. Separate
+  CI job installs optional dependencies so these tests are not silently skipped.
+
+## Earlier MAE below KRW 2,000 research (superseded objective)
+
+The user requested a data-science effort to reach mean absolute forwarding-fee
+error below KRW2,000 using the existing data. Keep this objective active until
+it is achieved and verified; do not call a narrower successful segment complete.
+Start by auditing labels, repeat-product concentration, feature equivalence,
+missing images and the largest errors. Preserve all valid nonzero fee records
+in the full benchmark; report image-complete and full-source coverage separately.
+
+Primary accuracy is row MAE on product-disjoint data; also report macro-product
+MAE, median/90th errors, underestimation cost, coverage, and memory/time. Existing
+38-row results are a repeatedly inspected research benchmark. Do not tune on
+it or call it new future validation. Establish deterministic grouped outer
+evaluation and within-training selection before comparing candidate methods.
+All preprocessing, sampling and parameter fitting must remain inside each
+training partition. Record exact population, split and candidate definitions.
+No outcome weight, IDs, freight after shipment, customer or routing results may
+enter an image prompt or deployable query features. Oracle measured-weight
+comparisons are allowed only as explicitly separate data-quality diagnostics.
+
+Compare robust tabular, semantic text/image, quantity-aware neighbor, and
+physical/tariff-guided models within a bounded predeclared search. Keep frequent
+products undersampled and product-balanced metrics visible. Audit surprisingly
+good results for leakage and dependence. Do not drop expensive goods, renormalize
+the target, or only score familiar products to satisfy the threshold. Retain
+scripts, per-row out-of-fold predictions, fitted artifacts, and validation
+results; update the existing dev PR when a defensible improvement is ready.
+Production data, deployment and resident model services remain unchanged.
+
+### Data audit and first nested benchmark
+
+- Original source XLS and DB match on all2,674 positive fees and weights.
+  There are238 independent groups, with2,314 rows (86.5%) in one product group.
+  Complete old image attributes cover1,997 rows235 groups; no rows are removed
+  from the new full-source evaluation. A constant6,500 baseline has in-sample
+  row MAE1,600 but macro-product MAE9,808. This is not a new-product solution.
+- The first private18-candidate nested5x2 grouped experiment gives row OOF
+  MAE1,795.17 and macro-product MAE5,985.77. All2,674 rows are scored once with
+  independent preprocessing and selection. An independent recomputation agrees.
+  Product bootstrap95% row-MAE range1,283–8,138 is wide; no prospective accuracy
+  claim. Only130/238 groups have MAE below2,000. Do not declare the goal done
+  from the frequency-weighted number or substitute this for a shipped model.
+- Large legacy errors include a machine whose working capacity was misread as
+  product size, and multi-unit bulky goods. Compare per-unit weight/fee models,
+  supervised mass-to-cost models, and label-free higher-quality image attributes.
+  The revised extractor is tool-free, keeps compatibility dimensions separate,
+  and processes original photos serially with cached, versioned results.
+- The operator confirmed Value/가격 currency is CNY on2026-11-06. Value agrees
+  with sum(item price x quantity) within rounding (ratio0.9962–1.0058), so use
+  declared total and per-unit CNY features without multiplying quantity twice.
+  This is reported product value, not a shipment outcome or guaranteed purchase
+  cost. No price, target fee, outcome weight or customer data enters vision.
+  Add explicit regression export; preserve default fee-export behavior.
+
 ## Separate parcel size and weight (2026-11-06)
 
 The user approved separate volume/parcel-size and weight axes. Supersede the
