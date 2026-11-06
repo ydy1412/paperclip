@@ -1,6 +1,56 @@
 # Shipping-cost estimator
 
-## Ordinal weight classification (2026-11-06, current contract)
+## VIP tariff-step weight classification (2026-11-06, current contract)
+
+The user clarified that the weight model itself must use the VIP tariff's
+weight steps. Do not retain the earlier 5kg classes and only convert fees.
+The official VIP tables have upper-inclusive 0.5kg rows. Record the public
+snapshot in next1688-vip-tariff.json. Sea routes end at449.5kg; the air table
+ends at150kg. Use their common0.5kg grid and the sea table's full upper-bound
+union, plus a distinct above-table class. Do not choose a user's route.
+
+Relabel and retrain: (0,0.5], (0.5,1], (1,1.5], ... (449,449.5], >449.5kg.
+For example1.2kg is the1.5kg tariff class, and exactly5kg stays in the5kg class.
+The first two rows remain separate even when a route charges the same price.
+Partial credit is now1/.5/.3/0 for exact/one/two/farther tariff steps (one step
+is0.5kg). Do not compare these scores directly with the old5kg task.
+
+The labels are sparse (maximum observed96kg). Preserve all valid records and
+all tariff classes, including empty classes. Use a parameter-shared ordinal
+location classifier with an explicit classification/expected-credit loss;
+do not fit900 independent neural heads or silently drop heavy labels. Compare
+bounded reward forests, photo-prior and matched hard-loss controls within
+product-disjoint nested folds. Preserve the prior's uncertainty in calibration.
+Report exact/adjacent accuracy, kg-distance, unseen-in-training classes,
+range width in kg, coverage and actual memory. Mark extrapolation for review.
+
+Keep coarse artifacts compatible using their own versioned band contract.
+Verify half-kg boundaries, near-boundary values, both gradients, saved-model
+inference on original photos, group isolation and memory. Do not change the
+UI, live services or original DB. Update the existing dev PR after checks.
+
+### VIP-step verification
+
+- Same2,673 rows/237 groups; labels relabeled with official upper-inclusive
+  steps. Independent recomputation and fit/calibration/test isolation pass.
+  Existing coarse artifact point/range readback is unchanged.
+- Equal-product partial credit0.38228; exact0.5kg class22.36%; within one step
+  48.70%; mean rounded-class distance3.4849kg. Matched hard training0.36965,
+  photo prior0.39504. Bootstrap95% credit0.33401–0.43155. The new method has
+  not established a gain over photo prior. Do not reuse old coarse accuracy.
+-90% target ranges cover94.37% product-weighted rows/94.09% whole products,
+  but are often too wide. Upper-unbounded ranges have no finite average width.
+  A13.4kg photo example predicts0.5–1kg and its0–5kg range also fails. Retain
+  this error; examples are calibration-partition functionality checks only.
+- The selected private candidate uses shared ordered-logistic parameters,
+  expected partial credit and l2 regularization. Initial truncated-distribution
+  experiment is retained separately. Source, report and fitted artifacts are in
+  tmp/vip-weight/ordered/. Peak RSS394MiB/footprint621MiB, no resident AI.
+- Mark the VIP experiment needs-review. No UI, API, automatic price or operating
+  deployment change. Correct label granularity is implemented; reliable fine
+  half-kg accuracy is not established by the present data.
+
+## Earlier coarse ordinal experiment (2026-11-06, superseded bands)
 
 The user replaced the exact-fee target with coarse weight classification and
 removed the KRW 2,000 completion threshold from the active goal. Preserve the

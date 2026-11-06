@@ -7,9 +7,10 @@ try:
     from scipy.optimize import check_grad
     from ordinal_model import (OrdinalClassifier, REWARD, weight_classes, product_weights,
                                partial_objective, decisions, fit_calibration, class_ranges,
-                               save_bundle, load_bundle, predict_request, fee_references)
+                               save_bundle, load_bundle, predict_request, fee_references, location_objective, prediction_scales)
     from ordinal_benchmark import nested_benchmark, metrics
     from regression_model import make_features
+    from weight_bands import vip_contract, count as band_count, classify, interval, reward_matrix, utilities
 except ModuleNotFoundError as error:
     raise unittest.SkipTest('Optional research dependencies are not installed') from error
 
@@ -54,6 +55,45 @@ class OrdinalModelTests(unittest.TestCase):
         value = lambda p: partial_objective(np.log(p), np.ones((1, 1)), np.array([0]), np.ones(1), 3., 0)[0]
         self.assertLess(value(nearby), value(distant))
         self.assertNotEqual(objective(parameters)[1].tolist(), partial_objective(parameters, x, labels, weights, 0., .1)[1].tolist())
+
+    def test_vip_table_boundaries_replace_the_old_five_kg_labels(self):
+        spec = vip_contract()
+        np.testing.assert_array_equal(classify([.07, .5, .500001, 1., 1.2, 1.5, 5., 5.000001, 96, 449.5, 449.50001], spec),
+                                      [0, 0, 1, 1, 2, 2, 9, 10, 191, 898, 899])
+        self.assertEqual(band_count(spec), 900)
+        self.assertEqual(interval(2, 2, spec), {'lowerKg': 1., 'upperKg': 1.5, 'lowerInclusive': False, 'upperExclusive': False})
+        self.assertIsNone(interval(899, 899, spec)['upperKg'])
+        self.assertEqual(spec['membership'], 'VIP')
+        result = metrics(np.array([0]), np.array([0]), np.array([0]), np.array([[0, 899]]), spec)
+        self.assertIsNone(result['range']['macroWidthKg'])
+        self.assertEqual(result['range']['macroUpperUnbounded'], 1.)
+
+    def test_shared_ordinal_loss_gradient_and_banded_reward_match(self):
+        rng = np.random.default_rng(39)
+        x = rng.normal(size=(8, 4));labels = np.arange(8);weights = np.ones(8)/8
+        parameters = rng.normal(size=4)*.1;anchors = rng.uniform(0, 7, 8);scales = rng.uniform(1, 4, 8)
+        objective = lambda p: location_objective(p, x, labels, weights, 3., .1, anchors, scales, 9)
+        self.assertLess(check_grad(lambda p: objective(p)[0], lambda p: objective(p)[1], parameters), 1e-5)
+        self.assertNotEqual(objective(parameters)[1].tolist(), location_objective(parameters, x, labels, weights, 0., .1, anchors, scales, 9)[1].tolist())
+        probabilities = rng.uniform(size=(8, 9));probabilities /= probabilities.sum(axis=1, keepdims=True)
+        local = {'upperEdgesKg': list(np.arange(.5, 4.5, .5))}
+        np.testing.assert_allclose(utilities(probabilities), probabilities @ reward_matrix(local), atol=1e-15)
+
+    def test_vip_training_has_900_outputs_and_persists_its_own_band_contract(self):
+        data = self.data();spec = vip_contract()
+        model = OrdinalClassifier({'family': 'ordered_location', 'strength': 1., 'l2': 1., 'temperature': 2.}, spec).fit(data['features'], data['labels'], data['groups'])
+        scores = model.scores(data['features']);self.assertEqual(scores.shape, (25, 900))
+        self.assertLess(model.training['parameters'], 900)
+        scales = prediction_scales(data['features'], spec)
+        calibration = fit_calibration(scores, data['labels'], data['groups'], scales=scales)
+        ranges = class_ranges(scores, calibration, scales)
+        self.assertTrue((ranges[:, 0] <= ranges[:, 1]).all())
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = save_bundle(directory, model, calibration, None, {})
+            output = predict_request(directory, {'category': '940320', 'items': [{'title': 'metal product', 'quantity': 2}]})
+            self.assertEqual(manifest['bandContract']['id'], spec['id'])
+            self.assertEqual(output['bandContract']['stepKg'], .5)
+            self.assertFalse(output['weightBand']['upperExclusive'])
 
     def test_product_weights_do_not_reward_frequent_products(self):
         groups = np.array([0]*100+[1, 2])

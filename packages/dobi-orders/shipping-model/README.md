@@ -1,6 +1,74 @@
 # Local shipping-cost model
 
-## Partial-credit weight classification (2026-11-06)
+## Current: VIP tariff-step weight classification (2026-11-06)
+
+The user corrected the target: retrain weight classification on the VIP tariff
+steps, rather than retaining the five coarse classes and only converting fees.
+`next1688-vip-tariff.json` is the official dated snapshot. `weight_bands.py`
+derives labels from its0.5kg upper-inclusive rows: `(0,0.5]`, `(0.5,1]`,
+`(1,1.5]`, and so on.1.2kg is the1.5kg tariff class; exactly5kg stays in the5kg
+class. The two sea tables end at449.5kg and air at150kg. The common weight
+grid uses the union (899 rows) plus an explicit above-table class. No route is
+chosen for the user, and same-price adjacent rows remain distinct weight labels.
+
+The CLI defaults to `--bands vip`. Add `--bands coarse` only to reproduce the
+older experiment below. The model is relabeled and retrained, not just renamed.
+Credit remains1/.5/.3/0 for exact/one/two/farther steps; one step is now0.5kg.
+Scores are not comparable with the earlier5kg task.
+
+```sh
+python shipping-model/ordinal_benchmark.py --bands vip \
+  --data /private/training.json \
+  --attributes /private/attributes.normalized.json \
+  --image-cache /private/image-cache \
+  --encoder /private/encoder.onnx \
+  --output /private/vip-weight-run
+
+python shipping-model/ordinal_model.py predict \
+  --model-dir /private/vip-weight-run/candidate < /private/request.json
+```
+
+A shared cumulative-logistic location model trains classification likelihood
+plus expected partial-credit loss. Parameters are shared across all900 classes.
+The stable first/last class probabilities retain tail mass. Compare bounded
+reward forests and photo-prior controls inside grouped selection. Empty classes
+remain in the output contract; they are not dropped. Actual recorded weights
+remain labels only. Calibration uses product-max tariff-step errors, scaled by
+label-free photo-prior width. These ranges are conservative and often too wide.
+An unbounded upper range is never reported as a finite kg width.
+
+On2,673 rows/237 products, five outer/two inner folds and separate calibration:
+
+| Equal-product metric | VIP-step model | Matched hard loss | Photo prior only |
+| --- | ---: | ---: | ---: |
+| Partial-credit score | 0.3823 | 0.3697 | 0.3950 |
+| Exact tariff class | 22.4% | 22.6% | 24.5% |
+| Within one0.5kg class | 48.7% | 42.1% | 49.6% |
+| Mean rounded-class distance | 3.48kg | 3.54kg | 3.47kg |
+
+The new loss does not establish improvement over the simpler photo prior.
+The product-bootstrap95% score interval is0.3340–0.4315. The nominal90% range
+contains94.37% with equal-product row weighting, but ranges are very wide;
+inspect width and unbounded rates in `report.json`. For example, recorded13.4kg
+was predicted in `(0.5,1]kg` with range `(0,5]kg` and still missed the range.
+An18.4kg functional example has a range up to119kg. Do not present these as
+precise or operationally qualified predictions. This experimental artifact is
+marked `needs-review` and is not enabled in the UI or API.
+
+The actual data occupies only part of the tariff grid and ends at96kg. Future
+or other-forwarder accuracy, actual-versus-chargeable Weight semantics, packing
+and volumetric weight remain unverified. Separate freight/remote charges are
+not targets. VIP is the label-grid source, not a fee input feature or a new
+claim that the whole historical dataset used VIP prices.
+
+Private evidence: `tmp/vip-weight/ordered/` contains source snapshots, plan,
+OOF predictions, report, independent recomputation, original-photo examples
+and a trained candidate. `tmp/vip-weight/run/` retains the earlier truncated
+distribution comparison. Python peak RSS is about394MiB; peak process footprint
+about621MiB, with one thread and no resident model or new remote vision call.
+Coarse schema1 artifacts still return their original band/range endpoints.
+
+## Earlier coarse partial-credit experiment (superseded bands)
 
 The current experiment predicts ordered weight bands, not an exact kg value:
 `[0,5)`, `[5,10)`, `[10,15)`, `[15,20)`, `[20,infinity)` kg. These display bands
@@ -32,7 +100,7 @@ classifier. Keep all source data, fitted files and results out of Git.
 node shipping-model/export.mjs /private/orders.sqlite /private/training.json fee-with-physical-labels
 
 # Paths refer to existing complete v1 vision attributes and frozen image cache.
-python shipping-model/ordinal_benchmark.py \
+python shipping-model/ordinal_benchmark.py --bands coarse \
   --data /private/training.json \
   --attributes /private/attributes.normalized.json \
   --image-cache /private/image-cache \
