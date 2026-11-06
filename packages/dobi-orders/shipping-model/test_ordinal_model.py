@@ -126,7 +126,10 @@ class OrdinalModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             save_bundle(directory, classifier, calibration, fees, {})
             restored, _ = load_bundle(directory)
-            np.testing.assert_allclose(restored['classifier'].scores(data['features']), scores)
+            # Image projections use float32; BLAS can differ by a few ULPs
+            # after restoring array layout. The discrete decision must not change.
+            np.testing.assert_allclose(restored['classifier'].scores(data['features']), scores, rtol=1e-6, atol=1e-7)
+            np.testing.assert_array_equal(restored['classifier'].predict(data['features']), classifier.predict(data['features']))
             request = {'category': '940320', 'items': [{'title': 'metal product', 'quantity': 2}]}
             output = predict_request(directory, request)
             changed = predict_request(directory, {**request, 'physicalLabels': {'recordedWeightKg': 9000}, 'shippingFee': 1})
